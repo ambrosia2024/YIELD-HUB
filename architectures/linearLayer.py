@@ -3,6 +3,8 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Optional, Dict, List, Tuple
 
+import numpy as np
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -48,6 +50,16 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
         self.config = config
         self.trend_model = TrendModel()
         self.feature_norm_params: Optional[Dict] = None
+        # Track most recent training year for exponential weighting
+        self._most_recent_year: Optional[int] = None
+        # Flag for first batch logging
+        self._weight_log_done = False
+
+        # Log exponential weighting configuration
+        if config.use_exponential_weighting:
+            print(f"[Exponential Weighting] ENABLED - tau={config.exponential_tau}")
+        else:
+            print(f"[Exponential Weighting] DISABLED")
 
         use_sota = config.use_sota_features
         # Domain features (GDD, RUE, Farquhar) – additional TS channels beyond weather
@@ -72,11 +84,22 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
         # Heat stress: 7 scalar features when enabled
         n_heat_stress = 7 if config.use_heat_stress_days else 0
 
+        # Multi-year summaries - must match the config's calculation
+        n_multi_year = 0
+        if config.multi_year_summaries:
+            from cybench.process.featureEngineering import MultiYearFeatureEngineer
+            feature_types = (['all'] if 'all' in config.multi_year_features
+                           else config.multi_year_features)
+            n_multi_year = len(MultiYearFeatureEngineer.get_feature_names(
+                config.multi_year_window, feature_types
+            ))
+
         self.n_static_features = (
             len(SOIL_PROPERTIES) + len(LOCATION_PROPERTIES) + n_crop_calendar
             + (2 if include_spatial else 0)
             + lag_years
             + n_heat_stress
+            + n_multi_year
         )
 
         print(f"[Model] TS features={self.n_ts_features}, Static features={self.n_static_features}")
@@ -114,6 +137,7 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
             self.config.include_spatial_features,
             self.config.lag_years,
             self.config.use_heat_stress_days,
+            multi_year_config=self.config.multi_year_config if hasattr(self.config, 'multi_year_config') else None,
         )
 
     def _normalize_time_series(self, x_ts: torch.Tensor,
@@ -207,6 +231,30 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
         self.trend_model.fit(train_items)
         self.feature_norm_params = dm.feature_norm_params
 
+        # Track most recent training year for exponential weighting
+        if self.config.use_exponential_weighting:
+            self._most_recent_year = int(dm.train_ds.years.max().item())
+            train_years = dm.train_ds.years.numpy()
+            year_range = (train_years.min(), train_years.max())
+
+            # Compute and log weight distribution
+            sample_years = [year_range[1], year_range[1]-3, year_range[1]-5, year_range[1]-10]
+            weights = {y: np.exp(-(self._most_recent_year - y) / self.config.exponential_tau)
+                      for y in sample_years if y >= year_range[0]}
+
+            logging.info(f"[Exponential Weighting] ENABLED")
+            logging.info(f"  Most recent training year: {self._most_recent_year}")
+            logging.info(f"  Training year range: {year_range[0]} to {year_range[1]}")
+            logging.info(f"  Decay constant (tau): {self.config.exponential_tau}")
+            logging.info(f"  Sample weights by year distance:")
+            for dist_label, year_val in [("Current (0y)", self._most_recent_year),
+                                         ("-3 years", self._most_recent_year-3),
+                                         ("-5 years", self._most_recent_year-5),
+                                         ("-10 years", self._most_recent_year-10)]:
+                if year_val >= year_range[0]:
+                    w = np.exp(-(self._most_recent_year - year_val) / self.config.exponential_tau)
+                    logging.info(f"    {dist_label} (year {year_val}): {w:.4f}")
+
         train_df = self.trend_model._train_df
         logging.info(f"Fitting trends for {len(train_df[KEY_LOC].unique())} locations")
 
@@ -270,11 +318,47 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
         trends_z = (trend_predictions_orig - dm.y_mean) / dm.y_std
         return torch.tensor(trends_z, dtype=torch.float32, device=self.device).unsqueeze(1)
 
-    def _compute_weighted_loss(self, pred: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+    def _compute_weighted_loss(self, pred: torch.Tensor, y: torch.Tensor,
+                                years: Optional[torch.Tensor] = None) -> torch.Tensor:
         """
         Compute MSE loss between predictions and targets.
+
+        Args:
+            pred: Predictions of shape (batch,)
+            y: Targets of shape (batch,)
+            years: Sample years of shape (batch,) for exponential weighting
+
+        Returns:
+            Loss tensor
         """
-        return F.mse_loss(pred, y)
+        if self.config.use_exponential_weighting and years is not None:
+            # Compute per-sample losses
+            per_sample_loss = F.mse_loss(pred, y, reduction='none')
+
+            # Compute exponential weights based on year distance
+            # weight = exp(-(current_year - sample_year) / tau)
+            years_int = years.cpu().numpy() if years.is_cuda else years.numpy()
+            weights = np.exp(-(self._most_recent_year - years_int) / self.config.exponential_tau)
+            weights_tensor = torch.tensor(weights, dtype=torch.float32, device=pred.device)
+
+            # Normalize weights to sum to batch size (preserves loss scale)
+            weights_tensor = weights_tensor / (weights_tensor.mean() + 1e-8)
+
+            # Log first batch sample weights (once)
+            if not self._weight_log_done:
+                unique_years = np.unique(years_int[:min(16, len(years_int))])  # Sample first 16
+                logging.info(f"[Exponential Weighting] First batch sample weights:")
+                for yr in sorted(unique_years, reverse=True)[:6]:  # Show up to 6 years
+                    idx = np.where(years_int == yr)[0][0]
+                    dist = self._most_recent_year - yr
+                    logging.info(f"    Year {yr} (distance {dist}y): weight={weights[idx]:.4f}")
+                self._weight_log_done = True
+
+            # Apply weighted loss
+            weighted_loss = (per_sample_loss * weights_tensor).mean()
+            return weighted_loss
+        else:
+            return F.mse_loss(pred, y)
 
     def _shared_step(self, batch, metrics: ModelMetrics, loss_key: str):
         x_ts, x_static, y, years, adm_ids, lats, lons, validity_mask = batch
@@ -294,17 +378,24 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
             final_pred = pred + batch_trends.squeeze(-1).detach()
         else:
             final_pred = pred
-        loss = self._compute_weighted_loss(final_pred, y)
+
+        # Pass years for exponential weighting
+        loss = self._compute_weighted_loss(final_pred, y, years=years)
 
         metrics.update(final_pred.detach(), y.detach())
         self.log(loss_key, loss, prog_bar=True)
         return loss
 
     def on_test_start(self):
-        # Reset prediction cache
-        self._yield_predictions_cache.clear()
+        # Only clear cache if not using recursive lags, or if cache is empty (first call)
+        # For recursive lags in multi-year testing, preserve cache across years
         if self.config.use_recursive_lags and self.config.lag_years > 0:
-            logging.info("[Recursive Lags] Prediction cache cleared for testing")
+            if not self._yield_predictions_cache:
+                logging.info("[Recursive Lags] Prediction cache initialized for testing")
+            else:
+                logging.info(f"[Recursive Lags] Preserving cache with {len(self._yield_predictions_cache)} predictions for multi-year testing")
+        else:
+            self._yield_predictions_cache.clear()
 
         # Initialize per-year prediction storage for CSV results
         dm = self.trainer.datamodule

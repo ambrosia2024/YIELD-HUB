@@ -96,7 +96,7 @@ Usage:
     python linearBaselines.py --crop maize --country NL --model_type xlinear --use_sota_features --use_residual_trend --use_recursive_lags --use_cwb_feature --aggregation daily
 
 # Quick test run (5 epochs)
-    python linearBaselines.py --crop wheat --country NL --model_type olinear --epochs 2 --aggregation daily --test_years 5 --lag_years 0 --aggregation daily --results_dir checkpoints-test/results --save_checkpoint_dir checkpoints-test/results --wandb_project test-and-delete-later --forecast_type end-of-season
+    python linearBaselines.py --crop wheat --country NL --model_type olinear --epochs 2 --aggregation daily --test_years 5 --lag_years 0 --aggregation daily --results_dir checkpoints-test/results --save_checkpoint_dir checkpoints-test/results --wandb_project test-and-delete-later --forecast_type end-of-season --use_exponential_weighting --exponential_tau 10
     python linearBaselines.py --crop wheat --country NL --model_type olinear --epochs 5 --aggregation daily --test_years 5 --lag_years 0 --aggregation daily --results_dir checkpoints-test/results --save_checkpoint_dir checkpoints-test/results --wandb_project test-and-delete-later --forecast_type middle-of-season
 
 --------------------
@@ -253,6 +253,25 @@ if __name__ == "__main__":
                              'Controls what portion of the season is observed before forecasting: '
                              'end-of-season (100%%), three-quarter-of-season (75%%), '
                              'middle-of-season (50%%), quarter-of-season (25%%).')
+    # Exponential sample weighting for non-stationarity
+    parser.add_argument('--use_exponential_weighting', action='store_true',
+                        help='Enable exponential sample weighting based on year distance. '
+                             'Recent samples get higher weight: weight = exp(-(current_year - sample_year) / tau). '
+                             'Helps model focus on recent patterns when feature-yield relationships shift over time.')
+    parser.add_argument('--exponential_tau', type=float, default=10.0,
+                        help='Decay constant (tau) for exponential weighting (default: 10.0). '
+                             'Higher values = slower decay (more uniform weighting). '
+                             'Examples: tau=5 gives 2023=1.0, 2020=0.55, 2015=0.25; '
+                             'tau=10 gives 2023=1.0, 2020=0.74, 2015=0.55.')
+    # Multi-year context features
+    parser.add_argument('--multi_year_summaries', action='store_true',
+        help='Enable multi-year summary features from previous growing seasons')
+    parser.add_argument('--multi_year_window', type=int, default=1, choices=[1, 2, 3],
+        help='Years of historical context (1=T-1, 2=T-1,T-2, 3=T-1,T-2,T-3). Default: 1')
+    parser.add_argument('--multi_year_features', nargs='+', default=['weather'],
+        choices=['weather', 'remote_sensing', 'phenology', 'all'],
+        help='Which features to summarize from previous years. '
+             'weather=temp/precip/gdd, remote_sensing=NDVI/FPAR/SSM, phenology=crop calendar changes')
     # XLinear-specific hyperparameters (only used when model_type='xlinear')
     parser.add_argument('--xlinear_hidden_size', type=int, default=64,
                         help='XLinear: dimension of hidden embeddings for all linear layers (default: 64)')
@@ -303,6 +322,8 @@ if __name__ == "__main__":
     print(f"Domain features: GDD={args.use_gdd}  HeatStress={args.use_heat_stress_days}  "
           f"RUE={args.use_rue}  Farquhar={args.use_farquhar}")
     print(f"TestYears={args.test_years}")
+    print(f"Exponential Weighting: {args.use_exponential_weighting} (tau={args.exponential_tau})")
+    print(f"Multi-Year Summaries: {args.multi_year_summaries} (window={args.multi_year_window}, features={args.multi_year_features})")
     print(f"lr={args.lr}  wd={args.weight_decay}  epochs={args.epochs}  "
           f"batch={args.batch_size}  seed={args.seed}")
     print(f"{'=' * 70}\n")
@@ -336,6 +357,11 @@ if __name__ == "__main__":
         use_cwb_feature=args.use_cwb_feature,
         drop_tavg=args.drop_tavg,
         use_revin=args.use_revin,
+        use_exponential_weighting=args.use_exponential_weighting,
+        exponential_tau=args.exponential_tau,
+        multi_year_summaries=args.multi_year_summaries,
+        multi_year_window=args.multi_year_window,
+        multi_year_features=args.multi_year_features,
         results_dir=args.results_dir,
         lr_scheduler_lambda=lr_scheduler_lambda,
         xlinear_hidden_size=args.xlinear_hidden_size,

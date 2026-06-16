@@ -8,6 +8,7 @@ Python version: 3.12.0
 import os, sys
 from tqdm import tqdm
 from typing import Optional, Dict, List, Tuple
+import logging
 
 import numpy as np
 import pandas as pd
@@ -590,6 +591,15 @@ def run_walk_forward_validation(
             'yearly_metrics': fold_yearly_metrics,
         })
 
+        # Clear prediction cache between folds to prevent cross-contamination
+        # Each fold should start fresh with no cached predictions from previous folds
+        if hasattr(model_fold, '_yield_predictions_cache'):
+            model_fold._yield_predictions_cache.clear()
+            logging.info(f"[Fold {fold_idx + 1}] Cleared prediction cache after testing")
+        if hasattr(model_fold, '_prediction_cache'):
+            model_fold._prediction_cache.clear()
+            logging.info(f"[Fold {fold_idx + 1}] Cleared TST prediction cache after testing")
+
     # Aggregate results
     aggregated = _aggregate_walk_forward_results(results_matrix, all_years, test_years)
 
@@ -679,7 +689,9 @@ def _aggregate_walk_forward_results(results_matrix: List[Dict], all_years: List[
 
     for fold_result in results_matrix:
         train_end_year = fold_result['train_end_year']
-        first_test_year = train_end_year + 1
+        # Find the actual first test year (handles gaps in year sequences)
+        tested_years = sorted(fold_result['yearly_metrics'].keys())
+        first_test_year = min(tested_years) if tested_years else None
 
         for test_year, metrics in fold_result['yearly_metrics'].items():
             # Track per-year values
@@ -689,7 +701,7 @@ def _aggregate_walk_forward_results(results_matrix: List[Dict], all_years: List[
                 if value is not None:
                     per_year_values[test_year][metric_name].append(value)
 
-            # Track first test year values (train_end_year + 1)
+            # Track first test year values (the earliest year tested in this fold)
             if test_year == first_test_year:
                 for metric_name, value in metrics.items():
                     if value is not None:

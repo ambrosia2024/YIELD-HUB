@@ -96,7 +96,7 @@ Usage:
     python linearBaselines.py --crop maize --country NL --model_type xlinear --n_trials 50 --epochs 5 --hpo_objective nrmse --hpo_results_file checkpoints-test/results/HPO/octuna_file.txt --hpo_study_name test-and-delete-later
 
 # Quick test run (2 trials)
-    python linearBaselines.py --crop wheat --country NL --model_type nlinear --n_trials 4 --epochs 2 --results_dir checkpoints-test/results --data_fraction 0.50
+    python linearBaselines.py --crop wheat --country NL --model_type nlinear --n_trials 4 --epochs 2 --results_dir checkpoints-test/results --forecast_type middle-of-season --aggregation daily --use_exponential_weighting --exponential_tau 3 --multi_year_summaries --multi_year_window 1 --multi_year_features all
 
 --------------------
 Hyperparameters:
@@ -259,6 +259,25 @@ if __name__ == "__main__":
                              'Controls what portion of the season is observed before forecasting: '
                              'end-of-season (100%%), three-quarter-of-season (75%%), '
                              'middle-of-season (50%%), quarter-of-season (25%%).')
+    # Exponential sample weighting for non-stationarity
+    parser.add_argument('--use_exponential_weighting', action='store_true',
+                        help='Enable exponential sample weighting based on year distance. '
+                             'Recent samples get higher weight: weight = exp(-(current_year - sample_year) / tau). '
+                             'Helps model focus on recent patterns when feature-yield relationships shift over time.')
+    parser.add_argument('--exponential_tau', type=float, default=10.0,
+                        help='Decay constant (tau) for exponential weighting (default: 10.0). '
+                             'Higher values = slower decay (more uniform weighting). '
+                             'Examples: tau=5 gives 2023=1.0, 2020=0.55, 2015=0.25; '
+                             'tau=10 gives 2023=1.0, 2020=0.74, 2015=0.55.')
+    # Multi-year context features
+    parser.add_argument('--multi_year_summaries', action='store_true',
+        help='Enable multi-year summary features from previous growing seasons')
+    parser.add_argument('--multi_year_window', type=int, default=1, choices=[1, 2, 3],
+        help='Years of historical context (1=T-1, 2=T-1,T-2, 3=T-1,T-2,T-3). Default: 1')
+    parser.add_argument('--multi_year_features', nargs='+', default=['weather'],
+        choices=['weather', 'remote_sensing', 'phenology', 'all'],
+        help='Which features to summarize from previous years. '
+             'weather=temp/precip/gdd, remote_sensing=NDVI/FPAR/SSM, phenology=crop calendar changes')
     # Optuna HPO arguments
     parser.add_argument('--n_trials', type=int, default=50,
                         help='Number of Optuna trials (default: 50)')
@@ -312,6 +331,8 @@ if __name__ == "__main__":
     print(f"  Domain features: GDD={args.use_gdd}  HeatStress={args.use_heat_stress_days}  "
           f"RUE={args.use_rue}  Farquhar={args.use_farquhar}")
     print(f"  TestYears={args.test_years}")
+    print(f"  Exponential Weighting: {args.use_exponential_weighting} (tau={args.exponential_tau})")
+    print(f"  Multi-Year Summaries: {args.multi_year_summaries} (window={args.multi_year_window}, features={args.multi_year_features})")
     print(f"  Trials={args.n_trials}  Objective={args.hpo_objective}")
     print(f"{'=' * 70}\n")
 
@@ -425,6 +446,11 @@ if __name__ == "__main__":
                 use_cwb_feature=args.use_cwb_feature,
                 drop_tavg=args.drop_tavg,
                 use_revin=args.use_revin,
+                use_exponential_weighting=args.use_exponential_weighting,
+                exponential_tau=args.exponential_tau,
+                multi_year_summaries=args.multi_year_summaries,
+                multi_year_window=args.multi_year_window,
+                multi_year_features=args.multi_year_features,
                 results_dir=args.results_dir,
                 lr_scheduler_lambda=lr_scheduler_lambda,
                 xlinear_hidden_size=xlinear_hidden_size,
@@ -460,6 +486,11 @@ if __name__ == "__main__":
                 use_cwb_feature=args.use_cwb_feature,
                 drop_tavg=args.drop_tavg,
                 use_revin=args.use_revin,
+                use_exponential_weighting=args.use_exponential_weighting,
+                exponential_tau=args.exponential_tau,
+                multi_year_summaries=args.multi_year_summaries,
+                multi_year_window=args.multi_year_window,
+                multi_year_features=args.multi_year_features,
                 results_dir=args.results_dir,
                 lr_scheduler_lambda=lr_scheduler_lambda,
                 xlinear_hidden_size=args.xlinear_hidden_size,

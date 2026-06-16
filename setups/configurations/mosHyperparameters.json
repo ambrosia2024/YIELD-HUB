@@ -1536,5 +1536,14 @@
         }
       }
     }
+  },
+"model_flags": {
+    "patchtst": {
+      "wheat": ["--use_gdd", "--use_rue", "--use_farquhar", "--use_sota_features", "--include_spatial_features"],
+      "maize": ["--use_sota_features", "--include_spatial_features"]
+    },
+    "xlinear": {
+      "default": ["--use_gdd", "--use_rue", "--use_farquhar", "--use_sota_features", "--include_spatial_features", "--use_heat_stress_days", "--lag_years", "2", "--use_revin", "--use_recursive_lags"]
+    }
   }
 }

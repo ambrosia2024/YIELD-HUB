@@ -1,7 +1,7 @@
 """
 --------------------
 Author: XYZ
-Description: Feature engineering helpers (Completely inspired by the cybench repository) 
+Description: Feature engineering helpers (Completely inspired by the cybench repository)
 Python version: 3.12.0
 --------------------
 """
@@ -42,12 +42,12 @@ RS_VALID_RANGES = {
 # Overriding GDD values with literature-based calibration
 # https://www.sciencedirect.com/science/article/pii/S037837742500469X
 GDD_BASE_TEMP = {
-    'maize': 10.0,   
-    'wheat': 0.0,    
+    'maize': 10.0,
+    'wheat': 0.0,
 }
 GDD_UPPER_LIMIT = {
-    'maize': 30.0,   
-    'wheat': 26.0,  
+    'maize': 30.0,
+    'wheat': 26.0,
 }
 
 DEKAD_FREQ = "10D"
@@ -105,7 +105,7 @@ def interpolate_to_daily(data: pd.Series, target_dates: pd.DatetimeIndex,
 
 def _clean_rs_series(series: pd.Series, var_name: str) -> pd.Series:
     """
-    Mask sentinel values, then fill gaps, then clip to valid range. 
+    Mask sentinel values, then fill gaps, then clip to valid range.
 
     Using ffill().bfill() BEFORE clipping could (? – not sure) propagate sentinel values across the season. Just to be safe, these values are first
     masked, then ffill'ed, and then clipped.
@@ -263,8 +263,8 @@ def _compute_farquhar_series(tavg: np.ndarray, cum_prec: np.ndarray,
     Approximates seasonal-scale net assimilation using the FvCB C3 model.
 
    The FvCB model was derived for instantaneous leaf-scale processes. Applying it at dekadal/weekly/daily crop-season scale
-    will always be a proxy approximation, not a mechanistic simulation. Results should be
-    interpreted as a biophysically-motivated index, not true assimilation rates.
+   will always be a proxy approximation, not a mechanistic simulation. Results should be
+   interpreted as a biophysically-motivated index, not true assimilation rates.
 
     Model components:
       Ac = Vcmax * (ci - Gamma) / (ci + Kc)     [Rubisco-limited]
@@ -297,7 +297,7 @@ def _compute_farquhar_series(tavg: np.ndarray, cum_prec: np.ndarray,
 
     # Intercellular CO2 under moderate water stress (C3 plants)
     # ci/ca ≈ 0.7 for well-watered C3, lower under drought
-    # Reference: Wong et al. (1979) Plant Physiology 78:821-825
+    # Reference: Wong et al. (1979) Plant Physiology 78:821–825
     ci = 0.7 * co2
 
     # FvCB biochemical constants (Bernacchi et al. 2002)
@@ -515,7 +515,7 @@ def _extract_weather_features(dataset: CYDataset, adm_id: str, year: int,
                 if col in year_data.columns:
                     daily_df[col] = interpolate_to_daily(year_data[col], target_dates,
                                                          method='linear',
-                                                         interpolate_data='weather')
+                                                         interpolate_data='unknown')
                     result['weather'][:, j] = daily_df[col].values
 
             # Extract raw arrays needed for domain features and heat stress
@@ -523,7 +523,7 @@ def _extract_weather_features(dataset: CYDataset, adm_id: str, year: int,
                 if needed_col not in daily_df.columns and needed_col in year_data.columns:
                     daily_df[needed_col] = interpolate_to_daily(
                         year_data[needed_col], target_dates,
-                        method='linear', interpolate_data='weather')
+                        method='linear', interpolate_data='unknown')
 
             # Store raw arrays for heat stress (these are already at target resolution)
             result['tavg_raw'] = daily_df['tavg'].values if 'tavg' in daily_df else np.zeros(seq_len)
@@ -569,14 +569,14 @@ def _extract_weather_features(dataset: CYDataset, adm_id: str, year: int,
                 if col in year_data.columns:
                     daily_df_full[col] = interpolate_to_daily(year_data[col], full_daily_range,
                                                                method='linear',
-                                                               interpolate_data='weather')
+                                                               interpolate_data='unknown')
 
             # Also extract raw arrays needed for domain features and heat stress
             for needed_col in ['tavg', 'tmin', 'tmax', 'prec', 'rad']:
                 if needed_col not in daily_df_full.columns and needed_col in year_data.columns:
                     daily_df_full[needed_col] = interpolate_to_daily(
                         year_data[needed_col], full_daily_range,
-                        method='linear', interpolate_data='weather')
+                        method='linear', interpolate_data='unknown')
 
             # Store raw daily arrays for heat stress computation
             # (heat stress uses daily data regardless of aggregation)
@@ -595,7 +595,7 @@ def _extract_weather_features(dataset: CYDataset, adm_id: str, year: int,
                 domain_daily['cum_gdd_daily'] = np.cumsum(gdd_daily)
 
             if use_rue or use_farquhar:
-                cum_prec_d = np.nancumsum(result['prec_raw'])   
+                cum_prec_d = np.nancumsum(result['prec_raw'])
                 cum_rad_d = np.nancumsum(rad_daily)
                 if use_rue:
                     domain_daily['rue'] = _compute_rue_series(
@@ -725,6 +725,7 @@ def _extract_static_features(dataset: CYDataset, adm_id: str, year: int,
                               tmax_series: Optional[np.ndarray] = None,
                               prec_series: Optional[np.ndarray] = None,
                               validity_mask: Optional[np.ndarray] = None,
+                              multi_year_summaries: Optional[Dict[str, float]] = None,
                               ) -> Tuple[np.ndarray, Optional[float], Optional[float]]:
     """
     Assemble the static feature vector for one location-year.
@@ -736,6 +737,7 @@ def _extract_static_features(dataset: CYDataset, adm_id: str, year: int,
       4. Explicit lat/lon      (conditional)
       5. Lagged yields         (conditional)
       6. Heat stress counts    (conditional)
+      7. Multi-year summaries  (conditional)
 
     Args:
         dataset: CY-Bench dataset
@@ -754,6 +756,7 @@ def _extract_static_features(dataset: CYDataset, adm_id: str, year: int,
         tmax_series: Daily maximum temperature array for heat stress computation
         prec_series: Daily precipitation array for heat stress computation
         validity_mask: Boolean mask of valid timesteps for heat stress counting
+        multi_year_summaries: Dict of multi-year summary features to append
 
     Returns:
         Tuple of (static_features_array, latitude, longitude)
@@ -870,6 +873,11 @@ def _extract_static_features(dataset: CYDataset, adm_id: str, year: int,
             )
             static_vals.extend([np.nan] * 7)
 
+    # Multi-year summaries (NEW)
+    if multi_year_summaries is not None:
+        for feature_name in sorted(multi_year_summaries.keys()):
+            static_vals.append(multi_year_summaries[feature_name])
+
     return np.array(static_vals, dtype=np.float32), lat, lon
 
 def _assemble_features(features: Dict, seq_len: int,
@@ -927,6 +935,7 @@ def build_daily_input_sequence(
         use_rue: bool = False,
         use_farquhar: bool = False,
         crop: str = 'maize',
+        multi_year_config: Optional[Dict] = None,
 ) -> Tuple[np.ndarray, np.ndarray, float, Dict, np.ndarray]:
     """
     Build model-ready input for one location-year.
@@ -947,6 +956,7 @@ def build_daily_input_sequence(
         use_rue: Add RUE index as a time series channel
         use_farquhar: Add Farquhar proxy as a time series channel
         crop: Crop name for crop-specific parameters
+        multi_year_config: Dict with 'enabled', 'window', 'features' for multi-year summaries
 
     Returns:
         X_ts: Time series features of shape (seq_len, n_ts_features)
@@ -966,6 +976,23 @@ def build_daily_input_sequence(
     gdd_upper = float(GDD_UPPER_LIMIT.get(crop, 30.0 if crop == 'maize' else 26.0 if crop == 'wheat' else 30.0))
 
     logging.debug(f"Building sequence: {adm_id}, {year}, {aggregation}")
+
+    # Compute multi-year summaries if enabled
+    multi_year_summaries = None
+    if multi_year_config is not None and multi_year_config.get('enabled', False):
+        multi_year_summaries = MultiYearFeatureEngineer.compute_summaries(
+            dataset=dataset,
+            adm_id=adm_id,
+            current_year=year,
+            window=multi_year_config.get('window', 1),
+            feature_types=multi_year_config.get('features', ['weather']),
+            crop=crop,
+            aggregation=aggregation,
+        )
+        if multi_year_summaries:
+            logging.debug(f"[{adm_id}] Generated {len(multi_year_summaries)} multi-year summary features for year {year}")
+        else:
+            logging.debug(f"[{adm_id}] No multi-year summaries generated for year {year} (insufficient historical data)")
 
     # Crop season trimming
     crop_season_info = None
@@ -1032,6 +1059,7 @@ def build_daily_input_sequence(
         tmax_series=tmax_raw,
         prec_series=prec_raw,
         validity_mask=raw_validity_mask,
+        multi_year_summaries=multi_year_summaries,
     )
 
     # Target yield
@@ -1083,10 +1111,547 @@ def build_daily_input_sequence(
 
     return X_ts_out, X_static, y, meta, validity_mask
 
+
+# =============================================================================
+# Multi-Year Feature Engineer
+# =============================================================================
+
+class MultiYearFeatureEngineer:
+    """
+    Computes summary statistics from previous years' weather and remote sensing data
+    to capture carryover effects between growing seasons.
+
+    Features are returned as scalar values that can be appended to static features.
+    This bridges the temporal resolution gap: daily weather data → annual summaries → annual yield.
+
+    Supported feature types:
+      - 'weather': Temperature, precipitation, radiation summaries
+      - 'remote_sensing': NDVI, FPAR, soil moisture summaries
+      - 'phenology': Crop calendar changes over years
+      - 'all': All of the above
+
+    Example:
+        summaries = MultiYearFeatureEngineer.compute_summaries(
+            dataset=dataset,
+            adm_id='US_10_50',
+            current_year=2020,
+            window=2,
+            feature_types=['weather', 'remote_sensing'],
+            crop='maize'
+        )
+    """
+
+    # Crop-specific thresholds for extreme event counting
+    HEAT_THRESHOLDS = {
+        'maize': 35.0,  # °C - pollination failure threshold
+        'wheat': 30.0,  # °C - grain filling threshold
+    }
+    FROST_THRESHOLD = 0.0  # °C
+    COLD_STRESS_THRESHOLD = 5.0  # °C
+    DRY_DAY_THRESHOLD = 1.0  # mm
+    WET_DAY_THRESHOLD = 10.0  # mm
+
+    @staticmethod
+    def compute_summaries(
+        dataset: CYDataset,
+        adm_id: str,
+        current_year: int,
+        window: int,
+        feature_types: List[str],
+        crop: str,
+        aggregation: str = 'daily',
+    ) -> Dict[str, float]:
+        """
+        Compute multi-year summary features for a location-year.
+
+        Args:
+            dataset: CY-Bench dataset
+            adm_id: Administrative region ID
+            current_year: Reference year (compute summaries for years T-1, T-2, ...)
+            window: Number of years to look back (1=T-1, 2=T-1,T-2)
+            feature_types: List of feature types to summarize ('weather', 'remote_sensing', 'phenology', 'all')
+            crop: Crop name for crop-specific thresholds
+            aggregation: Temporal aggregation used for target dates
+
+        Returns:
+            Dict mapping feature name → scalar value (NaN for missing years)
+        """
+        summaries = {}
+
+        # Expand 'all' to specific types
+        if 'all' in feature_types:
+            feature_types = ['weather', 'remote_sensing', 'phenology']
+
+        # Get expected feature names to ensure consistent output structure
+        expected_names = set(MultiYearFeatureEngineer.get_feature_names(window, feature_types))
+
+        # Compute summaries for each year in the window
+        for year_offset in range(1, window + 1):
+            target_year = current_year - year_offset
+            year_suffix = f"_Tminus{year_offset}"
+
+            # Get target dates for the previous year
+            target_dates, seq_len, freq_str = MultiYearFeatureEngineer._get_target_dates(
+                dataset, adm_id, target_year, aggregation
+            )
+
+            if target_dates is None or len(target_dates) == 0:
+                logging.debug(f"[{adm_id}] No data for year {target_year}, using NaN placeholders")
+                # Add NaN placeholders for all expected features for this year offset
+                for name in expected_names:
+                    if name.endswith(year_suffix):
+                        summaries[name] = np.nan
+                continue
+
+            # Extract year-specific data
+            year_data = MultiYearFeatureEngineer._extract_year_data(
+                dataset, adm_id, target_year, target_dates, aggregation
+            )
+
+            # Compute summaries based on requested feature types
+            if 'weather' in feature_types:
+                weather_sums = MultiYearFeatureEngineer._compute_weather_summaries(
+                    year_data, crop, year_suffix
+                )
+                summaries.update(weather_sums)
+
+            if 'remote_sensing' in feature_types:
+                rs_sums = MultiYearFeatureEngineer._compute_remote_sensing_summaries(
+                    year_data, year_suffix
+                )
+                summaries.update(rs_sums)
+
+            if 'phenology' in feature_types:
+                phen_sums = MultiYearFeatureEngineer._compute_phenology_summaries(
+                    dataset, adm_id, current_year, target_year, year_suffix
+                )
+                summaries.update(phen_sums)
+
+        # If window > 1, also compute multi-year trends
+        if window >= 2:
+            trend_sums = MultiYearFeatureEngineer._compute_multi_year_trends(
+                dataset, adm_id, current_year, window, feature_types, crop, aggregation
+            )
+            summaries.update(trend_sums)
+
+        # Ensure all expected features are present (fill missing with NaN)
+        for name in expected_names:
+            if name not in summaries:
+                summaries[name] = np.nan
+
+        # Sort by feature name for consistent ordering
+        return dict(sorted(summaries.items()))
+
+    @staticmethod
+    def _get_target_dates(
+        dataset: CYDataset,
+        adm_id: str,
+        year: int,
+        aggregation: str,
+    ) -> Tuple[pd.DatetimeIndex, int, str]:
+        """Get target dates for a given year, handling missing data gracefully."""
+        try:
+            crop_season_info = None
+            if ("crop_season" in dataset._dfs_x and
+                    (adm_id, year) in dataset._dfs_x["crop_season"].index):
+                crop_season_info = dataset._dfs_x["crop_season"].loc[(adm_id, year)]
+
+            return _get_aggregation_params(aggregation, year, crop_season_info, data_fraction=1.0)
+        except Exception as e:
+            logging.debug(f"[{adm_id}] Error getting target dates for year {year}: {e}")
+            return None, 0, None
+
+    @staticmethod
+    def _extract_year_data(
+        dataset: CYDataset,
+        adm_id: str,
+        year: int,
+        target_dates: pd.DatetimeIndex,
+        aggregation: str,
+    ) -> Dict[str, np.ndarray]:
+        """
+        Extract raw time series data for a specific year.
+
+        Returns dict with 'tavg', 'tmin', 'tmax', 'prec', 'ndvi', 'fpar', 'ssm' arrays.
+        """
+        year_data = {}
+
+        # Extract weather data
+        if "meteo" in dataset._dfs_x:
+            try:
+                meteo = dataset._dfs_x["meteo"].loc[adm_id]
+                all_meteo = meteo.reset_index() if isinstance(meteo, pd.Series) else meteo
+                year_df = (all_meteo[all_meteo[KEY_YEAR] == year]
+                           if KEY_YEAR in all_meteo.columns else all_meteo).copy()
+
+                if not year_df.empty:
+                    # Interpolate to daily resolution for consistent summaries
+                    full_daily_range = pd.date_range(start=target_dates[0], end=target_dates[-1], freq='D')
+
+                    for var in ['tavg', 'tmin', 'tmax', 'prec', 'rad']:
+                        if var in year_df.columns:
+                            daily_series = interpolate_to_daily(
+                                year_df[var], full_daily_range, method='linear', interpolate_data='unknown'
+                            )
+                            year_data[var] = daily_series.values
+            except Exception as e:
+                logging.debug(f"[{adm_id}] Weather extraction error for year {year}: {e}")
+
+        # Extract remote sensing data
+        for rs_var in ['ndvi', 'fpar', 'ssm', 'rsm']:
+            try:
+                if rs_var in ["ssm", "rsm"]:
+                    if "soil_moisture" not in dataset._dfs_x:
+                        continue
+                    df = dataset._dfs_x["soil_moisture"]
+                    if (adm_id, year) not in df.index:
+                        continue
+                    rs_data = df.loc[(adm_id, year)].iloc[:, 0]
+                else:
+                    if rs_var not in dataset._dfs_x:
+                        continue
+                    df = dataset._dfs_x[rs_var]
+                    if (adm_id, year) not in df.index:
+                        continue
+                    rs_data = df.loc[(adm_id, year)].iloc[:, 0]
+
+                # Interpolate to daily resolution
+                full_daily_range = pd.date_range(start=target_dates[0], end=target_dates[-1], freq='D')
+                daily_val = interpolate_to_daily(
+                    rs_data, full_daily_range,
+                    interpolate_data='soil_moisture' if rs_var in ['ssm', 'rsm'] else rs_var
+                )
+                year_data[rs_var] = daily_val.values
+            except Exception as e:
+                logging.debug(f"[{adm_id}] {rs_var} extraction error for year {year}: {e}")
+
+        return year_data
+
+    @staticmethod
+    def _compute_weather_summaries(
+        year_data: Dict[str, np.ndarray],
+        crop: str,
+        year_suffix: str,
+    ) -> Dict[str, float]:
+        """Compute weather-based summary features."""
+        summaries = {}
+
+        tavg = year_data.get('tavg', np.array([]))
+        tmin = year_data.get('tmin', np.array([]))
+        tmax = year_data.get('tmax', np.array([]))
+        prec = year_data.get('prec', np.array([]))
+
+        if len(tavg) > 0:
+            # Filter out NaN values for statistics
+            valid_tavg = tavg[~np.isnan(tavg)]
+            valid_tmin = tmin[~np.isnan(tmin)]
+            valid_tmax = tmax[~np.isnan(tmax)]
+            valid_prec = prec[~np.isnan(prec)]
+
+            if len(valid_tavg) > 0:
+                # Temperature summaries
+                summaries[f'prev_year_avg_temp{year_suffix}'] = float(np.mean(valid_tavg))
+                summaries[f'prev_year_max_temp{year_suffix}'] = float(np.max(valid_tmax))
+                summaries[f'prev_year_min_temp{year_suffix}'] = float(np.min(valid_tmin))
+                summaries[f'prev_year_temp_std{year_suffix}'] = float(np.std(valid_tavg))
+
+                # Growing degree days (using crop-specific base temp)
+                gdd_base = MultiYearFeatureEngineer.HEAT_THRESHOLDS.get(crop, 10.0)  # Reuse as base temp
+                gdd_upper = GDD_UPPER_LIMIT.get(crop, 30.0)
+                gdd = np.maximum(np.minimum(valid_tavg, gdd_upper) - gdd_base, 0.0)
+                summaries[f'prev_year_gdd{year_suffix}'] = float(np.sum(gdd))
+
+            if len(valid_prec) > 0:
+                # Precipitation summaries
+                summaries[f'prev_year_total_precip{year_suffix}'] = float(np.sum(valid_prec))
+                summaries[f'prev_year_precip_std{year_suffix}'] = float(np.std(valid_prec))
+
+                # Extreme event counts
+                heat_thresh = MultiYearFeatureEngineer.HEAT_THRESHOLDS.get(crop, 35.0)
+                summaries[f'prev_year_heat_days{year_suffix}'] = float(np.sum(valid_tmax > heat_thresh))
+                summaries[f'prev_year_frost_days{year_suffix}'] = float(np.sum(valid_tmin < MultiYearFeatureEngineer.FROST_THRESHOLD))
+                summaries[f'prev_year_cold_stress_days{year_suffix}'] = float(np.sum(valid_tmin < MultiYearFeatureEngineer.COLD_STRESS_THRESHOLD))
+                summaries[f'prev_year_dry_days{year_suffix}'] = float(np.sum(valid_prec < MultiYearFeatureEngineer.DRY_DAY_THRESHOLD))
+                summaries[f'prev_year_wet_days{year_suffix}'] = float(np.sum(valid_prec > MultiYearFeatureEngineer.WET_DAY_THRESHOLD))
+
+        return summaries
+
+    @staticmethod
+    def _compute_remote_sensing_summaries(
+        year_data: Dict[str, np.ndarray],
+        year_suffix: str,
+    ) -> Dict[str, float]:
+        """Compute remote sensing summary features."""
+        summaries = {}
+
+        for rs_var in ['ndvi', 'fpar', 'ssm']:
+            if rs_var in year_data:
+                data = year_data[rs_var]
+                valid_data = data[~np.isnan(data)]
+
+                if len(valid_data) > 0:
+                    summaries[f'prev_year_{rs_var}_max{year_suffix}'] = float(np.max(valid_data))
+                    summaries[f'prev_year_{rs_var}_mean{year_suffix}'] = float(np.mean(valid_data))
+                    summaries[f'prev_year_{rs_var}_integral{year_suffix}'] = float(np.sum(valid_data))
+
+        # End-of-season soil moisture (last 30 days average)
+        if 'ssm' in year_data:
+            ssm = year_data['ssm']
+            valid_ssm = ssm[~np.isnan(ssm)]
+            if len(valid_ssm) >= 30:
+                summaries[f'prev_year_ssm_final{year_suffix}'] = float(np.mean(valid_ssm[-30:]))
+            elif len(valid_ssm) > 0:
+                summaries[f'prev_year_ssm_final{year_suffix}'] = float(np.mean(valid_ssm))
+
+        return summaries
+
+    @staticmethod
+    def _compute_phenology_summaries(
+        dataset: CYDataset,
+        adm_id: str,
+        current_year: int,
+        target_year: int,
+        year_suffix: str,
+    ) -> Dict[str, float]:
+        """Compute phenology summary features (crop calendar changes)."""
+        summaries = {}
+
+        try:
+            # Get current year crop calendar
+            if ("crop_season" in dataset._dfs_x and
+                    (adm_id, current_year) in dataset._dfs_x["crop_season"].index):
+                current_cc = dataset._dfs_x["crop_season"].loc[(adm_id, current_year)]
+
+                # Get target year crop calendar
+                if ("crop_season" in dataset._dfs_x and
+                        (adm_id, target_year) in dataset._dfs_x["crop_season"].index):
+                    target_cc = dataset._dfs_x["crop_season"].loc[(adm_id, target_year)]
+
+                    # Compute differences
+                    if 'sos_date' in current_cc.index and 'sos_date' in target_cc.index:
+                        sos_curr = current_cc['sos_date']
+                        sos_targ = target_cc['sos_date']
+                        if pd.notna(sos_curr) and pd.notna(sos_targ):
+                            if isinstance(sos_curr, pd.Timestamp) and isinstance(sos_targ, pd.Timestamp):
+                                summaries[f'sos_year_over_year_change{year_suffix}'] = float(
+                                    (sos_curr.dayofyear - sos_targ.dayofyear)
+                                )
+
+                    if 'eos_date' in current_cc.index and 'eos_date' in target_cc.index:
+                        eos_curr = current_cc['eos_date']
+                        eos_targ = target_cc['eos_date']
+                        if pd.notna(eos_curr) and pd.notna(eos_targ):
+                            if isinstance(eos_curr, pd.Timestamp) and isinstance(eos_targ, pd.Timestamp):
+                                summaries[f'eos_year_over_year_change{year_suffix}'] = float(
+                                    (eos_curr.dayofyear - eos_targ.dayofyear)
+                                )
+
+                    # Season length change
+                    if ('sos_date' in current_cc.index and 'eos_date' in current_cc.index and
+                            'sos_date' in target_cc.index and 'eos_date' in target_cc.index):
+                        season_curr = None
+                        season_targ = None
+                        if (pd.notna(current_cc['sos_date']) and pd.notna(current_cc['eos_date']) and
+                                pd.notna(target_cc['sos_date']) and pd.notna(target_cc['eos_date'])):
+                            if (isinstance(current_cc['sos_date'], pd.Timestamp) and
+                                isinstance(current_cc['eos_date'], pd.Timestamp) and
+                                isinstance(target_cc['sos_date'], pd.Timestamp) and
+                                isinstance(target_cc['eos_date'], pd.Timestamp)):
+                                season_curr = (current_cc['eos_date'] - current_cc['sos_date']).days
+                                season_targ = (target_cc['eos_date'] - target_cc['sos_date']).days
+                                summaries[f'season_length_change{year_suffix}'] = float(season_curr - season_targ)
+        except Exception as e:
+            logging.debug(f"[{adm_id}] Phenology summary error: {e}")
+
+        return summaries
+
+    @staticmethod
+    def _compute_multi_year_trends(
+        dataset: CYDataset,
+        adm_id: str,
+        current_year: int,
+        window: int,
+        feature_types: List[str],
+        crop: str,
+        aggregation: str,
+    ) -> Dict[str, float]:
+        """Compute linear trends across multiple years."""
+        summaries = {}
+
+        # Collect data for all years in window
+        years = [current_year - offset for offset in range(1, window + 1)]
+
+        # Collect time series for trend computation
+        for feature_type in feature_types:
+            if feature_type == 'weather':
+                # Compute trends for key weather variables
+                for var in ['total_precip', 'avg_temp', 'gdd']:
+                    values = []
+                    valid_years = []
+
+                    for year in years:
+                        target_dates, _, _ = MultiYearFeatureEngineer._get_target_dates(
+                            dataset, adm_id, year, aggregation
+                        )
+                        if target_dates is None or len(target_dates) == 0:
+                            continue
+
+                        year_data = MultiYearFeatureEngineer._extract_year_data(
+                            dataset, adm_id, year, target_dates, aggregation
+                        )
+
+                        if var == 'total_precip' and 'prec' in year_data:
+                            prec = year_data['prec'][~np.isnan(year_data['prec'])]
+                            if len(prec) > 0:
+                                values.append(np.sum(prec))
+                                valid_years.append(year)
+                        elif var == 'avg_temp' and 'tavg' in year_data:
+                            tavg = year_data['tavg'][~np.isnan(year_data['tavg'])]
+                            if len(tavg) > 0:
+                                values.append(np.mean(tavg))
+                                valid_years.append(year)
+                        elif var == 'gdd' and 'tavg' in year_data:
+                            tavg = year_data['tavg'][~np.isnan(year_data['tavg'])]
+                            if len(tavg) > 0:
+                                gdd_base = GDD_BASE_TEMP.get(crop, 10.0)
+                                gdd_upper = GDD_UPPER_LIMIT.get(crop, 30.0)
+                                gdd = np.maximum(np.minimum(tavg, gdd_upper) - gdd_base, 0.0)
+                                values.append(np.sum(gdd))
+                                valid_years.append(year)
+
+                    # Compute linear trend (slope)
+                    if len(values) >= 2:
+                        slope = MultiYearFeatureEngineer._linear_slope(valid_years, values)
+                        summaries[f'{var}_trend_{window}year'] = slope
+
+            elif feature_type == 'remote_sensing':
+                # Compute trends for NDVI
+                values = []
+                valid_years = []
+
+                for year in years:
+                    target_dates, _, _ = MultiYearFeatureEngineer._get_target_dates(
+                        dataset, adm_id, year, aggregation
+                    )
+                    if target_dates is None or len(target_dates) == 0:
+                        continue
+
+                    year_data = MultiYearFeatureEngineer._extract_year_data(
+                        dataset, adm_id, year, target_dates, aggregation
+                    )
+
+                    if 'ndvi' in year_data:
+                        ndvi = year_data['ndvi'][~np.isnan(year_data['ndvi'])]
+                        if len(ndvi) > 0:
+                            values.append(np.max(ndvi))  # Peak NDVI
+                            valid_years.append(year)
+
+                if len(values) >= 2:
+                    slope = MultiYearFeatureEngineer._linear_slope(valid_years, values)
+                    summaries[f'ndvi_peak_trend_{window}year'] = slope
+
+        return summaries
+
+    @staticmethod
+    def _linear_slope(years: List[int], values: List[float]) -> float:
+        """Compute linear slope (trend) using least squares."""
+        if len(years) < 2:
+            return 0.0
+
+        x = np.array(years)
+        y = np.array(values)
+
+        # Linear regression: y = mx + b
+        # slope m = Σ(xi - x_mean)(yi - y_mean) / Σ(xi - x_mean)^2
+        x_mean = np.mean(x)
+        y_mean = np.mean(y)
+
+        numerator = np.sum((x - x_mean) * (y - y_mean))
+        denominator = np.sum((x - x_mean) ** 2)
+
+        if denominator < 1e-10:
+            return 0.0
+
+        return float(numerator / denominator)
+
+    @staticmethod
+    def get_feature_names(
+        window: int,
+        feature_types: List[str],
+    ) -> List[str]:
+        """
+        Return the names of multi-year summary features that will be generated.
+
+        Useful for updating feature normalization statistics and model input dimensions.
+
+        Args:
+            window: Number of years to look back
+            feature_types: List of feature types to include
+
+        Returns:
+            List of feature names in alphabetical order
+        """
+        names = []
+
+        # Expand 'all' to specific types
+        if 'all' in feature_types:
+            feature_types = ['weather', 'remote_sensing', 'phenology']
+
+        # Per-year features
+        for year_offset in range(1, window + 1):
+            year_suffix = f"_Tminus{year_offset}"
+
+            if 'weather' in feature_types:
+                names.extend([
+                    f'prev_year_avg_temp{year_suffix}',
+                    f'prev_year_max_temp{year_suffix}',
+                    f'prev_year_min_temp{year_suffix}',
+                    f'prev_year_temp_std{year_suffix}',
+                    f'prev_year_gdd{year_suffix}',
+                    f'prev_year_total_precip{year_suffix}',
+                    f'prev_year_precip_std{year_suffix}',
+                    f'prev_year_heat_days{year_suffix}',
+                    f'prev_year_frost_days{year_suffix}',
+                    f'prev_year_cold_stress_days{year_suffix}',
+                    f'prev_year_dry_days{year_suffix}',
+                    f'prev_year_wet_days{year_suffix}',
+                ])
+
+            if 'remote_sensing' in feature_types:
+                for rs_var in ['ndvi', 'fpar', 'ssm']:
+                    names.extend([
+                        f'prev_year_{rs_var}_max{year_suffix}',
+                        f'prev_year_{rs_var}_mean{year_suffix}',
+                        f'prev_year_{rs_var}_integral{year_suffix}',
+                    ])
+                names.append(f'prev_year_ssm_final{year_suffix}')
+
+            if 'phenology' in feature_types:
+                names.extend([
+                    f'sos_year_over_year_change{year_suffix}',
+                    f'eos_year_over_year_change{year_suffix}',
+                    f'season_length_change{year_suffix}',
+                ])
+
+        # Multi-year trend features (only if window >= 2)
+        if window >= 2:
+            if 'weather' in feature_types:
+                names.extend([
+                    f'total_precip_trend_{window}year',
+                    f'avg_temp_trend_{window}year',
+                    f'gdd_trend_{window}year',
+                ])
+            if 'remote_sensing' in feature_types:
+                names.append(f'ndvi_peak_trend_{window}year')
+
+        return sorted(names)
+
+
 def _get_static_feature_names(
     include_spatial_features: bool,
     lag_years: int,
     use_heat_stress_days: bool = False,
+    multi_year_config: Optional[Dict] = None,
 ) -> List[str]:
     """
     Return static feature names in the EXACT order that _extract_static_features()
@@ -1107,6 +1672,7 @@ def _get_static_feature_names(
       4. Explicit lat/lon (conditional)
       5. Lagged yields (conditional)
       6. Heat stress counts (conditional)
+      7. Multi-year summaries (conditional)
     """
     names = list(SOIL_PROPERTIES)
     names.extend(LOCATION_PROPERTIES)
@@ -1123,7 +1689,7 @@ def _get_static_feature_names(
     for lag in range(1, lag_years + 1):
         names.append(f'lag_yield_{lag}')
 
-    # Heat stress counts 
+    # Heat stress counts
     if use_heat_stress_days:
         names.extend([
             'heat_stress_days',
@@ -1133,6 +1699,13 @@ def _get_static_feature_names(
             'wet_days',
             'heat_stress_frac',
             'dry_frac',
-        ]) 
+        ])
+
+    # Multi-year summaries (NEW)
+    if multi_year_config is not None and multi_year_config.get('enabled', False):
+        window = multi_year_config.get('window', 1)
+        feature_types = multi_year_config.get('features', ['weather'])
+        multi_year_names = MultiYearFeatureEngineer.get_feature_names(window, feature_types)
+        names.extend(multi_year_names)
 
     return names

@@ -238,6 +238,7 @@ class DailyCYBenchSeqDataModule(pl.LightningDataModule):
                     use_rue=cfg.use_rue,
                     use_farquhar=cfg.use_farquhar,
                     crop=cfg.crop,
+                    multi_year_config=cfg.multi_year_config if hasattr(cfg, 'multi_year_config') and cfg.multi_year_config is not None else None,
                 )
                 all_X_ts.append(X_ts)
                 all_X_static.append(X_static)
@@ -249,6 +250,8 @@ class DailyCYBenchSeqDataModule(pl.LightningDataModule):
                 all_masks.append(mask)
 
             # Convert to numpy arrays
+            # With compute_summaries now returning consistent feature structure,
+            # all_X_static should have consistent length across samples
             self.all_X_ts = np.array(all_X_ts)
             self.all_X_static = np.array(all_X_static)
             self.all_y = np.array(all_y)
@@ -419,6 +422,7 @@ class DailyCYBenchSeqDataModule(pl.LightningDataModule):
             self.config.include_spatial_features,
             self.config.lag_years,
             self.config.use_heat_stress_days,
+            multi_year_config=self.config.multi_year_config if hasattr(self.config, 'multi_year_config') else None,
         )
 
     def train_dataloader(self):

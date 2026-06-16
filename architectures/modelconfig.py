@@ -1,6 +1,6 @@
-from typing import Optional, Dict, List, Tuple, Callable
+from typing import Optional, Dict, List, Tuple, Callable, Union
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from cybench.config import (
     GDD_BASE_TEMP, GDD_UPPER_LIMIT, LOCATION_PROPERTIES, SOIL_PROPERTIES,
@@ -50,6 +50,8 @@ class TSTModelConfig:
     use_farquhar: bool = False
     use_revin: bool = False
     use_positional_encoding: bool = True  # Add sinusoidal positional encoding to preserve temporal ordering
+    use_exponential_weighting: bool = False  # Enable exponential sample weighting for non-stationarity
+    exponential_tau: float = 10.0  # Decay constant for exponential weighting (higher = slower decay)
     results_dir: str = "checkpoints/results"
     lr_scheduler_lambda: Optional[Callable] = None
     patchtst_d_model: int = 64
@@ -57,6 +59,10 @@ class TSTModelConfig:
     patchtst_ffn_dim: int = 256
     patchtst_num_layers: int = 3
     patchtst_dropout: float = 0.1
+    # Multi-year context features
+    multi_year_summaries: bool = False  # Enable multi-year summary features from previous growing seasons
+    multi_year_window: int = 1  # Years of historical context (1=T-1, 2=T-1,T-2, 3=T-1,T-2,T-3)
+    multi_year_features: List[str] = field(default_factory=lambda: ['weather'])  # Which features to summarize
 
     @property
     def seq_len(self):
@@ -77,6 +83,17 @@ class TSTModelConfig:
         # Full list of time series variables including remote sensing.
         return self.weather_features + REMOTE_SENSING_FEATURES
 
+    @property
+    def multi_year_config(self) -> Optional[Dict]:
+        """Build multi-year config dict for feature engineering."""
+        if self.multi_year_summaries:
+            return {
+                'enabled': True,
+                'window': self.multi_year_window,
+                'features': self.multi_year_features,
+            }
+        return None
+
     def _compute_expected_static_features(self) -> int:
         # Compute the total expected static feature count from the current config.
         # Validates if build_daily_input_sequence() is producing the right number of features.
@@ -94,9 +111,19 @@ class TSTModelConfig:
         n_spatial = 2 if self.include_spatial_features else 0
         n_lagged = self.lag_years
         # Heat stress: 7 scalar features when enabled
-        n_heat_stress = 7 if self.use_heat_stress_days else 0 
+        n_heat_stress = 7 if self.use_heat_stress_days else 0
 
-        return n_soil + n_location + n_crop + n_spatial + n_lagged + n_heat_stress
+        # Multi-year summaries
+        n_multi_year = 0
+        if self.multi_year_summaries:
+            from cybench.process.featureEngineering import MultiYearFeatureEngineer
+            feature_types = (['all'] if 'all' in self.multi_year_features
+                           else self.multi_year_features)
+            n_multi_year = len(MultiYearFeatureEngineer.get_feature_names(
+                self.multi_year_window, feature_types
+            ))
+
+        return n_soil + n_location + n_crop + n_spatial + n_lagged + n_heat_stress + n_multi_year
     
 
 @dataclass
@@ -128,12 +155,18 @@ class LinearModelConfig:
     use_rue: bool = False
     use_farquhar: bool = False
     use_positional_encoding: bool = True  # Add sinusoidal positional encoding to preserve temporal ordering
+    use_exponential_weighting: bool = False  # Enable exponential sample weighting for non-stationarity
+    exponential_tau: float = 10.0  # Decay constant for exponential weighting (higher = slower decay)
     results_dir: str = "checkpoints/results"
     lr_scheduler_lambda: Optional[Callable] = None
     xlinear_hidden_size: int = 64
     xlinear_temporal_ff: int = 128
     xlinear_channel_ff: int = 16
     xlinear_dropout: float = 0.1
+    # Multi-year context features
+    multi_year_summaries: bool = False  # Enable multi-year summary features from previous growing seasons
+    multi_year_window: int = 1  # Years of historical context (1=T-1, 2=T-1,T-2, 3=T-1,T-2,T-3)
+    multi_year_features: List[str] = field(default_factory=lambda: ['weather'])  # Which features to summarize
 
     @property
     def seq_len(self):
@@ -156,6 +189,17 @@ class LinearModelConfig:
         """Full list of time series variables including remote sensing."""
         return self.weather_features + REMOTE_SENSING_FEATURES
 
+    @property
+    def multi_year_config(self) -> Optional[Dict]:
+        """Build multi-year config dict for feature engineering."""
+        if self.multi_year_summaries:
+            return {
+                'enabled': True,
+                'window': self.multi_year_window,
+                'features': self.multi_year_features,
+            }
+        return None
+
     def _compute_expected_static_features(self) -> int:
         """
         Compute the total expected static feature count from the current config.
@@ -172,6 +216,16 @@ class LinearModelConfig:
         n_lagged = self.lag_years
 
         # Heat stress: 7 scalar features when enabled
-        n_heat_stress = 7 if self.use_heat_stress_days else 0 
+        n_heat_stress = 7 if self.use_heat_stress_days else 0
 
-        return n_soil + n_location + n_crop + n_spatial + n_lagged + n_heat_stress
+        # Multi-year summaries
+        n_multi_year = 0
+        if self.multi_year_summaries:
+            from cybench.process.featureEngineering import MultiYearFeatureEngineer
+            feature_types = (['all'] if 'all' in self.multi_year_features
+                           else self.multi_year_features)
+            n_multi_year = len(MultiYearFeatureEngineer.get_feature_names(
+                self.multi_year_window, feature_types
+            ))
+
+        return n_soil + n_location + n_crop + n_spatial + n_lagged + n_heat_stress + n_multi_year
