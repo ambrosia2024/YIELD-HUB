@@ -209,18 +209,8 @@ def save_best_params_to_csv(
                 writer.writerow([param, value])
             writer.writerow(['r2', best_r2_trial.values[1]])
     else:
-        if not study.best_trial:
-            print("[HPO] No completed trials found, skipping CSV export.")
-            return
-        """
-        csv_path = os.path.join(save_dir, 'optuna_best.csv')
-        with open(csv_path, 'w', newline='') as csvfile:
-            writer = csv.writer(csvfile)
-            writer.writerow(['hyperparameter', 'value'])
-            for param, value in study.best_params.items():
-                writer.writerow([param, value])
-            writer.writerow(['objective_value', study.best_value])
-        """
+        # Single-objective optimization (nrmse or r2) - do not save CSV
+        return
 
 def run_hpo(
     objective: Callable[[optuna.Trial], Any],

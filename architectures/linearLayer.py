@@ -20,6 +20,7 @@ from cybench.config import (
 
 # Custom Classes and functions
 from trendLayer import TrendModel
+from biasCorrection import BiasCorrection
 from modelconfig import LinearModelConfig
 
 sys.path.append('../process/')
@@ -49,6 +50,12 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
         self.weight_decay = weight_decay
         self.config = config
         self.trend_model = TrendModel()
+        # Bias correction: automatic when use_recursive_lags=True
+        self.bias_correction: Optional[BiasCorrection] = (
+            BiasCorrection(method='linear') if config.use_recursive_lags else None
+        )
+        if self.bias_correction:
+            logging.info("[BiasCorrection] ENABLED (automatic with use_recursive_lags=True)")
         self.feature_norm_params: Optional[Dict] = None
         # Track most recent training year for exponential weighting
         self._most_recent_year: Optional[int] = None
@@ -230,6 +237,12 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
         ]
         self.trend_model.fit(train_items)
         self.feature_norm_params = dm.feature_norm_params
+
+        # Initialize validation prediction storage for bias correction fitting
+        if self.bias_correction is not None:
+            self._val_preds = []
+            self._val_targets = []
+            logging.info("[BiasCorrection] Initialized validation prediction storage")
 
         # Track most recent training year for exponential weighting
         if self.config.use_exponential_weighting:
@@ -448,6 +461,9 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
         """
         Cache predictions in original scale for recursive lag prediction.
 
+        Applies bias correction if enabled (automatic with use_recursive_lags=True).
+        Bias-corrected predictions are cached to reduce error compounding in recursive forecasting.
+
         Args:
             predictions_z: Predictions in z-score space [B]
             years: Years [B]
@@ -460,6 +476,12 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
 
         # Convert to original scale
         predictions_orig = predictions_z.detach() * y_std + y_mean
+
+        # Apply bias correction if fitted (reduces error compounding in recursive lags)
+        if self.bias_correction is not None and self.bias_correction.is_fitted:
+            predictions_orig_np = predictions_orig.cpu().numpy()
+            predictions_orig_np = self.bias_correction.correct(predictions_orig_np)
+            predictions_orig = torch.tensor(predictions_orig_np, device=device, dtype=predictions_orig.dtype)
 
         for pred, year, adm_id in zip(predictions_orig, years, adm_ids):
             cache_key = (adm_id, int(year))
@@ -548,7 +570,17 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
         self.train_metrics.reset()
 
     def validation_step(self, batch, batch_idx):
-        self._eval_step_with_clipping(batch, self.val_metrics, "val_loss", "val")
+        # Accumulate predictions for bias correction fitting if enabled
+        if self.bias_correction is not None and hasattr(self, '_val_preds'):
+            loss, preds_clipped, targets, years = self._eval_step_with_clipping(
+                batch, self.val_metrics, "val_loss", "val", return_orig=True
+            )
+            # Accumulate predictions in original scale for bias correction fitting
+            self._val_preds.extend(preds_clipped.detach().cpu().tolist())
+            self._val_targets.extend(targets.detach().cpu().tolist())
+            return loss
+        else:
+            self._eval_step_with_clipping(batch, self.val_metrics, "val_loss", "val")
 
     def on_validation_epoch_end(self):
         results = self.val_metrics.compute()
@@ -561,6 +593,19 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
         self.log('val/nrmse', results['nrmse'], prog_bar=False)
         self.val_metrics.log_results("val")
         self.val_metrics.reset()
+
+    def on_train_end(self):
+        """Fit bias correction on validation predictions at the end of training."""
+        if self.bias_correction is not None and hasattr(self, '_val_preds') and len(self._val_preds) > 0:
+            # Fit bias correction on validation predictions
+            self.bias_correction.fit(np.array(self._val_preds), np.array(self._val_targets))
+            params = self.bias_correction.get_correction_params()
+            logging.info(f"[BiasCorrection] Fitted on {len(self._val_preds)} validation samples")
+            if 'a' in params and 'b' in params:
+                logging.info(f"[BiasCorrection] Correction: corrected = {params['a']:.4f} * pred + {params['b']:.4f}")
+            # Clear validation predictions to free memory
+            self._val_preds = []
+            self._val_targets = []
 
     def test_step(self, batch, batch_idx):
         """Test step with optional recursive lag prediction and per-year accumulation."""

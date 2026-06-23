@@ -107,7 +107,7 @@ Usage:
 
 # Quick test run (5 epochs)
     python tstBaselines.py --crop wheat --country NL --model_type informer --epochs 2 --aggregation daily --lag_years 0 --test_years 5 --results_dir checkpoints-test/results --save_checkpoint_dir checkpoints-test/results --wandb_project test-and-delete-later --forecast_type end-of-season --use_exponential_weighting --exponential_tau 10 --multi_year_summaries --multi_year_window 1 --multi_year_features all
-    python tstBaselines.py --crop wheat --country NL --model_type autoformer --epochs 2 --aggregation daily --lag_years 0 --test_years 5 --results_dir checkpoints-test/results --save_checkpoint_dir checkpoints-test/results --wandb_project test-and-delete-later --forecast_type middle-of-season
+    python tstBaselines.py --crop wheat --country NL --model_type timesnet --epochs 2 --aggregation daily --lag_years 2 --test_years 5 --results_dir checkpoints-test/results --save_checkpoint_dir checkpoints-test/results --use_recursive_lags --wandb_project test-and-delete-later --forecast_type middle-of-season
 
 ------------
 Core dependencies:
@@ -386,6 +386,14 @@ if __name__ == "__main__":
 
     print(f"[Feature Config] Weather features: {config.weather_features}")
     print(f"[Feature Config] Total time series vars ({len(config.time_series_vars)}): {config.time_series_vars}")
+
+    if config.use_recursive_lags and config.lag_years > 0:
+        print(f"\n{'=' * 70}")
+        print(f"[RECURSIVE LAGS ENABLED]")
+        print(f"During testing, model predictions will be used as lag features")
+        print(f"instead of observed (actual) historical yields.")
+        print(f"This provides true out-of-sample evaluation with error accumulation.")
+        print(f"{'=' * 70}\n")
 
     # Create checkpoint directory if it doesn't exist
     os.makedirs(args.save_checkpoint_dir, exist_ok=True)

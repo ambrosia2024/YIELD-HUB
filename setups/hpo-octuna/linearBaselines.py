@@ -96,7 +96,7 @@ Usage:
     python linearBaselines.py --crop maize --country NL --model_type xlinear --n_trials 50 --epochs 5 --hpo_objective nrmse --hpo_results_file checkpoints-test/results/HPO/octuna_file.txt --hpo_study_name test-and-delete-later
 
 # Quick test run (2 trials)
-    python linearBaselines.py --crop wheat --country NL --model_type nlinear --n_trials 4 --epochs 2 --results_dir checkpoints-test/results --forecast_type middle-of-season --aggregation daily --use_exponential_weighting --exponential_tau 3 --multi_year_summaries --multi_year_window 1 --multi_year_features all
+    python linearBaselines.py --crop wheat --country NL --model_type nlinear --n_trials 4 --epochs 2 --results_dir checkpoints-test/results --forecast_type middle-of-season --aggregation daily
 
 --------------------
 Hyperparameters:
@@ -290,7 +290,14 @@ if __name__ == "__main__":
     parser.add_argument('--hpo_objective', type=str, default='nrmse',
                         choices=['nrmse', 'r2', 'multi'],
                         help='Optimization objective: nrmse (minimize), r2 (maximize), or multi (both)')
+    # Removed: --optimize parameter (everything is optimized together)
     args = parser.parse_args()
+
+    # Auto-enable use_recursive_lags when lag_years > 0
+    # This ensures true out-of-sample testing when using historical lag features
+    if args.lag_years > 0 and not args.use_recursive_lags:
+        args.use_recursive_lags = True
+        print(f"[Auto-config] Enabled use_recursive_lags=True (lag_years={args.lag_years} > 0)")
 
     # The original alignment.py in cybench repo only supports "middle-of-season", "quarter-of-season", and "N-days" predictions. Since, we wanted to have "middle-of-season", "quarter-of-season", "end-of-season" and "three-quarter-of-season", we set lead_time to "0-days" which makes alignment.py load
     # the full season (SOS to EOS). The actual forecast timing is then controlled via data_fraction parameter below during feature building.
@@ -412,6 +419,35 @@ if __name__ == "__main__":
 
     def optuna_objective(trial):
         """Optuna objective function for hyperparameter optimization"""
+
+        # === FEATURE FLAGS ===
+        use_gdd_hp = trial.suggest_categorical('use_gdd', [False, True])
+        use_heat_stress_days_hp = trial.suggest_categorical('use_heat_stress_days', [False, True])
+        use_rue_hp = trial.suggest_categorical('use_rue', [False, True])
+        use_farquhar_hp = trial.suggest_categorical('use_farquhar', [False, True])
+        use_sota_features_hp = trial.suggest_categorical('use_sota_features', [False, True])
+        include_spatial_features_hp = trial.suggest_categorical('include_spatial_features', [False, True])
+        use_residual_trend_hp = trial.suggest_categorical('use_residual_trend', [False, True])
+        use_cwb_feature_hp = trial.suggest_categorical('use_cwb_feature', [False, True])
+        drop_tavg_hp = trial.suggest_categorical('drop_tavg', [False, True])
+        lag_years_hp = trial.suggest_categorical('lag_years', [0, 1, 2, 3])
+
+        # use_recursive_lags is only applicable when lag_years > 0
+        # We'll handle this after suggesting lag_years
+
+        use_exponential_weighting_hp = trial.suggest_categorical('use_exponential_weighting', [False, True])
+        exponential_tau_hp = trial.suggest_categorical('exponential_tau', [0, 10, 25, 50, 75, 100])
+        multi_year_summaries_hp = trial.suggest_categorical('multi_year_summaries', [False, True])
+        multi_year_window_hp = trial.suggest_categorical('multi_year_window', [1, 2, 3])
+        multi_year_features_hp = trial.suggest_categorical('multi_year_features', ['weather', 'remote_sensing', 'phenology', 'all'])
+
+        # For xlinear models, also tune use_revin
+        if args.model_type == 'xlinear':
+            use_revin_hp = trial.suggest_categorical('use_revin', [False, True])
+        else:
+            use_revin_hp = args.use_revin
+
+        # === MODEL HYPERPARAMETERS ===
         if args.model_type == 'xlinear':
             xlinear_hidden_size = trial.suggest_categorical('xlinear_hidden_size', [32, 64, 128, 256])
             xlinear_temporal_ff = trial.suggest_categorical('xlinear_temporal_ff', [64, 128, 256, 512])
@@ -422,35 +458,55 @@ if __name__ == "__main__":
             batch_size = trial.suggest_categorical('batch_size', [16, 32, 64, 128])
             lr = trial.suggest_float('lr', 5e-5, 5e-4, log=True)
             weight_decay = trial.suggest_float('weight_decay', 1e-6, 1e-4, log=True)
-            seed = trial.suggest_categorical('seed', [42, 100, 500, 1111, 5555])
+        else:
+            # For other linear models
+            xlinear_hidden_size = args.xlinear_hidden_size
+            xlinear_temporal_ff = args.xlinear_temporal_ff
+            xlinear_channel_ff = args.xlinear_channel_ff
+            xlinear_dropout = args.xlinear_dropout
 
-            # Create config with suggested parameters
+            batch_size = trial.suggest_categorical('batch_size', [16, 32, 64, 128])
+            lr = trial.suggest_float('lr', 5e-5, 5e-4, log=True)
+            weight_decay = trial.suggest_float('weight_decay', 1e-6, 1e-4, log=True)
+
+        # FIXED: seed is never tuned - always use the command-line arg
+        seed = args.seed
+
+        # Handle use_recursive_lags based on lag_years_hp
+        # Only enable when lag_years > 0, otherwise False
+        if lag_years_hp > 0:
+            use_recursive_lags_hp = trial.suggest_categorical('use_recursive_lags', [False, True])
+        else:
+            use_recursive_lags_hp = False
+
+        # Create config with suggested parameters
+        if args.model_type == 'xlinear':
             hpo_config = LinearModelConfig(
                 crop=args.crop, country=args.country,
                 model_type=args.model_type, aggregation=args.aggregation,
                 data_fraction=data_fraction,
-                use_sota_features=args.use_sota_features,
-                include_spatial_features=args.include_spatial_features,
-                lag_years=args.lag_years,
+                use_sota_features=use_sota_features_hp,
+                include_spatial_features=include_spatial_features_hp,
+                lag_years=lag_years_hp,
                 load_checkpoint=None,  # Never load checkpoint during HPO
                 seed=seed, batch_size=batch_size,
                 num_workers=args.num_workers,
                 max_epochs=args.epochs, lr=lr, weight_decay=weight_decay,
                 test_years=args.test_years,
-                use_residual_trend=args.use_residual_trend,
-                use_recursive_lags=args.use_recursive_lags,
-                use_gdd=args.use_gdd,
-                use_heat_stress_days=args.use_heat_stress_days,
-                use_rue=args.use_rue,
-                use_farquhar=args.use_farquhar,
-                use_cwb_feature=args.use_cwb_feature,
-                drop_tavg=args.drop_tavg,
-                use_revin=args.use_revin,
-                use_exponential_weighting=args.use_exponential_weighting,
-                exponential_tau=args.exponential_tau,
-                multi_year_summaries=args.multi_year_summaries,
-                multi_year_window=args.multi_year_window,
-                multi_year_features=args.multi_year_features,
+                use_residual_trend=use_residual_trend_hp,
+                use_recursive_lags=use_recursive_lags_hp,
+                use_gdd=use_gdd_hp,
+                use_heat_stress_days=use_heat_stress_days_hp,
+                use_rue=use_rue_hp,
+                use_farquhar=use_farquhar_hp,
+                use_cwb_feature=use_cwb_feature_hp,
+                drop_tavg=drop_tavg_hp,
+                use_revin=use_revin_hp,
+                use_exponential_weighting=use_exponential_weighting_hp,
+                exponential_tau=exponential_tau_hp,
+                multi_year_summaries=multi_year_summaries_hp,
+                multi_year_window=multi_year_window_hp,
+                multi_year_features=[multi_year_features_hp],
                 results_dir=args.results_dir,
                 lr_scheduler_lambda=lr_scheduler_lambda,
                 xlinear_hidden_size=xlinear_hidden_size,
@@ -459,44 +515,39 @@ if __name__ == "__main__":
                 xlinear_dropout=xlinear_dropout,
             )
         else:
-            # For other linear models, only tune shared hyperparameters
-            batch_size = trial.suggest_categorical('batch_size', [16, 32, 64, 128])
-            lr = trial.suggest_float('lr', 1e-5, 1e-3, log=True)
-            weight_decay = trial.suggest_float('weight_decay', 1e-6, 1e-4, log=True)
-            seed = trial.suggest_categorical('seed', [42, 100, 500, 1111, 5555])
-
+            # For other linear models
             hpo_config = LinearModelConfig(
                 crop=args.crop, country=args.country,
                 model_type=args.model_type, aggregation=args.aggregation,
                 data_fraction=data_fraction,
-                use_sota_features=args.use_sota_features,
-                include_spatial_features=args.include_spatial_features,
-                lag_years=args.lag_years,
+                use_sota_features=use_sota_features_hp,
+                include_spatial_features=include_spatial_features_hp,
+                lag_years=lag_years_hp,
                 load_checkpoint=None,
                 seed=seed, batch_size=batch_size,
                 num_workers=args.num_workers,
                 max_epochs=args.epochs, lr=lr, weight_decay=weight_decay,
                 test_years=args.test_years,
-                use_residual_trend=args.use_residual_trend,
-                use_recursive_lags=args.use_recursive_lags,
-                use_gdd=args.use_gdd,
-                use_heat_stress_days=args.use_heat_stress_days,
-                use_rue=args.use_rue,
-                use_farquhar=args.use_farquhar,
-                use_cwb_feature=args.use_cwb_feature,
-                drop_tavg=args.drop_tavg,
-                use_revin=args.use_revin,
-                use_exponential_weighting=args.use_exponential_weighting,
-                exponential_tau=args.exponential_tau,
-                multi_year_summaries=args.multi_year_summaries,
-                multi_year_window=args.multi_year_window,
-                multi_year_features=args.multi_year_features,
+                use_residual_trend=use_residual_trend_hp,
+                use_recursive_lags=use_recursive_lags_hp,
+                use_gdd=use_gdd_hp,
+                use_heat_stress_days=use_heat_stress_days_hp,
+                use_rue=use_rue_hp,
+                use_farquhar=use_farquhar_hp,
+                use_cwb_feature=use_cwb_feature_hp,
+                drop_tavg=drop_tavg_hp,
+                use_revin=use_revin_hp,
+                use_exponential_weighting=use_exponential_weighting_hp,
+                exponential_tau=exponential_tau_hp,
+                multi_year_summaries=multi_year_summaries_hp,
+                multi_year_window=multi_year_window_hp,
+                multi_year_features=[multi_year_features_hp],
                 results_dir=args.results_dir,
                 lr_scheduler_lambda=lr_scheduler_lambda,
-                xlinear_hidden_size=args.xlinear_hidden_size,
-                xlinear_temporal_ff=args.xlinear_temporal_ff,
-                xlinear_channel_ff=args.xlinear_channel_ff,
-                xlinear_dropout=args.xlinear_dropout,
+                xlinear_hidden_size=xlinear_hidden_size,
+                xlinear_temporal_ff=xlinear_temporal_ff,
+                xlinear_channel_ff=xlinear_channel_ff,
+                xlinear_dropout=xlinear_dropout,
             )
 
         # Create datamodule
@@ -565,18 +616,40 @@ if __name__ == "__main__":
                 return float('inf')
 
     # Enqueue default baseline configuration for comparison
-    baseline_params = None
+    baseline_params = {
+        'use_gdd': args.use_gdd,
+        'use_heat_stress_days': args.use_heat_stress_days,
+        'use_rue': args.use_rue,
+        'use_farquhar': args.use_farquhar,
+        'use_sota_features': args.use_sota_features,
+        'include_spatial_features': args.include_spatial_features,
+        'use_residual_trend': args.use_residual_trend,
+        'use_cwb_feature': args.use_cwb_feature,
+        'drop_tavg': args.drop_tavg,
+        'lag_years': args.lag_years,
+        'use_exponential_weighting': args.use_exponential_weighting,
+        'exponential_tau': int(args.exponential_tau),
+        'multi_year_summaries': args.multi_year_summaries,
+        'multi_year_window': args.multi_year_window,
+        'multi_year_features': args.multi_year_features[0] if args.multi_year_features else 'weather',
+        'batch_size': 16,
+        'lr': 1e-4,
+        'weight_decay': 1e-5,
+    }
+
+    # Add model-specific hyperparameters
     if args.model_type == 'xlinear':
-        baseline_params = {
+        baseline_params.update({
             'xlinear_hidden_size': 64,
             'xlinear_temporal_ff': 128,
             'xlinear_channel_ff': 16,
             'xlinear_dropout': 0.1,
-            'batch_size': 16,
-            'lr': 1e-4,
-            'weight_decay': 1e-5,
-            'seed': 42,
-        }
+            'use_revin': args.use_revin,
+        })
+
+    # Add use_recursive_lags only if lag_years > 0
+    if args.lag_years > 0:
+        baseline_params['use_recursive_lags'] = args.use_recursive_lags
 
     # Run optimization
     study = run_hpo(
@@ -590,6 +663,270 @@ if __name__ == "__main__":
 
     # Print and save results
     print_best_results(study, args.hpo_objective)
+
+    # Log baseline NRMSE for comparison
+    baseline_trial = [t for t in study.trials if t.number == 0]
+    if baseline_trial:
+        baseline_nrmse = baseline_trial[0].value
+        if baseline_nrmse and np.isfinite(baseline_nrmse):
+            print(f"\n[Baseline] Baseline NRMSE: {baseline_nrmse:.6f}")
+            # Also append to results file for permanent record
+            with open(hpo_results_file, 'a') as f:
+                f.write(f"\n[Baseline NRMSE for comparison] {baseline_nrmse:.6f}\n")
+
+    # Create checkpoint directory for saving results
+    os.makedirs(args.save_checkpoint_dir, exist_ok=True)
+
+    # ==================== PARAMETER EFFECT ANALYSIS ====================
+    print(f"\n{'=' * 80}")
+    print(f"PARAMETER EFFECT ANALYSIS (ALL PARAMETERS)")
+    print(f"{'=' * 80}\n")
+
+    try:
+        # Collect ALL parameters to analyze (both features and hyperparameters)
+        feature_params = {
+            'use_gdd', 'use_rue', 'use_farquhar', 'use_heat_stress_days',
+            'use_sota_features', 'include_spatial_features', 'use_residual_trend',
+            'use_cwb_feature', 'drop_tavg',
+            'lag_years', 'use_recursive_lags', 'use_exponential_weighting', 'exponential_tau',
+            'multi_year_summaries', 'multi_year_window', 'multi_year_features'
+        }
+
+        # Add use_revin for xlinear models
+        if args.model_type == 'xlinear':
+            feature_params.add('use_revin')
+
+        # Model hyperparameters to analyze
+        model_params = {'batch_size', 'lr', 'weight_decay'}
+        if args.model_type == 'xlinear':
+            model_params.update({
+                'xlinear_hidden_size', 'xlinear_temporal_ff',
+                'xlinear_channel_ff', 'xlinear_dropout'
+            })
+
+        # Combine all parameters
+        params_to_analyze = feature_params | model_params
+
+        # Analyze each parameter
+        param_results = []
+
+        for param_name in params_to_analyze:
+            # Use all trials for analysis (no dependency filtering)
+            # This ensures all parameters appear in the output
+            trials_to_analyze = list(study.trials)
+
+            # Group trials by parameter value
+            value_groups = {}
+            for trial in trials_to_analyze:
+                if trial.state == optuna.trial.TrialState.COMPLETE and param_name in trial.params:
+                    value = trial.params[param_name]
+                    if value not in value_groups:
+                        value_groups[value] = []
+                    obj_value = trial.values[0] if args.hpo_objective == 'multi' else trial.value
+                    # Skip failed trials (inf or nan values)
+                    if not np.isfinite(obj_value):
+                        continue
+                    value_groups[value].append(obj_value)
+
+            # Note: We still analyze parameters with only 1 value to report all tuned params
+            # For parameters with <2 values, we'll report them but note limited variation
+            if not value_groups:
+                continue  # Skip only if parameter never appeared
+
+            # Calculate statistics for each value
+            value_stats = {}
+            for value, vals in value_groups.items():
+                value_stats[value] = {
+                    'mean': np.mean(vals),
+                    'std': np.std(vals),
+                    'count': len(vals)
+                }
+
+            # Find best and worst values
+            best_value = min(value_stats, key=lambda v: value_stats[v]['mean'])
+            worst_value = max(value_stats, key=lambda v: value_stats[v]['mean'])
+
+            best_mean = value_stats[best_value]['mean']
+            worst_mean = value_stats[worst_value]['mean']
+
+            # Calculate effect size (negative = improvement for NRMSE)
+            effect_size = best_mean - worst_mean
+            baseline_nrmse = worst_mean
+
+            # Calculate percent improvement
+            pct_improvement = (effect_size / baseline_nrmse * 100) if baseline_nrmse > 0 else 0
+
+            # Store all value statistics for detailed reporting
+            all_values_stats = []
+            for value, stats in value_stats.items():
+                is_best = (value == best_value)
+                is_worst = (value == worst_value)
+                all_values_stats.append({
+                    'value': value,
+                    'mean': stats['mean'],
+                    'std': stats['std'],
+                    'count': stats['count'],
+                    'is_best': is_best,
+                    'is_worst': is_worst,
+                })
+
+            # Sort by mean NRMSE (ascending)
+            all_values_stats.sort(key=lambda x: x['mean'])
+
+            param_results.append({
+                'model_type': args.model_type,
+                'country': args.country,
+                'crop': args.crop,
+                'parameter': param_name,
+                'best_value': best_value,
+                'worst_value': worst_value,
+                'best_mean': best_mean,
+                'worst_mean': worst_mean,
+                'effect_size': effect_size,
+                'pct_improvement': pct_improvement,
+                'all_values': all_values_stats,
+            })
+
+        # Sort by absolute effect size
+        param_results.sort(key=lambda x: abs(x['effect_size']), reverse=True)
+
+        # Print table
+        if param_results:
+            print(f"\n{'='*80}")
+            print(f"PARAMETER EFFECT ANALYSIS - Absolute NRMSE Values")
+            print(f"{'='*80}")
+            print(f"Model: {args.model_type} | Crop: {args.crop} | Country: {args.country}")
+            print(f"Objective: {args.hpo_objective} (lower NRMSE is better)")
+            print(f"Trials: {len([t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE])}\n")
+
+            for r in param_results:
+                print(f"\n{r['parameter']}:")
+                print(f"  {'Value':<20} {'NRMSE (mean±std)':<20} {'Trials':<10} {'Status':<10}")
+                print(f"  {'-'*60}")
+
+                for val_stat in r['all_values']:
+                    # Format value display
+                    if isinstance(val_stat['value'], bool):
+                        val_str = f"{val_stat['value']} ({'ON' if val_stat['value'] else 'OFF'})"
+                    elif isinstance(val_stat['value'], str):
+                        val_str = f"'{val_stat['value']}'"
+                    else:
+                        val_str = str(val_stat['value'])
+
+                    # Status indicator
+                    status = ""
+                    if val_stat['is_best']:
+                        status = "★ BEST"
+                    elif val_stat['is_worst']:
+                        status = "✗ WORST"
+
+                    print(f"  {val_str:<20} {val_stat['mean']:.4f}±{val_stat['std']:.4f}  {val_stat['count']:<10} {status:<10}")
+
+                # Show range
+                if len(r['all_values']) > 1:
+                    nrmse_range = r['worst_mean'] - r['best_mean']
+                    print(f"  Range: {nrmse_range:.4f} (worst {r['worst_mean']:.4f} - best {r['best_mean']:.4f})")
+                else:
+                    print(f"  Note: Only 1 value tested (no variation)")
+
+            # Save to CSV for aggregation (expanded format with all values)
+            csv_file = os.path.join(
+                args.results_dir,
+                f'{args.model_type}_{args.crop}_{args.country}_parameter_effects.csv'
+            )
+            with open(csv_file, 'w', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow([
+                    'model_type', 'country', 'crop', 'parameter',
+                    'value', 'value_type', 'nrmse_mean', 'nrmse_std', 'trial_count', 'is_best', 'is_worst'
+                ])
+
+                # Add baseline NRMSE from trial 0
+                baseline_trial = [t for t in study.trials if t.number == 0]
+                if baseline_trial:
+                    baseline_nrmse = baseline_trial[0].value if args.hpo_objective != 'multi' else baseline_trial[0].values[0]
+                    if baseline_nrmse and baseline_nrmse != float('inf'):
+                        writer.writerow([
+                            args.model_type, args.country, args.crop, 'baseline',
+                            'Trial 0', 'baseline',
+                            f"{baseline_nrmse:.6f}", '0', 1, False, False
+                        ])
+
+                for r in param_results:
+                    for val_stat in r['all_values']:
+                        # Format value for CSV
+                        if isinstance(val_stat['value'], bool):
+                            val_str = 'True' if val_stat['value'] else 'False'
+                        else:
+                            val_str = str(val_stat['value'])
+
+                        writer.writerow([
+                            r['model_type'], r['country'], r['crop'], r['parameter'],
+                            val_str, type(val_stat['value']).__name__,
+                            f"{val_stat['mean']:.6f}", f"{val_stat['std']:.6f}",
+                            val_stat['count'], val_stat['is_best'], val_stat['is_worst']
+                        ])
+
+            print(f"\n[Parameter Effects] CSV saved to: {csv_file}")
+
+            # Also save human-readable TXT
+            txt_file = os.path.join(
+                args.results_dir,
+                f'{args.model_type}_{args.crop}_{args.country}_parameter_effects.txt'
+            )
+            with open(txt_file, 'w') as f:
+                f.write(f"Parameter Effect Analysis (ALL PARAMETERS)\n")
+                f.write(f"{'=' * 80}\n")
+                f.write(f"Model: {args.model_type} | Crop: {args.crop} | Country: {args.country}\n")
+                f.write(f"Objective: {args.hpo_objective} (lower NRMSE is better)\n")
+                f.write(f"Trials: {len([t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE])}\n\n")
+
+                # Add baseline NRMSE from trial 0
+                baseline_trial = [t for t in study.trials if t.number == 0]
+                if baseline_trial:
+                    baseline_nrmse = baseline_trial[0].value if args.hpo_objective != 'multi' else baseline_trial[0].values[0]
+                    if baseline_nrmse and baseline_nrmse != float('inf'):
+                        f.write(f"BASELINE NRMSE (Trial 0): {baseline_nrmse:.6f}\n\n")
+
+                for r in param_results:
+                    f.write(f"\n{r['parameter']}:\n")
+                    f.write(f"  {'Value':<20} {'NRMSE (mean±std)':<20} {'Trials':<10} {'Status':<10}\n")
+                    f.write(f"  {'-'*60}\n")
+
+                    for val_stat in r['all_values']:
+                        # Format value display
+                        if isinstance(val_stat['value'], bool):
+                            val_str = f"{val_stat['value']} ({'ON' if val_stat['value'] else 'OFF'})"
+                        elif isinstance(val_stat['value'], str):
+                            val_str = f"'{val_stat['value']}'"
+                        else:
+                            val_str = str(val_stat['value'])
+
+                        # Status indicator
+                        status = ""
+                        if val_stat['is_best']:
+                            status = "★ BEST"
+                        elif val_stat['is_worst']:
+                            status = "✗ WORST"
+
+                        f.write(f"  {val_str:<20} {val_stat['mean']:.4f}±{val_stat['std']:.4f}  {val_stat['count']:<10} {status:<10}\n")
+
+                    # Show range
+                    if len(r['all_values']) > 1:
+                        nrmse_range = r['worst_mean'] - r['best_mean']
+                        f.write(f"  Range: {nrmse_range:.4f} (worst {r['worst_mean']:.4f} - best {r['best_mean']:.4f})\n")
+                    else:
+                        f.write(f"  Note: Only 1 value tested (no variation)\n")
+
+            print(f"[Parameter Effects] TXT saved to: {txt_file}")
+
+        else:
+            print("[Parameter Effects] No parameters were varied in this study.")
+
+    except Exception as e:
+        print(f"[Parameter Effects] Could not compute: {e}")
+        import traceback
+        traceback.print_exc()
 
     # Save results to text file
     save_results_to_file(

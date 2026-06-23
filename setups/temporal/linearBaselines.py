@@ -97,7 +97,7 @@ Usage:
 
 # Quick test run (5 epochs)
     python linearBaselines.py --crop wheat --country NL --model_type olinear --epochs 2 --aggregation daily --test_years 5 --lag_years 0 --aggregation daily --results_dir checkpoints-test/results --save_checkpoint_dir checkpoints-test/results --wandb_project test-and-delete-later --forecast_type end-of-season --use_exponential_weighting --exponential_tau 10
-    python linearBaselines.py --crop wheat --country NL --model_type olinear --epochs 5 --aggregation daily --test_years 5 --lag_years 0 --aggregation daily --results_dir checkpoints-test/results --save_checkpoint_dir checkpoints-test/results --wandb_project test-and-delete-later --forecast_type middle-of-season
+    python linearBaselines.py --crop wheat --country NL --model_type olinear --epochs 5 --aggregation daily --test_years 5 --lag_years 2 --use_recursive_lags --aggregation daily --results_dir checkpoints-test/results --save_checkpoint_dir checkpoints-test/results --wandb_project test-and-delete-later --forecast_type middle-of-season
 
 --------------------
 Hyperparameters:
@@ -377,12 +377,12 @@ if __name__ == "__main__":
     print(f"[Feature Config] Total time series vars ({len(config.time_series_vars)}): {config.time_series_vars}")
 
     if config.use_recursive_lags and config.lag_years > 0:
-        print(f"\n{'!' * 70}")
+        print(f"\n{'=' * 70}")
         print(f"[RECURSIVE LAGS ENABLED]")
         print(f"During testing, model predictions will be used as lag features")
         print(f"instead of observed (actual) historical yields.")
         print(f"This provides true out-of-sample evaluation with error accumulation.")
-        print(f"{'!' * 70}\n")
+        print(f"{'=' * 70}\n")
 
     # Create checkpoint directory
     os.makedirs(args.save_checkpoint_dir, exist_ok=True)
