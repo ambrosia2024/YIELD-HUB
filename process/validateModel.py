@@ -412,6 +412,7 @@ def run_walk_forward_validation(
     save_checkpoint_dir: Optional[str] = None,
     save_top_k: int = -1,
     save_last: bool = True,
+    fold_idx_only: Optional[int] = None,
 ) -> Dict:
     """
     Run walk-forward validation where each fold is tested on ALL future years.
@@ -448,7 +449,7 @@ def run_walk_forward_validation(
         - overall_metrics: Average metrics across all folds/years
         - per_year_metrics: Aggregated metrics per test year
     """
-    from cybench.process.loadData import generate_walk_forward_splits
+    from loadData import generate_walk_forward_splits
 
     print(f"\n{'=' * 70}")
     print(f"WALK-FORWARD VALIDATION (Test on All Future Years)")
@@ -460,6 +461,14 @@ def run_walk_forward_validation(
 
     # Generate walk-forward splits
     wf_splits = generate_walk_forward_splits(all_years, test_years)
+    if fold_idx_only is not None:
+        wf_splits = [s for s in wf_splits if s["fold_idx"] == fold_idx_only]
+        if not wf_splits:
+            raise ValueError(
+                f"fold_idx_only={fold_idx_only} invalid for test_years={test_years} "
+                f"(valid: 0..{test_years - 1})"
+            )
+        print(f"[Walk-Forward] Running single fold index {fold_idx_only} only")
 
     print(f"[Walk-Forward Config]")
     print(f"Number of folds: {len(wf_splits)}")

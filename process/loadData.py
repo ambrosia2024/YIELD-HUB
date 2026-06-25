@@ -7,6 +7,7 @@ Python version: 3.12.0
 --------------------
 """
 
+import os
 import sys
 import logging
 from typing import Union
@@ -32,7 +33,9 @@ from cybench.config import (
 # Custom functions
 from featureEngineering import build_daily_input_sequence, _get_static_feature_names
 
-sys.path.append('../architectures/')
+_ARCH_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "architectures"))
+if _ARCH_DIR not in sys.path:
+    sys.path.insert(0, _ARCH_DIR)
 from modelconfig import TSTModelConfig, LinearModelConfig
 
 # %% Global constants

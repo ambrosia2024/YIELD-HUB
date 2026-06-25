@@ -210,3 +210,11 @@ docs/
 README_old.md
 data/
 wrappers/data/
+
+# Walk-forward / Slurm run artifacts (see output/walk-forward/)
+output/
+wandb/
+setups/**/log/
+setups/**/modelCheckpoints/
+setups/**/checkpoints-test/
+setups/walk-forward/walk_forward_tasks.txt
