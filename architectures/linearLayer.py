@@ -68,6 +68,22 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
         else:
             print(f"[Exponential Weighting] DISABLED")
 
+        # Tokenization configuration
+        if config.if_tokenize:
+            print(f"[Tokenization] ENABLED - fixed AvgPool1d (kernel={config.tokenize_kernel}, stride={config.tokenize_stride})")
+            self.tokenizer = nn.AvgPool1d(
+                kernel_size=config.tokenize_kernel,
+                stride=config.tokenize_stride,
+            )
+            self._tokenized_seq_len = self._compute_tokenized_seq_len(
+                config.seq_len, config.tokenize_kernel, config.tokenize_stride
+            )
+            print(f"[Tokenization] Sequence length: {config.seq_len} -> {self._tokenized_seq_len}")
+        else:
+            print(f"[Tokenization] DISABLED")
+            self.tokenizer = None
+            self._tokenized_seq_len = None
+
         use_sota = config.use_sota_features
         # Domain features (GDD, RUE, Farquhar) – additional TS channels beyond weather
         n_domain_ts = sum([config.use_gdd, config.use_rue, config.use_farquhar])
@@ -139,6 +155,23 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
         """
         return seq_len - max(lags_sequence)
 
+    @staticmethod
+    def _compute_tokenized_seq_len(seq_len: int, kernel: int, stride: int) -> int:
+        """
+        Compute output sequence length after 1D average pooling.
+
+        Formula: floor((seq_len - kernel) / stride) + 1
+
+        Args:
+            seq_len: Input sequence length
+            kernel: Kernel size for pooling
+            stride: Stride for pooling
+
+        Returns:
+            Output sequence length after pooling
+        """
+        return (seq_len - kernel) // stride + 1
+
     def _get_static_feature_names(self) -> List[str]:
         return _get_static_feature_names(
             self.config.include_spatial_features,
@@ -146,6 +179,50 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
             self.config.use_heat_stress_days,
             multi_year_config=self.config.multi_year_config if hasattr(self.config, 'multi_year_config') else None,
         )
+
+    def _apply_tokenization(self, x_ts: torch.Tensor,
+                            observed_mask: Optional[torch.Tensor] = None) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
+        """
+        Apply fixed average pooling tokenization to time series data.
+
+        This is used for ablation studies to understand if reducing sequence length
+        via fixed (non-learned) pooling helps or hurts model performance.
+
+        Args:
+            x_ts: Time series tensor of shape (batch, seq_len, n_features)
+            observed_mask: Optional boolean mask of shape (batch, seq_len)
+
+        Returns:
+            Tuple of (tokenized_x_ts, tokenized_observed_mask)
+            - tokenized_x_ts: Tokenized time series of shape (batch, new_seq_len, n_features)
+            - tokenized_observed_mask: Mask adjusted to tokenized sequence, or None if input was None
+        """
+        if self.tokenizer is None:
+            return x_ts, observed_mask
+
+        B, T, C = x_ts.shape
+
+        # Transpose to (B, C, T) for AvgPool1d which operates on the last dimension
+        x_ts_t = x_ts.transpose(1, 2)  # (B, C, T)
+
+        # Apply average pooling
+        x_tokenized_t = self.tokenizer(x_ts_t)  # (B, C, new_T)
+
+        # Transpose back to (B, new_T, C)
+        x_tokenized = x_tokenized_t.transpose(1, 2)  # (B, new_T, C)
+
+        # Adjust observed mask if provided
+        if observed_mask is not None:
+            # Reshape mask to (B, T, 1) for pooling
+            mask_expanded = observed_mask.unsqueeze(-1).float()  # (B, T, 1)
+            mask_t = mask_expanded.transpose(1, 2)  # (B, 1, T)
+            # Apply same pooling - any valid observation in the pool makes the token valid
+            mask_pooled_t = self.tokenizer(mask_t)  # (B, 1, new_T)
+            # Convert back to boolean: token is valid if any observation in pool was valid
+            mask_pooled = (mask_pooled_t.squeeze(1) > 0).bool()  # (B, new_T)
+            return x_tokenized, mask_pooled
+
+        return x_tokenized, None
 
     def _normalize_time_series(self, x_ts: torch.Tensor,
                                 observed_mask: Optional[torch.Tensor] = None) -> torch.Tensor:
@@ -377,6 +454,9 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
         x_ts, x_static, y, years, adm_ids, lats, lons, validity_mask = batch
         dm = self.trainer.datamodule
 
+        # Apply tokenization if enabled (ablation study)
+        x_ts, validity_mask = self._apply_tokenization(x_ts, observed_mask=validity_mask)
+
         if self.config.use_residual_trend:
             batch_trends = self._compute_batch_trends(adm_ids, years, dm, lats, lons)
             assert batch_trends is not None
@@ -514,6 +594,9 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
         """
         x_ts, x_static, y_z, years, adm_ids, lats, lons, validity_mask = batch
         dm = self.trainer.datamodule
+
+        # Apply tokenization if enabled (ablation study)
+        x_ts, validity_mask = self._apply_tokenization(x_ts, observed_mask=validity_mask)
 
         # Compute trends if enabled and trend model has been fitted
         if self.config.use_residual_trend and self.trend_model._train_df is not None:
@@ -776,6 +859,9 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
         x_ts, x_static, y_z, years, adm_ids, lats, lons, validity_mask = batch
         dm = self.trainer.datamodule
 
+        # Apply tokenization if enabled (ablation study)
+        x_ts, validity_mask = self._apply_tokenization(x_ts, observed_mask=validity_mask)
+
         # Compute trends if enabled
         if self.config.use_residual_trend and self.trend_model._train_df is not None:
             batch_trends = self._compute_batch_trends(adm_ids, years, dm, lats, lons)
@@ -867,12 +953,15 @@ class NLinearYieldModel(BaseTimeSeriesModel):
     def _build_model(self) -> nn.Module:
         # Standardize sequence length calculation for fair comparison with transformers
         lags_sequence = [1] if self.config.lag_years > 0 else [0]
+        # Use tokenized sequence length if tokenization is enabled
+        base_seq_len = self._tokenized_seq_len if self._tokenized_seq_len else self.config.seq_len
         effective_seq_len = self._get_standardized_context_length(
-            self.config.seq_len, lags_sequence
+            base_seq_len, lags_sequence
         )
 
         logging.info(
             f"[NLinear BUILD] seq_len={self.config.seq_len}, "
+            f"base_seq_len={base_seq_len}, "
             f"effective_seq_len={effective_seq_len}, "
             f"n_ts_features={self.n_ts_features}, "
             f"n_static_features={self.n_static_features}"
@@ -968,8 +1057,10 @@ class DLinearYieldModel(BaseTimeSeriesModel):
     def _build_model(self) -> nn.Module:
         # Standardize sequence length calculation for fair comparison with transformers
         lags_sequence = [1] if self.config.lag_years > 0 else [0]
+        # Use tokenized sequence length if tokenization is enabled
+        base_seq_len = self._tokenized_seq_len if self._tokenized_seq_len else self.config.seq_len
         effective_seq_len = self._get_standardized_context_length(
-            self.config.seq_len, lags_sequence
+            base_seq_len, lags_sequence
         )
 
         kernel_size = self.KERNEL_SIZES.get(self.config.aggregation, 25)
@@ -979,6 +1070,7 @@ class DLinearYieldModel(BaseTimeSeriesModel):
 
         logging.info(
             f"[DLinear BUILD] seq_len={self.config.seq_len}, "
+            f"base_seq_len={base_seq_len}, "
             f"effective_seq_len={effective_seq_len}, "
             f"kernel_size={kernel_size}, "
             f"n_ts_features={self.n_ts_features}, "
@@ -1152,12 +1244,15 @@ class RLinearYieldModel(BaseTimeSeriesModel):
     def _build_model(self) -> nn.Module:
         # Standardize sequence length calculation for fair comparison with transformers
         lags_sequence = [1] if self.config.lag_years > 0 else [0]
+        # Use tokenized sequence length if tokenization is enabled
+        base_seq_len = self._tokenized_seq_len if self._tokenized_seq_len else self.config.seq_len
         effective_seq_len = self._get_standardized_context_length(
-            self.config.seq_len, lags_sequence
+            base_seq_len, lags_sequence
         )
 
         logging.info(
             f"[RLinear BUILD] seq_len={self.config.seq_len}, "
+            f"base_seq_len={base_seq_len}, "
             f"effective_seq_len={effective_seq_len}, "
             f"n_ts_features={self.n_ts_features}, "
             f"n_static_features={self.n_static_features}"
@@ -1263,8 +1358,10 @@ class XLinearYieldModel(BaseTimeSeriesModel):
     def _build_model(self) -> nn.Module:
         # Standardize sequence length calculation for fair comparison with transformers
         lags_sequence = [1] if self.config.lag_years > 0 else [0]
+        # Use tokenized sequence length if tokenization is enabled
+        base_seq_len = self._tokenized_seq_len if self._tokenized_seq_len else self.config.seq_len
         effective_seq_len = self._get_standardized_context_length(
-            self.config.seq_len, lags_sequence
+            base_seq_len, lags_sequence
         )
 
         n_exo = self.n_ts_features
@@ -1275,6 +1372,7 @@ class XLinearYieldModel(BaseTimeSeriesModel):
 
         logging.info(
             f"[XLinear BUILD] seq_len={self.config.seq_len}, "
+            f"base_seq_len={base_seq_len}, "
             f"effective_seq_len={effective_seq_len}, "
             f"n_exo_channels={n_exo}, "
             f"n_static={self.n_static_features}, hidden={hidden}, "
@@ -1499,8 +1597,10 @@ class OLinearYieldModel(BaseTimeSeriesModel):
     def _build_model(self) -> nn.Module:
         # Standardize sequence length calculation for fair comparison with transformers
         lags_sequence = [1] if self.config.lag_years > 0 else [0]
+        # Use tokenized sequence length if tokenization is enabled
+        base_seq_len = self._tokenized_seq_len if self._tokenized_seq_len else self.config.seq_len
         effective_seq_len = self._get_standardized_context_length(
-            self.config.seq_len, lags_sequence
+            base_seq_len, lags_sequence
         )
 
         n_channels = self.n_ts_features
@@ -1510,6 +1610,7 @@ class OLinearYieldModel(BaseTimeSeriesModel):
 
         logging.info(
             f"[OLinear BUILD] seq_len={self.config.seq_len}, "
+            f"base_seq_len={base_seq_len}, "
             f"effective_seq_len={effective_seq_len}, "
             f"n_channels={n_channels}, "
             f"n_static={self.n_static_features}, hidden={hidden}, "

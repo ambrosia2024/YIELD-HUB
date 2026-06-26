@@ -97,7 +97,7 @@ Usage:
 
 # Quick test run (5 epochs)
     python linearBaselines.py --crop wheat --country NL --model_type olinear --epochs 2 --aggregation daily --test_years 5 --lag_years 0 --aggregation daily --results_dir checkpoints-test/results --save_checkpoint_dir checkpoints-test/results --wandb_project test-and-delete-later --forecast_type end-of-season --use_exponential_weighting --exponential_tau 10
-    python linearBaselines.py --crop wheat --country NL --model_type olinear --epochs 5 --aggregation daily --test_years 5 --lag_years 2 --use_recursive_lags --aggregation daily --results_dir checkpoints-test/results --save_checkpoint_dir checkpoints-test/results --wandb_project test-and-delete-later --forecast_type middle-of-season
+    python linearBaselines.py --crop wheat --country NL --model_type olinear --epochs 5 --aggregation daily --test_years 5 --lag_years 2 --use_recursive_lags --aggregation daily --results_dir checkpoints-test/results --save_checkpoint_dir checkpoints-test/results --wandb_project test-and-delete-later --forecast_type middle-of-season --if_tokenize
 
 --------------------
 Hyperparameters:
@@ -281,6 +281,16 @@ if __name__ == "__main__":
                         help='XLinear: feed-forward dimension in the Variate-wise Gating Module (default: 16)')
     parser.add_argument('--xlinear_dropout', type=float, default=0.1,
                         help='XLinear: dropout probability for regularization (default: 0.1)')
+    # Tokenization ablation arguments
+    parser.add_argument('--if_tokenize', action='store_true',
+                        help='Enable fixed average pooling tokenization (ablation study). '
+                             'Reduces sequence length via non-overlapping average pooling before feeding to model.')
+    parser.add_argument('--tokenize_kernel', type=int, default=7,
+                        help='Kernel size for average pooling tokenization (default: 7). '
+                             'Only used when --if_tokenize is enabled.')
+    parser.add_argument('--tokenize_stride', type=int, default=7,
+                        help='Stride for average pooling tokenization (default: 7). '
+                             'Only used when --if_tokenize is enabled.')
     args = parser.parse_args()
 
     # The original alignment.py in cybench repo only supports "middle-of-season", "quarter-of-season", and "N-days" predictions. Since, we wanted to have "middle-of-season", "quarter-of-season", "end-of-season" and "three-quarter-of-season", we set lead_time to "0-days" which makes alignment.py load
@@ -324,6 +334,7 @@ if __name__ == "__main__":
     print(f"TestYears={args.test_years}")
     print(f"Exponential Weighting: {args.use_exponential_weighting} (tau={args.exponential_tau})")
     print(f"Multi-Year Summaries: {args.multi_year_summaries} (window={args.multi_year_window}, features={args.multi_year_features})")
+    print(f"Tokenization: {args.if_tokenize} (kernel={args.tokenize_kernel}, stride={args.tokenize_stride})")
     print(f"lr={args.lr}  wd={args.weight_decay}  epochs={args.epochs}  "
           f"batch={args.batch_size}  seed={args.seed}")
     print(f"{'=' * 70}\n")
@@ -368,6 +379,9 @@ if __name__ == "__main__":
         xlinear_temporal_ff=args.xlinear_temporal_ff,
         xlinear_channel_ff=args.xlinear_channel_ff,
         xlinear_dropout=args.xlinear_dropout,
+        if_tokenize=args.if_tokenize,
+        tokenize_kernel=args.tokenize_kernel,
+        tokenize_stride=args.tokenize_stride,
     )
 
     # Show forecast horizon configuration

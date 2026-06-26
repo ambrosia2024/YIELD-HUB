@@ -126,6 +126,22 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
         else:
             print(f"[Exponential Weighting] DISABLED")
 
+        # Tokenization configuration
+        if config.if_tokenize:
+            print(f"[Tokenization] ENABLED - fixed AvgPool1d (kernel={config.tokenize_kernel}, stride={config.tokenize_stride})")
+            self.tokenizer = nn.AvgPool1d(
+                kernel_size=config.tokenize_kernel,
+                stride=config.tokenize_stride,
+            )
+            self._tokenized_seq_len = self._compute_tokenized_seq_len(
+                config.seq_len, config.tokenize_kernel, config.tokenize_stride
+            )
+            print(f"[Tokenization] Sequence length: {config.seq_len} -> {self._tokenized_seq_len}")
+        else:
+            print(f"[Tokenization] DISABLED")
+            self.tokenizer = None
+            self._tokenized_seq_len = None
+
         # Uses config.time_series_vars property instead of global WEATHER_FEATURES
         # This ensures feature count matches the actual features being extracted
         use_sota = config.use_sota_features
@@ -219,6 +235,23 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
         """
         return seq_len - max(lags_sequence)
 
+    @staticmethod
+    def _compute_tokenized_seq_len(seq_len: int, kernel: int, stride: int) -> int:
+        """
+        Compute output sequence length after 1D average pooling.
+
+        Formula: floor((seq_len - kernel) / stride) + 1
+
+        Args:
+            seq_len: Input sequence length
+            kernel: Kernel size for pooling
+            stride: Stride for pooling
+
+        Returns:
+            Output sequence length after pooling
+        """
+        return (seq_len - kernel) // stride + 1
+
     @abstractmethod
     def _build_model(self) -> nn.Module:
         """
@@ -256,6 +289,50 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
             self.config.use_heat_stress_days,
             multi_year_config=self.config.multi_year_config if hasattr(self.config, 'multi_year_config') else None,
         )
+
+    def _apply_tokenization(self, x_ts: torch.Tensor,
+                            observed_mask: Optional[torch.Tensor] = None) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
+        """
+        Apply fixed average pooling tokenization to time series data.
+
+        This is used for ablation studies to understand if reducing sequence length
+        via fixed (non-learned) pooling helps or hurts transformer performance.
+
+        Args:
+            x_ts: Time series tensor of shape (batch, seq_len, n_features)
+            observed_mask: Optional boolean mask of shape (batch, seq_len)
+
+        Returns:
+            Tuple of (tokenized_x_ts, tokenized_observed_mask)
+            - tokenized_x_ts: Tokenized time series of shape (batch, new_seq_len, n_features)
+            - tokenized_observed_mask: Mask adjusted to tokenized sequence, or None if input was None
+        """
+        if self.tokenizer is None:
+            return x_ts, observed_mask
+
+        B, T, C = x_ts.shape
+
+        # Transpose to (B, C, T) for AvgPool1d which operates on the last dimension
+        x_ts_t = x_ts.transpose(1, 2)  # (B, C, T)
+
+        # Apply average pooling
+        x_tokenized_t = self.tokenizer(x_ts_t)  # (B, C, new_T)
+
+        # Transpose back to (B, new_T, C)
+        x_tokenized = x_tokenized_t.transpose(1, 2)  # (B, new_T, C)
+
+        # Adjust observed mask if provided
+        if observed_mask is not None:
+            # Reshape mask to (B, T, 1) for pooling
+            mask_expanded = observed_mask.unsqueeze(-1).float()  # (B, T, 1)
+            mask_t = mask_expanded.transpose(1, 2)  # (B, 1, T)
+            # Apply same pooling - any valid observation in the pool makes the token valid
+            mask_pooled_t = self.tokenizer(mask_t)  # (B, 1, new_T)
+            # Convert back to boolean: token is valid if any observation in pool was valid
+            mask_pooled = (mask_pooled_t.squeeze(1) > 0).bool()  # (B, new_T)
+            return x_tokenized, mask_pooled
+
+        return x_tokenized, None
 
     def _init_temporal_attention(self, d_model: int) -> None:
         """
@@ -711,6 +788,9 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
             print(f"[DEBUG TRAIN] NaN in targets (y): {torch.isnan(y).sum().item()} out of {y.numel()}")
             print(f"[DEBUG TRAIN] Sample targets: {y[:5].tolist()}")
 
+        # Apply tokenization if enabled (ablation study)
+        x_ts, validity_mask = self._apply_tokenization(x_ts, observed_mask=validity_mask)
+
         # Compute trends only if use_residual_trend is enabled
         if self.config.use_residual_trend:
             batch_trends = self._compute_batch_trends(adm_ids, years, dm, lats, lons)
@@ -766,6 +846,9 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
         """
         x_ts, x_static, y_z, years, adm_ids, lats, lons, validity_mask = batch
         dm = self.trainer.datamodule
+
+        # Apply tokenization if enabled (ablation study)
+        x_ts, validity_mask = self._apply_tokenization(x_ts, observed_mask=validity_mask)
 
         # Compute trends if enabled and trend model has been fitted
         # (skip during sanity check validation before on_train_start)
@@ -1013,6 +1096,9 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
         """
         x_ts, x_static, y_z, years, adm_ids, lats, lons, validity_mask = batch
         dm = self.trainer.datamodule
+
+        # Apply tokenization if enabled (ablation study)
+        x_ts, validity_mask = self._apply_tokenization(x_ts, observed_mask=validity_mask)
 
         # Compute trends if enabled
         if self.config.use_residual_trend and self.trend_model._train_df is not None:
@@ -1300,7 +1386,9 @@ class AutoformerYieldModel(BaseTimeSeriesModel):
             # Standardize context length calculation for fair comparison
             # Use [1] if lag_years > 0, else [0] to ensure alignment with linear models
             lags_sequence = [1] if self.config.lag_years > 0 else [0]
-            context_length = self._get_standardized_context_length(self.config.seq_len, lags_sequence)
+            # context_length = self._get_standardized_context_length(self.config.seq_len, lags_sequence)
+            effective_seq_len = self._tokenized_seq_len if self._tokenized_seq_len else self.config.seq_len
+            context_length = self._get_standardized_context_length(effective_seq_len, lags_sequence)
 
             # Following baseline approach: process temporal features first,
             # then concatenate with static features after getting pooled representation
@@ -1418,7 +1506,9 @@ class PatchTSTModel(BaseTimeSeriesModel):
             # Standardize context length calculation for fair comparison
             # Use [1] if lag_years > 0, else [0] to ensure alignment with linear models
             requested_lags = [1] if self.config.lag_years > 0 else [0]
-            context_length = self._get_standardized_context_length(self.config.seq_len, requested_lags)
+            # context_length = self._get_standardized_context_length(self.config.seq_len, requested_lags)
+            effective_seq_len = self._tokenized_seq_len if self._tokenized_seq_len else self.config.seq_len
+            context_length = self._get_standardized_context_length(effective_seq_len,requested_lags)
 
             logging.info(f"[PatchTST BUILD] CONFIG: seq_len={self.config.seq_len}, "
                         f"context_length={context_length}, n_ts_features={self.n_ts_features}, "
@@ -1545,7 +1635,10 @@ class TSMixerModel(BaseTimeSeriesModel):
         # Standardize context length calculation for fair comparison
         # Use [1] if lag_years > 0, else [0] to ensure alignment with linear models
         requested_lags = [1] if self.config.lag_years > 0 else [0]
-        context_length = self._get_standardized_context_length(self.config.seq_len, requested_lags)
+        # context_length = self._get_standardized_context_length(self.config.seq_len, requested_lags)
+        effective_seq_len = self._tokenized_seq_len if self._tokenized_seq_len else self.config.seq_len
+        context_length = self._get_standardized_context_length(effective_seq_len,requested_lags)
+
 
         # First, load or create the base model
         # For fair comparison, only use base model (consistent with other architectures)
@@ -1683,7 +1776,8 @@ class InformerModel(BaseTimeSeriesModel):
             # Standardize context length calculation for fair comparison
             # Use [1] if lag_years > 0, else [0] to ensure alignment with linear models
             requested_lags = [1] if self.config.lag_years > 0 else [0]
-            context_length = self._get_standardized_context_length(self.config.seq_len, requested_lags)
+            effective_seq_len = self._tokenized_seq_len if self._tokenized_seq_len else self.config.seq_len
+            context_length = self._get_standardized_context_length(effective_seq_len,requested_lags)
 
             # Build model with adjusted context_length (BASELINE PATTERN)
             cfg = InformerConfig(
@@ -1784,7 +1878,9 @@ class TSTModel(BaseTimeSeriesModel):
             # Standardize context length calculation for fair comparison
             # Use [1] if lag_years > 0, else [0] to ensure alignment with linear models
             requested_lags = [1] if self.config.lag_years > 0 else [0]
-            context_length = self._get_standardized_context_length(self.config.seq_len, requested_lags)
+            # context_length = self._get_standardized_context_length(self.config.seq_len, requested_lags)
+            effective_seq_len = self._tokenized_seq_len if self._tokenized_seq_len else self.config.seq_len
+            context_length = self._get_standardized_context_length(effective_seq_len,requested_lags)
 
             # Build model with adjusted context_length (BASELINE PATTERN)
             cfg = TimeSeriesTransformerConfig(
@@ -2187,7 +2283,10 @@ class iTransformerYieldModel(BaseTimeSeriesModel):
         # iTransformer doesn't use lags in the traditional sense, but for consistency
         # we should truncate to the same context length as other models
         requested_lags = [1] if self.config.lag_years > 0 else [0]
-        context_length = self._get_standardized_context_length(self.config.seq_len, requested_lags)
+        # context_length = self._get_standardized_context_length(self.config.seq_len, requested_lags)
+        effective_seq_len = self._tokenized_seq_len if self._tokenized_seq_len else self.config.seq_len
+        context_length = self._get_standardized_context_length(effective_seq_len,requested_lags)
+
 
         seq_len = context_length  # Use context_length, not full seq_len
         n_channels = self.n_ts_features
@@ -2360,7 +2459,10 @@ class TimeXerYieldModel(BaseTimeSeriesModel):
 
         # Calculate effective sequence length for alignment with linear models
         requested_lags = [1] if self.config.lag_years > 0 else [0]
-        context_length = self._get_standardized_context_length(self.config.seq_len, requested_lags)
+        # context_length = self._get_standardized_context_length(self.config.seq_len, requested_lags)
+        effective_seq_len = self._tokenized_seq_len if self._tokenized_seq_len else self.config.seq_len
+        context_length = self._get_standardized_context_length(effective_seq_len,requested_lags)
+
 
         seq_len = context_length  # Use context_length, not full seq_len
         n_channels = self.n_ts_features
@@ -2792,7 +2894,9 @@ class TimesNetModel(BaseTimeSeriesModel):
         # Standardize context length calculation for fair comparison
         # Use [1] if lag_years > 0, else [0] to ensure alignment with linear models
         requested_lags = [1] if self.config.lag_years > 0 else [0]
-        context_length = self._get_standardized_context_length(self.config.seq_len, requested_lags)
+        # context_length = self._get_standardized_context_length(self.config.seq_len, requested_lags)
+        effective_seq_len = self._tokenized_seq_len if self._tokenized_seq_len else self.config.seq_len
+        context_length = self._get_standardized_context_length(effective_seq_len,requested_lags)
 
         # TimesNet hyperparameters
         d_model = 64

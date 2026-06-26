@@ -63,6 +63,10 @@ class TSTModelConfig:
     multi_year_summaries: bool = False  # Enable multi-year summary features from previous growing seasons
     multi_year_window: int = 1  # Years of historical context (1=T-1, 2=T-1,T-2, 3=T-1,T-2,T-3)
     multi_year_features: List[str] = field(default_factory=lambda: ['weather'])  # Which features to summarize
+    # Tokenization ablation: fixed average pooling preprocessing
+    if_tokenize: bool = False  # Enable fixed average pooling tokenization (ablation study)
+    tokenize_kernel: int = 7  # Kernel size for average pooling (default: 7 for weekly aggregation)
+    tokenize_stride: int = 7  # Stride for average pooling (default: 7 for non-overlapping weekly tokens)
 
     @property
     def seq_len(self):
@@ -167,6 +171,10 @@ class LinearModelConfig:
     multi_year_summaries: bool = False  # Enable multi-year summary features from previous growing seasons
     multi_year_window: int = 1  # Years of historical context (1=T-1, 2=T-1,T-2, 3=T-1,T-2,T-3)
     multi_year_features: List[str] = field(default_factory=lambda: ['weather'])  # Which features to summarize
+    # Tokenization ablation: fixed average pooling preprocessing
+    if_tokenize: bool = False  # Enable fixed average pooling tokenization (ablation study)
+    tokenize_kernel: int = 7  # Kernel size for average pooling (default: 7 for weekly aggregation)
+    tokenize_stride: int = 7  # Stride for average pooling (default: 7 for non-overlapping weekly tokens)
 
     @property
     def seq_len(self):

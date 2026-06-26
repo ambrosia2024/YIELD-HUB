@@ -298,6 +298,16 @@ if __name__ == "__main__":
     parser.add_argument('--hpo_objective', type=str, default='nrmse',
                         choices=['nrmse', 'r2', 'multi'],
                         help='Optimization objective: nrmse (minimize), r2 (maximize), or multi (both)')
+    # Tokenization ablation arguments
+    parser.add_argument('--if_tokenize', action='store_true',
+                        help='Enable fixed average pooling tokenization (ablation study). '
+                             'Reduces sequence length via non-overlapping average pooling before feeding to model.')
+    parser.add_argument('--tokenize_kernel', type=int, default=7,
+                        help='Kernel size for average pooling tokenization (default: 7). '
+                             'Only used when --if_tokenize is enabled.')
+    parser.add_argument('--tokenize_stride', type=int, default=7,
+                        help='Stride for average pooling tokenization (default: 7). '
+                             'Only used when --if_tokenize is enabled.')
     # Removed: --optimize parameter (everything is optimized together)
     args = parser.parse_args()
 
