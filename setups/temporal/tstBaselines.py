@@ -108,7 +108,7 @@ Usage:
 # Quick test run (5 epochs)
     python tstBaselines.py --crop wheat --country NL --model_type informer --epochs 2 --aggregation daily --lag_years 0 --test_years 5 --results_dir checkpoints-test/results --save_checkpoint_dir checkpoints-test/results --wandb_project test-and-delete-later --forecast_type end-of-season --use_exponential_weighting --exponential_tau 10 --multi_year_summaries --multi_year_window 1 --multi_year_features all
     python tstBaselines.py --crop wheat --country NL --model_type informer --epochs 2 --aggregation daily --lag_years 2 --test_years 5 --results_dir checkpoints-test/results --save_checkpoint_dir checkpoints-test/results --use_recursive_lags --wandb_project test-and-delete-later --forecast_type middle-of-season --if_tokenize
-    python tstBaselines.py --crop wheat --country NL --model_type informer --epochs 2 --aggregation daily --lag_years 2 --test_years 5 --results_dir checkpoints-test/results --save_checkpoint_dir checkpoints-test/results --use_recursive_lags --wandb_project test-and-delete-later --forecast_type middle-of-season
+    python tstBaselines.py --crop wheat --country NL --model_type informer --epochs 2 --aggregation daily --lag_years 2 --test_years 5 --results_dir checkpoints-test/results --save_checkpoint_dir checkpoints-test/results --use_recursive_lags --wandb_project test-and-delete-later --forecast_type middle-of-season --use_wfan
     
 ------------
 Core dependencies:
@@ -304,6 +304,15 @@ if __name__ == "__main__":
     parser.add_argument('--tokenize_stride', type=int, default=7,
                         help='Stride for average pooling tokenization (default: 7). '
                              'Only used when --if_tokenize is enabled.')
+    # WFAN (Frequency-Adaptive Normalization) arguments
+    parser.add_argument('--use_wfan', action='store_true',
+                        help='Enable WFAN frequency-adaptive normalization for distribution shift mitigation.')
+    parser.add_argument('--wfan_k', type=int, default=2,
+                        help='Number of dominant frequency components to remove in WFAN (default: 2). '
+                             'Higher values remove more frequency components as non-stationary.')
+    parser.add_argument('--wfan_lambda', type=float, default=1.0,
+                        help='WFAN loss balancing coefficient for pattern-adaptive prediction (default: 1.0). '
+                             'Controls the weight of non-stationary prediction loss.')
     args = parser.parse_args()
 
     # The original alignment.py in cybench repo only supports "middle-of-season", "quarter-of-season", and "N-days" predictions. Since, we wanted to have "middle-of-season", "quarter-of-season", "end-of-season" and "three-quarter-of-season", we set lead_time to "0-days" which makes alignment.py load
@@ -347,6 +356,7 @@ if __name__ == "__main__":
     print(f"Exponential Weighting: {args.use_exponential_weighting} (tau={args.exponential_tau})")
     print(f"Multi-Year Summaries: {args.multi_year_summaries} (window={args.multi_year_window}, features={args.multi_year_features})")
     print(f"Tokenization: {args.if_tokenize} (kernel={args.tokenize_kernel}, stride={args.tokenize_stride})")
+    print(f"WFAN: {args.use_wfan} (K={args.wfan_k}, λ={args.wfan_lambda})")
     print(f"lr={args.lr}  wd={args.weight_decay}  epochs={args.epochs} "
           f"batch={args.batch_size}  seed={args.seed}")
     print(f"{'=' * 70}\n")
@@ -394,6 +404,9 @@ if __name__ == "__main__":
         if_tokenize=args.if_tokenize,
         tokenize_kernel=args.tokenize_kernel,
         tokenize_stride=args.tokenize_stride,
+        use_wfan=args.use_wfan,
+        wfan_k=args.wfan_k,
+        wfan_lambda=args.wfan_lambda,
     )
 
     # Show forecast horizon configuration

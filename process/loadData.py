@@ -16,6 +16,15 @@ import pandas as pd
 
 from typing import Optional, Dict, List, Tuple
 
+# For parallel feature building (optional, for HPO speedup)
+try:
+    from joblib import Parallel, delayed
+    JOBLIB_AVAILABLE = True
+except ImportError:
+    JOBLIB_AVAILABLE = False
+    Parallel = None
+    delayed = None
+
 import torch
 from torch.utils.data import Dataset, DataLoader
 import lightning.pytorch as pl
@@ -31,6 +40,14 @@ from cybench.config import (
 
 # Custom functions
 from featureEngineering import build_daily_input_sequence, _get_static_feature_names
+
+# Feature caching for HPO
+try:
+    from featureCache import FeatureCache, get_global_cache, reset_global_cache
+    FEATURE_CACHE_AVAILABLE = True
+except ImportError:
+    FEATURE_CACHE_AVAILABLE = False
+    FeatureCache = None
 
 sys.path.append('../architectures/')
 from modelconfig import TSTModelConfig, LinearModelConfig
@@ -155,12 +172,25 @@ class DailyYieldDataset(Dataset):
     
 # %% Data Module
 class DailyCYBenchSeqDataModule(pl.LightningDataModule):
-    """Lightning DataModule: loads CY-Bench data, builds features, normalises."""
+    """Lightning DataModule: loads CY-Bench data, builds features, normalises.
 
-    def __init__(self, config: Union[TSTModelConfig, LinearModelConfig]):
+    With feature caching enabled, features are built once and reused across trials.
+    """
+
+    def __init__(self, config: Union[TSTModelConfig, LinearModelConfig],
+                 feature_cache: Optional[FeatureCache] = None,
+                 use_cache: bool = True):
+        """
+        Args:
+            config: Model configuration
+            feature_cache: Optional FeatureCache instance for HPO
+            use_cache: Whether to use the cache (default: True)
+        """
         super().__init__()
-        self.save_hyperparameters(ignore=['config'])
+        self.save_hyperparameters(ignore=['config', 'feature_cache'])
         self.config = config
+        self.feature_cache = feature_cache
+        self.use_cache = use_cache and FEATURE_CACHE_AVAILABLE
         self.y_mean = self.y_std = None
         self.train_ds = self.val_ds = self.test_ds = None
         self.feature_norm_params = None
@@ -177,6 +207,10 @@ class DailyCYBenchSeqDataModule(pl.LightningDataModule):
         self._prediction_cache = {}  # {(adm_id, year): predicted_yield}
         self._test_years = None  # Track which years are in test set
         self._train_years = None  # Track which years are in train set
+
+        # Use global cache if none provided
+        if self.use_cache and self.feature_cache is None:
+            self.feature_cache = get_global_cache()
 
     def setup(self, stage: Optional[str] = None,
               train_years: Optional[List[int]] = None,
@@ -218,13 +252,53 @@ class DailyCYBenchSeqDataModule(pl.LightningDataModule):
 
         ds = CYDataset(cfg.crop, df_y, dfs_x)
 
-        # Build all features (only done once)
-        if self.all_X_ts is None:
-            all_X_ts, all_X_static, all_y = [], [], []
-            all_years_list, all_adm_ids, all_lats, all_lons, all_masks = [], [], [], [], []
+        # Check cache first if enabled
+        cache_hit = False
+        if self.use_cache and self.all_X_ts is None:
+            # Generate feature hash
+            feature_hash = self.feature_cache.make_feature_hash(
+                crop=cfg.crop,
+                country=cfg.country,
+                aggregation=cfg.aggregation,
+                data_fraction=cfg.data_fraction,
+                use_sota_features=cfg.use_sota_features,
+                include_spatial_features=cfg.include_spatial_features,
+                lag_years=cfg.lag_years,
+                use_gdd=cfg.use_gdd,
+                use_heat_stress_days=cfg.use_heat_stress_days,
+                use_rue=cfg.use_rue,
+                use_farquhar=cfg.use_farquhar,
+                use_cwb_feature=cfg.use_cwb_feature,
+                drop_tavg=cfg.drop_tavg,
+                use_exponential_weighting=cfg.use_exponential_weighting,
+                exponential_tau=cfg.exponential_tau,
+                multi_year_summaries=cfg.multi_year_summaries,
+                multi_year_window=cfg.multi_year_window,
+                multi_year_features=cfg.multi_year_features,
+                weather_features=cfg.weather_features,
+            )
 
-            for i in range(len(ds)):
-                sample = ds[i]
+            # Try to get from cache
+            cached = self.feature_cache.get(feature_hash)
+            if cached is not None:
+                print(f"  [CACHE HIT] Using cached features for hash {feature_hash[:8]}...")
+                self.all_X_ts = cached['X_ts']
+                self.all_X_static = cached['X_static']
+                self.all_y = cached['y']
+                self.all_years = cached['years']
+                self.all_adm_ids = cached['adm_ids']
+                self.all_lats = cached['lats']
+                self.all_lons = cached['lons']
+                self.all_masks = cached['masks']
+                cache_hit = True
+            else:
+                print(f"  [CACHE MISS] Building features for hash {feature_hash[:8]}...")
+
+        # Build all features (only if not cached)
+        if self.all_X_ts is None and not cache_hit:
+            # Helper function to build features for a single sample
+            def build_features_for_sample(idx):
+                sample = ds[idx]
                 X_ts, X_static, y, meta, mask = build_daily_input_sequence(
                     ds, sample[KEY_LOC], sample[KEY_YEAR],
                     aggregation=cfg.aggregation,
@@ -232,7 +306,7 @@ class DailyCYBenchSeqDataModule(pl.LightningDataModule):
                     use_sota_features=cfg.use_sota_features,
                     include_spatial_features=cfg.include_spatial_features,
                     lag_years=cfg.lag_years,
-                    weather_features_list=cfg.weather_features,  # Pass from config
+                    weather_features_list=cfg.weather_features,
                     use_gdd=cfg.use_gdd,
                     use_heat_stress_days=cfg.use_heat_stress_days,
                     use_rue=cfg.use_rue,
@@ -240,14 +314,41 @@ class DailyCYBenchSeqDataModule(pl.LightningDataModule):
                     crop=cfg.crop,
                     multi_year_config=cfg.multi_year_config if hasattr(cfg, 'multi_year_config') and cfg.multi_year_config is not None else None,
                 )
-                all_X_ts.append(X_ts)
-                all_X_static.append(X_static)
-                all_y.append(y)
-                all_years_list.append(sample[KEY_YEAR])
-                all_adm_ids.append(sample[KEY_LOC])
-                all_lats.append(meta["lat"])
-                all_lons.append(meta["lon"])
-                all_masks.append(mask)
+                return X_ts, X_static, y, sample[KEY_YEAR], sample[KEY_LOC], meta["lat"], meta["lon"], mask
+
+            # Use parallel processing if enabled and joblib is available
+            use_parallel = getattr(cfg, 'use_parallel', False) and JOBLIB_AVAILABLE
+            n_jobs = getattr(cfg, 'num_workers', None) or -1  # Use all CPUs by default
+
+            if use_parallel:
+                print(f"  [PARALLEL] Building features with {n_jobs if n_jobs > 0 else 'all'} workers...")
+                results = Parallel(n_jobs=n_jobs)(
+                    delayed(build_features_for_sample)(i) for i in range(len(ds))
+                )
+                all_X_ts, all_X_static, all_y, all_years_list, all_adm_ids, all_lats, all_lons, all_masks = zip(*results)
+                all_X_ts = list(all_X_ts)
+                all_X_static = list(all_X_static)
+                all_y = list(all_y)
+                all_years_list = list(all_years_list)
+                all_adm_ids = list(all_adm_ids)
+                all_lats = list(all_lats)
+                all_lons = list(all_lons)
+                all_masks = list(all_masks)
+            else:
+                # Sequential processing (default, backward compatible)
+                all_X_ts, all_X_static, all_y = [], [], []
+                all_years_list, all_adm_ids, all_lats, all_lons, all_masks = [], [], [], [], []
+
+                for i in range(len(ds)):
+                    X_ts, X_static, y, year, adm_id, lat, lon, mask = build_features_for_sample(i)
+                    all_X_ts.append(X_ts)
+                    all_X_static.append(X_static)
+                    all_y.append(y)
+                    all_years_list.append(year)
+                    all_adm_ids.append(adm_id)
+                    all_lats.append(lat)
+                    all_lons.append(lon)
+                    all_masks.append(mask)
 
             # Convert to numpy arrays
             # With compute_summaries now returning consistent feature structure,
@@ -260,6 +361,20 @@ class DailyCYBenchSeqDataModule(pl.LightningDataModule):
             self.all_lats = np.array(all_lats, dtype=object)
             self.all_lons = np.array(all_lons, dtype=object)
             self.all_masks = np.array(all_masks)
+
+            # Cache the newly built features
+            if self.use_cache:
+                self.feature_cache.set(feature_hash, {
+                    'X_ts': self.all_X_ts,
+                    'X_static': self.all_X_static,
+                    'y': self.all_y,
+                    'years': self.all_years,
+                    'adm_ids': self.all_adm_ids,
+                    'lats': self.all_lats,
+                    'lons': self.all_lons,
+                    'masks': self.all_masks,
+                })
+                print(f"  [CACHE] Stored features for hash {feature_hash[:8]}")
 
             # Validate static feature count
             expected = cfg._compute_expected_static_features()

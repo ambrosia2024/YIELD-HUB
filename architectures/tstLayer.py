@@ -67,7 +67,7 @@ if TimeSeriesMixerForPrediction is None:
 
 # Custom Classes and functions
 from trendLayer import TrendModel
-from biasCorrection import BiasCorrection
+from biasCorrectionLayer import BiasCorrection
 from modelconfig import TSTModelConfig
 
 sys.path.append('../process/')
@@ -1310,7 +1310,7 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
             scheduler = torch.optim.lr_scheduler.LambdaLR(
                 optimizer, lr_lambda=self.config.lr_scheduler_lambda
             )
-            return {"optimizer": optimizer, "lr_scheduler": {"scheduler": scheduler, "interval": "epoch"}}
+            return [optimizer], [{"scheduler": scheduler, "interval": "epoch"}]
         return optimizer
 
     def on_fit_start(self):
@@ -3019,5 +3019,31 @@ def create_model(config: TSTModelConfig) -> BaseTimeSeriesModel:
     if config.model_type.lower() not in model_map:
         raise ValueError(f"Unknown model_type '{config.model_type}'. "
                          f"Choose from: {list(model_map)}")
-    return model_map[config.model_type.lower()](
+
+    # Create base model
+    model = model_map[config.model_type.lower()](
         config, lr=config.lr, weight_decay=config.weight_decay)
+
+    # Wrap with WFAN if enabled
+    if config.use_wfan:
+        from wfan_layer import WFANWrapper
+        # Calculate number of time series features for WFAN
+        use_sota = config.use_sota_features
+        n_domain_ts = sum([config.use_gdd, config.use_rue, config.use_farquhar])
+        n_ts_features = (
+            len(config.time_series_vars)
+            + n_domain_ts
+            + (len(SOTA_TEMPORAL_VARS_LIST) if use_sota else 0)
+        )
+
+        model = WFANWrapper(
+            model,
+            seq_len=config.seq_len,
+            n_vars=n_ts_features,
+            K=config.wfan_k,
+            lambda_coef=config.wfan_lambda,
+            config=config
+        )
+        logging.info(f"[WFAN] ENABLED - K={config.wfan_k}, λ={config.wfan_lambda}")
+
+    return model

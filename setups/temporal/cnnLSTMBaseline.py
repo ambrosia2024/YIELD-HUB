@@ -2,78 +2,92 @@
 """
 --------------------
 Author: XYZ
-Description: A linear architecture based in-season and end-of-season crop yield prediction script that trains state-of-the-art time architectures 
-            with agricultural domain knowledge. The training-works on temporal split. 
+Description: CNN-LSTM based in-season and end-of-season crop yield prediction script.
+             This model implements a CNN-LSTM architecture inspired by Khaki et al. 2020
+             (https://doi.org/10.1155/2020/3429157) adapted for the CY-BENCH framework.
+
+Architecture Reference:
+    Khaki, S., Wang, L., Kapos, Z. et al. A CNN-RNN Framework for Crop Yield Prediction.
+    Computational Intelligence in Neuroscience (2020).
+    GitHub: https://github.com/saeedkhaki92/CNN-RNN-Yield-Prediction
+
 Python version: 3.12.0
+
 --------------------
-Architecture overview: This script implements unified linear baseline architectures that serve as
-strong references for evaluating transformer complexity:
+Architecture overview:
+    The CNN-LSTM model processes time series data through:
+    1. Parallel 1D CNN branches for different feature types (weather, soil, remote sensing)
+    2. Feature fusion and projection
+    3. LSTM for temporal modeling
+    4. Regression head for yield prediction
 
-    • NLinear: Simple linear layer with last-value normalization (https://arxiv.org/abs/2205.13504)
-    • DLinear: Decomposed linear (trend + remainder) (https://arxiv.org/abs/2205.13504)
-    • XLinear: Linear with exogenous variable handling (https://arxiv.org/pdf/2305.10721)
-    • RLinear: NLinear with RevIN (Reversible Instance Normalization) (https://arxiv.org/abs/2403.14587)
+    Key features:
+    - CNN branches extract spatial-temporal patterns from time series
+    - LSTM captures sequential dependencies across the growing season
+    - Static features (soil, location, crop calendar) are concatenated with CNN outputs
+    - Supports all CY-BENCH preprocessing options (SOTA features, recursive lags, etc.)
 
-------------
-Pipeline: The script processes agricultural data through multiple stages:
+--------------------
+Data pipeline:
+    The script processes agricultural data through multiple stages:
 
-1. INPUT FEATURES
-   - Weather: tmin, tmax, tavg, precipitation, radiation, (optional: cwb)
-   - Remote Sensing: NDVI, FPAR, SSM, RSM
-   - Soil Properties: Available water capacity, organic carbon, pH, texture
-   - Location: Country, state, latitude, longitude
-   - Crop Calendar: Start/end of season with cyclic encoding (sin/cos)
-   - Temporal Encoding: Fourier features (sin/cos of day-of-year, month)
-   - Historical Lags: Yield from previous years (1-2 years, configurable)
+    1. INPUT FEATURES
+       - Weather: tmin, tmax, tavg, precipitation, radiation, (optional: cwb)
+       - Remote Sensing: NDVI, FPAR, SSM, RSM
+       - Soil Properties: Available water capacity, organic carbon, pH, texture
+       - Location: Country, state, latitude, longitude
+       - Crop Calendar: Start/end of season with cyclic encoding (sin/cos)
+       - Temporal Encoding: Fourier features (sin/cos of day-of-year, month)
+       - Historical Lags: Yield from previous years (1-2 years, configurable)
 
-2. TEMPORAL AGGREGATION
-   - daily:   365 time steps (raw daily data)
-   - weekly:  52 time steps  (weekly averages, Monday-start)
-   - dekad:   36 time steps  (10-day periods, standard in ag monitoring)
+    2. TEMPORAL AGGREGATION
+       - daily:   365 time steps (raw daily data)
+       - weekly:  52 time steps  (weekly averages, Monday-start)
+       - dekad:   36 time steps  (10-day periods, standard in ag monitoring)
 
-3. GROWTH-STAGE PROCESSING
-   Weather data is masked to only include observations between crop start-of-season
-   (SOS) and end-of-season (EOS) dates, ensuring the model focuses on the growth
-   period.
+    3. GROWTH-STAGE PROCESSING
+       Weather data is masked to only include observations between crop start-of-season (SOS)
+       and end-of-season (EOS) dates, ensuring the model focuses on the growth period.
 
-4. NORMALIZATION
-   - Time series: Per-feature min-max scaling
-   - Static features: Mean-centering and scaling
-   - Targets: Normalized to zero mean, unit variance
+    4. NORMALIZATION
+       - Time series: Per-feature min-max scaling
+       - Static features: Mean-centering and scaling
+       - Targets: Normalized to zero mean, unit variance
 
-5. IN-SEASON vs END-SEASON predictions
-   – --forecast_type: When to make the prediction (end-of-season, three-quarter-of-season,
-                      middle-of-season, quarter-of-season, 60-days, 90-days, 120-days).
-----------------
+    5. IN-SEASON vs END-SEASON predictions
+       – --forecast_type: When to make the prediction (end-of-season, three-quarter-of-season,
+                          middle-of-season, quarter-of-season, 60-days, 90-days, 120-days).
+
+--------------------
 Other optional/advanced features:
 
-1. RESIDUAL TREND MODELING (--use_residual_trend)
-   Uses Mann-Kendall trend detection to identify significant linear trends in
-   training yields, then models residuals (yield - trend) to improve forecasting
-   for datasets with strong yield progression over time.
+    1. RESIDUAL TREND MODELING (--use_residual_trend)
+       Uses Mann-Kendall trend detection to identify significant linear trends in training yields,
+       then models residuals (yield - trend) to improve forecasting for datasets with strong
+       yield progression over time.
 
-2. RECURSIVE LAG PREDICTION (--use_recursive_lags)
-   For true out-of-sample testing: uses predicted yields as lag features during
-   test set evaluation instead of ground truth, preventing data leakage.
+    2. RECURSIVE LAG PREDICTION (--use_recursive_lags)
+       For true out-of-sample testing: uses predicted yields as lag features during test set
+       evaluation instead of ground truth, preventing data leakage.
 
-3. SPATIAL FEATURES (--include_spatial_features)
-   Adds explicit latitude/longitude as static features (beyond location embeddings).
+    3. SPATIAL FEATURES (--include_spatial_features)
+       Adds explicit latitude/longitude as static features (beyond location embeddings).
 
-4. FEATURE ABLATION TOGGLES
-   --use_cwb_feature: Include crop water balance (redundant with prec+temp)
-   --drop_tavg: Drop average temperature if dataset computes it as (tmin+tmax)/2
-   --use_gdd : Adds cumulative GDD as a time series channel
-   --use_heat_stress_days: Adds heat/frost/dry stress day counts as static features
-   --use_rue: Adds RUE (Radiation Use Efficiency) index as a time series channel
-   --use_farquhar: Adds Farquhar photosynthesis proxy as a time series channel
+    4. FEATURE ABLATION TOGGLES
+       --use_cwb_feature: Include climate water balance
+       --drop_tavg: Drop average temperature if dataset computes it as (tmin+tmax)/2
+       --use_gdd : Adds cumulative GDD as a time series channel
+       --use_heat_stress_days: Adds heat/frost/dry stress day counts as static features
+       --use_rue: Adds RUE (Radiation Use Efficiency) index as a time series channel
+       --use_farquhar: Adds Farquhar photosynthesis proxy as a time series channel
 
 -------------
 Training workflow:
-1. Data module handles train/val/test splits and normalization
-2. Lightning trainer manages GPU distribution, mixed precision, checkpoints
-3. Early stopping on validation loss with patience monitoring
-4. Model checkpointing saves best model based on validation loss
-5. WandB logging tracks metrics, hyperparameters, and artifacts
+    1. Data module handles train/val/test splits and normalization
+    2. Lightning trainer manages GPU distribution, mixed precision, checkpoints
+    3. Early stopping on validation loss with patience monitoring
+    4. Model checkpointing saves best model based on validation loss
+    5. WandB logging tracks metrics, hyperparameters, and artifacts
 
 Evaluation metrics:
     • MSE, MAE, RMSE: Standard error metrics
@@ -87,27 +101,34 @@ Output generated:
     Results CSV: Detailed predictions with actuals, errors, metadata
     WandB: Full experiment tracking with metrics, parameters, artifacts
 
---------------
-Usage:
-# Basic training with NLinear
-    python linearBaselines.py --crop maize --country NL --model_type nlinear --epochs 50 --aggregation daily
-
-# Use all SOTA features (Fourier encoding + residual trend + recursive lags)
-    python linearBaselines.py --crop maize --country NL --model_type xlinear --use_sota_features --use_residual_trend --use_recursive_lags --use_cwb_feature --aggregation daily
-
-# Quick test run (5 epochs)
-    python linearBaselines.py --crop wheat --country NL --model_type olinear --epochs 2 --aggregation daily --test_years 5 --lag_years 0 --aggregation daily --results_dir checkpoints-test/results --save_checkpoint_dir checkpoints-test/results --wandb_project test-and-delete-later --forecast_type end-of-season --use_exponential_weighting --exponential_tau 10
-    python linearBaselines.py --crop wheat --country NL --model_type olinear --epochs 5 --aggregation daily --test_years 5 --lag_years 2 --use_recursive_lags --aggregation daily --results_dir checkpoints-test/results --save_checkpoint_dir checkpoints-test/results --wandb_project test-and-delete-later --forecast_type middle-of-season --if_tokenize --use_wfan
-
 --------------------
 Hyperparameters:
-    --lr:              Learning rate (default: 1e-4)
-    --weight_decay:    L2 regularization (default: 1e-5)
-    --batch_size:      Training batch size (default: 16)
-    --lag_years:       Historical yield lags (1 or 2, default: 1)
-    --aggregation:     Temporal resolution (daily/weekly/dekad, default: dekad)
-    --seed:            Random seed for reproducibility (default: 42)
-    --use_revin:       Enable RevIN normalization for XLinear (default: False)
+    Key hyperparameters:
+        --lr:              Learning rate (default: 1e-4)
+        --weight_decay:    L2 regularization (default: 1e-5)
+        --batch_size:      Training batch size (default: 16)
+        --lag_years:       Historical yield lags (1 or 2, default: 1)
+        --aggregation:     Temporal resolution (daily/weekly/dekad, default: dekad)
+        --seed:            Random seed for reproducibility (default: 42)
+        --cnnlstm_hidden_size: LSTM hidden size (default: 64)
+        --cnnlstm_num_layers: Number of LSTM layers (default: 2)
+        --cnnlstm_dropout: LSTM dropout (default: 0.1)
+--------------
+Usage:
+# Basic training with default settings:
+    python cnnLSTMBaseline.py --crop maize --country NL --epochs 50 --aggregation daily
+
+# Use all SOTA features (Fourier encoding + residual trend + recursive lags)
+    python cnnLSTMBaseline.py --crop maize --country NL --use_sota_features \\
+        --use_residual_trend --use_recursive_lags --use_cwb_feature --aggregation daily
+
+# Quick test run (5 epochs)
+    python cnnLSTMBaseline.py --crop wheat --country NL --epochs 2 --aggregation daily --lag_years 0 --test_years 5 --results_dir checkpoints-test/results --save_checkpoint_dir checkpoints-test/results --wandb_project test-and-delete-later
+
+# Custom LSTM hyperparameters
+    python cnnLSTMBaseline.py --crop maize --country NL --epochs 50 \\
+        --cnnlstm_hidden_size 128 --cnnlstm_num_layers 3 --cnnlstm_dropout 0.2
+
 ------------
 Core dependencies:
     - torch>=2.0: PyTorch for model implementation
@@ -116,8 +137,13 @@ Core dependencies:
     - wandb: Experiment tracking
     - pymannkendall: Trend detection for residual modeling
     - pandas, numpy: Data manipulation
+
+Internal dependencies:
+    - cybench.datasets: Agricultural data loading utilities
+    - cybench.config: Domain constants and configurations
 """
 
+# %% Loading libraries
 import os
 import sys
 import random
@@ -148,12 +174,12 @@ from cybench.config import (
     CROP_CALENDAR_DATES
 )
 
-# Important: The original cybench alignment file doesn't handle for ex:- "end-of-season" lead_time. 
+# Important: The original cybench alignment file doesn't handle for ex:- "end-of-season" lead_time.
 # Since I wanted the forecast_type to be a categorical value between 'end-of-season', 'three-quarter-of-season', 'middle-of-season', and 'quarter-of-season'
 # It is important to set FORECAST_LEAD_TIME to 0-days to load full season data, and then trim it after.
 cybench.config.FORECAST_LEAD_TIME = "0-days"
 
-# Apply the alignment patch beofre importing datasets 
+# Apply the alignment patch before importing datasets
 from cybench.process.alignment_patch import patch_alignment
 patch_alignment()
 
@@ -169,10 +195,13 @@ from loadData import calculate_fixed_split, DailyCYBenchSeqDataModule
 from alignment_patch import verify_forecast_horizon_config
 
 sys.path.append('../../architectures/')
-from modelconfig import LinearModelConfig
-from linearLayer import create_model
+from modelconfig import TSTModelConfig
+from cnnLSTMLayer import create_cnn_lstm_model
 
-# Set matmul precision conditionally based on GPU capability
+# Setting precision
+# Enable debug logging to see model initialization and forward pass details
+logging.basicConfig(level=logging.DEBUG, format='%(levelname)s: %(message)s')
+
 if torch.cuda.is_available():
     capability = torch.cuda.get_device_capability()
     if capability[0] >= 8:  # Ampere or newer
@@ -186,32 +215,31 @@ else:
 # Main block
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="CY-BENCH Time Series Yield Forecasting with Linear Baseline Models")
+        description="CY-BENCH CNN-LSTM Yield Forecasting with Temporal (Fixed) Split")
+
+    # Basic arguments
     parser.add_argument('--crop', default="maize")
     parser.add_argument('--country', default="NL")
-    parser.add_argument('--model_type', default="nlinear",
-                        choices=['nlinear', 'dlinear', 'xlinear', 'rlinear', 'olinear'])
+
+    # CNN-LSTM specific hyperparameters
+    parser.add_argument('--cnnlstm_hidden_size', type=int, default=64,
+                        help='LSTM hidden size (default: 64)')
+    parser.add_argument('--cnnlstm_num_layers', type=int, default=2,
+                        help='Number of LSTM layers (default: 2)')
+    parser.add_argument('--cnnlstm_dropout', type=float, default=0.1,
+                        help='LSTM dropout probability (default: 0.1)')
+
+    # Data and training arguments (same as baseline)
     parser.add_argument('--aggregation', default="dekad",
                         choices=['daily', 'weekly', 'dekad'])
     parser.add_argument('--use_sota_features', action='store_true')
     parser.add_argument('--include_spatial_features', action='store_true')
     parser.add_argument('--lag_years', type=int, default=1, choices=[0, 1, 2],
                         help='Number of lagged yield years (max 2, default: 1)')
-    parser.add_argument('--load_checkpoint', default=None,
-                        help='Path to checkpoint to load for fine-tuning')
-    parser.add_argument('--save_checkpoint_dir', default='checkpoints-linear',
-                        help='Directory to save model checkpoints')
-    parser.add_argument('--results_dir', default='checkpoints/results',
-                        help='Directory to save CSV results (default: checkpoints/results/)')
-    parser.add_argument('--epochs', type=int, default=50,
-                        help='Maximum training epochs (default: 50)')
-    parser.add_argument('--batch_size', type=int, default=16)
-    parser.add_argument('--lr', type=float, default=1e-4)
-    parser.add_argument('--weight_decay', type=float, default=1e-5)
-    parser.add_argument('--seed', type=int, default=42)
-    parser.add_argument('--use_residual_trend', action='store_true')
     parser.add_argument('--use_recursive_lags', action='store_true',
-                        help='Use predicted yields as lags during testing (true out-of-sample)')
+                        help='Use predicted yields as lags during testing for true out-of-sample evaluation '
+                             '(default: False, uses observed test-set yields as lags)')
+
     # Domain feature engineering flags
     parser.add_argument('--use_gdd', action='store_true',
                         help='Add cumulative GDD as a time series channel. '
@@ -226,26 +254,46 @@ if __name__ == "__main__":
     parser.add_argument('--use_farquhar', action='store_true',
                         help='Add Farquhar photosynthesis proxy as a time series channel. '
                              'Based on FvCB C3 model. Seasonal-scale approximation only.')
+
+    parser.add_argument('--load_checkpoint', default=None,
+                        help='Path to checkpoint to load for fine-tuning')
+    parser.add_argument('--save_checkpoint_dir', default='checkpoints-test',
+                        help='Directory to save model checkpoints (default: checkpoints/)')
+    parser.add_argument('--results_dir', default='checkpoints/results',
+                        help='Directory to save CSV results (default: checkpoints/results/)')
+    parser.add_argument('--epochs', type=int, default=50,
+                        help='Maximum training epochs (default: 50)')
+    parser.add_argument('--batch_size', type=int, default=16)
+    parser.add_argument('--lr', type=float, default=1e-4)
+    parser.add_argument('--weight_decay', type=float, default=1e-5)
+    parser.add_argument('--seed', type=int, default=42)
+    parser.add_argument('--use_residual_trend', action='store_true')
     parser.add_argument('--num_workers', type=int, default=None,
                         help='DataLoader workers. Default: auto-calculated as min(cpu_count//4, 8). '
                              'For 3 concurrent scripts, this balances CPU usage. Set manually to override.')
     parser.add_argument('--test_years', type=int, default=3,
                         help='Number of years for final test set (default: 3)')
-    # Feature configuration flags
+
+    # Feature configuration flags for ablation studies
     parser.add_argument('--use_cwb_feature', action='store_true',
-                        help='Include crop water balance (cwb) as a feature')
+                        help='Include crop water balance (cwb) as a feature. '
+                             'Note: cwb is derived from prec and ET0 (depends on temperature), '
+                             'so it may be redundant with existing weather features.')
     parser.add_argument('--drop_tavg', action='store_true',
-                        help='Drop tavg feature')
-    parser.add_argument('--use_revin', action='store_true',
-                        help='Use RevIN normalization for XLinear endogenous series')
+                        help='Drop tavg feature if dataset computes it as (tmin+tmax)/2, '
+                             'which carries no additional information beyond tmin/tmax.')
     parser.add_argument('--lr_decay_every', type=int, default=None,
                         help='Decay learning rate by half every N epochs (default: None, no decay)')
+
+    # WandB configuration
     parser.add_argument('--wandb_project', default=None,
-                        help='Custom WandB project name (default: CYBENCH-LSTF-AAAI2027-new)')
+                        help='Custom WandB project name (default: CYBENCH-LSTF-AAAI2027)')
     parser.add_argument('--wandb_run_name', default=None,
-                        help='Custom WandB run name (default: model_type-crop-country)')
+                        help='Custom WandB run name (default: cnnlstm-crop-country)')
     parser.add_argument('--run_id', default=None,
                         help='Custom run ID for checkpoint naming and results tracking (default: auto-generated UUID)')
+
+    # Forecast type
     parser.add_argument('--forecast_type', default="end-of-season",
                         choices=['end-of-season', 'three-quarter-of-season', 'middle-of-season',
                                  'quarter-of-season'],
@@ -253,6 +301,7 @@ if __name__ == "__main__":
                              'Controls what portion of the season is observed before forecasting: '
                              'end-of-season (100%%), three-quarter-of-season (75%%), '
                              'middle-of-season (50%%), quarter-of-season (25%%).')
+
     # Exponential sample weighting for non-stationarity
     parser.add_argument('--use_exponential_weighting', action='store_true',
                         help='Enable exponential sample weighting based on year distance. '
@@ -263,6 +312,7 @@ if __name__ == "__main__":
                              'Higher values = slower decay (more uniform weighting). '
                              'Examples: tau=5 gives 2023=1.0, 2020=0.55, 2015=0.25; '
                              'tau=10 gives 2023=1.0, 2020=0.74, 2015=0.55.')
+
     # Multi-year context features
     parser.add_argument('--multi_year_summaries', action='store_true',
         help='Enable multi-year summary features from previous growing seasons')
@@ -272,15 +322,7 @@ if __name__ == "__main__":
         choices=['weather', 'remote_sensing', 'phenology', 'all'],
         help='Which features to summarize from previous years. '
              'weather=temp/precip/gdd, remote_sensing=NDVI/FPAR/SSM, phenology=crop calendar changes')
-    # XLinear-specific hyperparameters (only used when model_type='xlinear')
-    parser.add_argument('--xlinear_hidden_size', type=int, default=64,
-                        help='XLinear: dimension of hidden embeddings for all linear layers (default: 64)')
-    parser.add_argument('--xlinear_temporal_ff', type=int, default=128,
-                        help='XLinear: feed-forward dimension in the Time-wise Gating Module (default: 128)')
-    parser.add_argument('--xlinear_channel_ff', type=int, default=16,
-                        help='XLinear: feed-forward dimension in the Variate-wise Gating Module (default: 16)')
-    parser.add_argument('--xlinear_dropout', type=float, default=0.1,
-                        help='XLinear: dropout probability for regularization (default: 0.1)')
+
     # Tokenization ablation arguments
     parser.add_argument('--if_tokenize', action='store_true',
                         help='Enable fixed average pooling tokenization (ablation study). '
@@ -291,28 +333,19 @@ if __name__ == "__main__":
     parser.add_argument('--tokenize_stride', type=int, default=7,
                         help='Stride for average pooling tokenization (default: 7). '
                              'Only used when --if_tokenize is enabled.')
-    # WFAN (Frequency-Adaptive Normalization) arguments
-    parser.add_argument('--use_wfan', action='store_true',
-                        help='Enable WFAN frequency-adaptive normalization for distribution shift mitigation.')
-    parser.add_argument('--wfan_k', type=int, default=2,
-                        help='Number of dominant frequency components to remove in WFAN (default: 2). '
-                             'Higher values remove more frequency components as non-stationary.')
-    parser.add_argument('--wfan_lambda', type=float, default=1.0,
-                        help='WFAN loss balancing coefficient for pattern-adaptive prediction (default: 1.0). '
-                             'Controls the weight of non-stationary prediction loss.')
+
     args = parser.parse_args()
 
-    # The original alignment.py in cybench repo only supports "middle-of-season", "quarter-of-season", and "N-days" predictions. Since, we wanted to have "middle-of-season", "quarter-of-season", "end-of-season" and "three-quarter-of-season", we set lead_time to "0-days" which makes alignment.py load
-    # the full season (SOS to EOS). The actual forecast timing is then controlled via data_fraction parameter below during feature building.
+    # Set forecast type
     set_forecast_type("0-days")
     print(f"[Forecast Type] {args.forecast_type}")
 
-    # Map forecast_type to data_fraction (portion of season data to use)
+    # Map forecast_type to data_fraction
     forecast_to_fraction = {
-        'end-of-season': 1.0,           # 100% of season observed
-        'three-quarter-of-season': 0.75, # 75% of season observed
-        'middle-of-season': 0.5,        # 50% of season observed
-        'quarter-of-season': 0.25,      # 25% of season observed
+        'end-of-season': 1.0,
+        'three-quarter-of-season': 0.75,
+        'middle-of-season': 0.5,
+        'quarter-of-season': 0.25,
     }
     data_fraction = forecast_to_fraction[args.forecast_type]
     print(f"[Data Fraction] Using {data_fraction:.0%} of season data (from SOS to EOS)")
@@ -320,7 +353,6 @@ if __name__ == "__main__":
     # Set num_workers if not specified
     if args.num_workers is None:
         cpu_count = os.cpu_count() or 1
-        # For 3 concurrent scripts: divide by 4, cap at 8 for balance – gives good parallelism without overflooding the memory of the system
         args.num_workers = min(cpu_count // 4, 8)
         print(f"[Auto-config] Setting num_workers={args.num_workers} based on {cpu_count} CPU cores")
 
@@ -328,28 +360,27 @@ if __name__ == "__main__":
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
 
-    # Generate unique run identifier and timestamp for CSV tracking
+    # Generate unique run identifier
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_id = args.run_id if args.run_id else str(uuid.uuid4())[:8]  # Use provided run_id or generate short UUID
+    run_id = args.run_id if args.run_id else str(uuid.uuid4())[:8]
+
+    # Add model_type to args for checkpoint naming (CNN-LSTM specific)
+    args.model_type = "cnnlstm"
 
     print(f"\n{'=' * 70}")
-    print(f"CY-BENCH  |  {args.model_type.upper()}  |  {args.crop}-{args.country}  "
-          f"|  {args.aggregation.upper()}")
-    print(f"SOTA={args.use_sota_features}  Spatial={args.include_spatial_features}  "
-          f"Lag={args.lag_years}  RevIN={args.use_revin}")
-    print(f"RecursiveLags={args.use_recursive_lags}  ResidualTrend={args.use_residual_trend}")
-    print(f"Domain features: GDD={args.use_gdd}  HeatStress={args.use_heat_stress_days}  "
+    print(f"CY-BENCH | CNN-LSTM | {args.crop}-{args.country} | {args.aggregation.upper()}")
+    print(f"SOTA={args.use_sota_features}  Spatial={args.include_spatial_features} Lag={args.lag_years}")
+    print(f"Domain features: GDD={args.use_gdd}  HeatStress={args.use_heat_stress_days} "
           f"RUE={args.use_rue}  Farquhar={args.use_farquhar}")
     print(f"TestYears={args.test_years}")
     print(f"Exponential Weighting: {args.use_exponential_weighting} (tau={args.exponential_tau})")
     print(f"Multi-Year Summaries: {args.multi_year_summaries} (window={args.multi_year_window}, features={args.multi_year_features})")
     print(f"Tokenization: {args.if_tokenize} (kernel={args.tokenize_kernel}, stride={args.tokenize_stride})")
-    print(f"WFAN: {args.use_wfan} (K={args.wfan_k}, λ={args.wfan_lambda})")
-    print(f"lr={args.lr}  wd={args.weight_decay}  epochs={args.epochs}  "
-          f"batch={args.batch_size}  seed={args.seed}")
+    print(f"CNN-LSTM: hidden_size={args.cnnlstm_hidden_size}, num_layers={args.cnnlstm_num_layers}, dropout={args.cnnlstm_dropout}")
+    print(f"lr={args.lr}  wd={args.weight_decay}  epochs={args.epochs} batch={args.batch_size}  seed={args.seed}")
     print(f"{'=' * 70}\n")
 
-    # Create LR scheduler lambda if requested
+    # Create LR scheduler lambda if enabled
     lr_scheduler_lambda = None
     if args.lr_decay_every is not None:
         def lr_scheduler_lambda(epoch):
@@ -357,9 +388,10 @@ if __name__ == "__main__":
             decay_steps = epoch // decay_factor
             return 0.5 ** decay_steps
 
-    config = LinearModelConfig(
+    config = TSTModelConfig(
         crop=args.crop, country=args.country,
-        model_type=args.model_type, aggregation=args.aggregation,
+        model_type="cnnlstm",  # Using same config class
+        aggregation=args.aggregation,
         data_fraction=data_fraction,
         use_sota_features=args.use_sota_features,
         include_spatial_features=args.include_spatial_features,
@@ -370,14 +402,13 @@ if __name__ == "__main__":
         max_epochs=args.epochs, lr=args.lr, weight_decay=args.weight_decay,
         test_years=args.test_years,
         use_residual_trend=args.use_residual_trend,
+        use_cwb_feature=args.use_cwb_feature,
+        drop_tavg=args.drop_tavg,
         use_recursive_lags=args.use_recursive_lags,
         use_gdd=args.use_gdd,
         use_heat_stress_days=args.use_heat_stress_days,
         use_rue=args.use_rue,
         use_farquhar=args.use_farquhar,
-        use_cwb_feature=args.use_cwb_feature,
-        drop_tavg=args.drop_tavg,
-        use_revin=args.use_revin,
         use_exponential_weighting=args.use_exponential_weighting,
         exponential_tau=args.exponential_tau,
         multi_year_summaries=args.multi_year_summaries,
@@ -385,16 +416,12 @@ if __name__ == "__main__":
         multi_year_features=args.multi_year_features,
         results_dir=args.results_dir,
         lr_scheduler_lambda=lr_scheduler_lambda,
-        xlinear_hidden_size=args.xlinear_hidden_size,
-        xlinear_temporal_ff=args.xlinear_temporal_ff,
-        xlinear_channel_ff=args.xlinear_channel_ff,
-        xlinear_dropout=args.xlinear_dropout,
+        patchtst_d_model=args.cnnlstm_hidden_size,  # Reusing for hidden size
+        patchtst_num_layers=args.cnnlstm_num_layers,  # Reusing for num layers
+        patchtst_dropout=args.cnnlstm_dropout,  # Reusing for dropout
         if_tokenize=args.if_tokenize,
         tokenize_kernel=args.tokenize_kernel,
         tokenize_stride=args.tokenize_stride,
-        use_wfan=args.use_wfan,
-        wfan_k=args.wfan_k,
-        wfan_lambda=args.wfan_lambda,
     )
 
     # Show forecast horizon configuration
@@ -442,10 +469,10 @@ if __name__ == "__main__":
     print(f"Test years ({len(fixed_splits['test_years'])}): {sorted(fixed_splits['test_years'])}")
 
     print(f"\n{'=' * 70}")
-    print(f"PHASE 3: Final Model Training and Evaluation (Fixed Split)")
+    print(f"PHASE 3: Final Model Training and Evaluation")
     print(f"{'=' * 70}\n")
 
-    # Create datamodule for model
+    # Create datamodule
     dm_final = DailyCYBenchSeqDataModule(config)
     dm_final.setup(
         train_years=fixed_splits['train_years'],
@@ -453,13 +480,13 @@ if __name__ == "__main__":
         test_years=fixed_splits['test_years']
     )
 
-    # Create model
-    model_final = create_model(config)
+    # Create CNN-LSTM model
+    model_final = create_cnn_lstm_model(config)
 
-    # WandB logger for model
+    # WandB logger
     try:
-        wandb_project = args.wandb_project if args.wandb_project else "CYBENCH-LSTF-AAAI2027-new"
-        base_run_name = args.wandb_run_name if args.wandb_run_name else f"{args.model_type}-{args.crop}-{args.country}"
+        wandb_project = args.wandb_project if args.wandb_project else "CYBENCH-LSTF-AAAI2027"
+        base_run_name = args.wandb_run_name if args.wandb_run_name else f"cnnlstm-{args.crop}-{args.country}"
         wandb_run_name = args.run_id and f"{base_run_name}-{run_id}" or base_run_name
         wandb_logger = WandbLogger(
             project=wandb_project,
@@ -470,7 +497,7 @@ if __name__ == "__main__":
         loggers = [wandb_logger]
     except Exception as e:
         print(f"[WandB Warning] Could not initialise WandB logger: {e}")
-        loggers = [CSVLogger("logs/", name="cybench-linear")]
+        loggers = [CSVLogger("logs/", name="cybench-cnnlstm")]
 
     # Setup callbacks
     final_callbacks = [
@@ -480,7 +507,7 @@ if __name__ == "__main__":
             save_top_k=1,
             mode='min',
             dirpath=args.save_checkpoint_dir,
-            filename=f'{generate_checkpoint_name(args)}_{{epoch:02d}}_{{val_loss:.4f}}_runid:{run_id}',
+            filename=f'cnnlstm-{generate_checkpoint_name(args)}_{{epoch:02d}}_{{val_loss:.4f}}_runid:{run_id}',
         ),
         LearningRateMonitor(logging_interval='epoch'),
     ]
@@ -518,7 +545,7 @@ if __name__ == "__main__":
     else:
         final_metrics = {}
 
-    # Save test results to CSV files with per-year metrics
+    # Save test results to CSV
     print(f"\n[CSV Results] Retrieving per-year metrics from test results...")
 
     if hasattr(model_final, '_test_results_per_year') and model_final._test_results_per_year:
@@ -527,29 +554,24 @@ if __name__ == "__main__":
         print(f"[CSV Results] Warning: No per-year metrics found on model. Using overall metrics only.")
         per_year_metrics = {}
 
-    # Log per-year metrics to console
+    # Log per-year metrics
     print(f"\n[CSV Results] Per-Year Test Metrics:")
     for year in sorted(fixed_splits['test_years']):
         print(f"Year {year}:")
-        for metric in ['mse', 'mae', 'rmse', 'r2', 'mape', 'smape']:
-            key = f'{metric}_{year}'
-            if key in per_year_metrics:
-                print(f"{metric.upper()}: {per_year_metrics[key]:.4f}")
+        for metric in ['nrmse', 'mape', 'r2']:
+            if f'{metric}_{year}' in per_year_metrics:
+                print(f"{metric.upper()}: {per_year_metrics[f'{metric}_{year}']:.4f}")
 
-    # Log overall metrics
-    if 'mse_overall' in per_year_metrics:
-        print(f"\n  Overall:")
-        for metric in ['mse', 'mae', 'rmse', 'r2', 'mape', 'smape']:
-            key = f'{metric}_overall'
-            if key in per_year_metrics:
-                print(f"{metric.upper()}: {per_year_metrics[key]:.4f}")
+    print(f"Overall:")
+    for metric in ['nrmse', 'mape', 'r2']:
+        if f'{metric}_overall' in per_year_metrics:
+            print(f"{metric.upper()}: {per_year_metrics[f'{metric}_overall']:.4f}")
 
-    # Save to CSV - extract actual years from test results (not from fixed_splits)
+    # Extract actual test years
     actual_test_years = set()
     for key in per_year_metrics.keys():
         if key.endswith('_overall'):
             continue
-        # Extract year from keys like 'nrmse_2015', 'mape_2017', etc.
         parts = key.rsplit('_', 1)
         if len(parts) == 2 and parts[1].isdigit():
             actual_test_years.add(int(parts[1]))
@@ -577,10 +599,10 @@ if __name__ == "__main__":
         final_metrics
     )
 
-    # Print experiment completion message
+    # Print completion message
     print(f"\n{'=' * 70}")
     print(f"Experiment complete: {args.crop}-{args.country}")
-    print(f"Model: {args.model_type}")
+    print(f"Model: CNN-LSTM")
     print(f"Aggregation: {args.aggregation}")
     print(f"Test years: {fixed_splits['test_years']}")
     print(f"{'=' * 70}\n")

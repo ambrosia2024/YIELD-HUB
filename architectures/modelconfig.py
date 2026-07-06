@@ -67,6 +67,12 @@ class TSTModelConfig:
     if_tokenize: bool = False  # Enable fixed average pooling tokenization (ablation study)
     tokenize_kernel: int = 7  # Kernel size for average pooling (default: 7 for weekly aggregation)
     tokenize_stride: int = 7  # Stride for average pooling (default: 7 for non-overlapping weekly tokens)
+    # Parallel feature building for HPO speedup
+    use_parallel: bool = False  # Enable parallel feature building using joblib (default: False for backward compatibility)
+    # WFAN (Frequency-Adaptive Normalization) parameters
+    use_wfan: bool = False  # Enable WFAN frequency-adaptive normalization
+    wfan_k: int = 2  # Number of dominant frequency components to remove (K)
+    wfan_lambda: float = 1.0  # Loss balancing coefficient for pattern-adaptive prediction (λ)
 
     @property
     def seq_len(self):
@@ -175,6 +181,12 @@ class LinearModelConfig:
     if_tokenize: bool = False  # Enable fixed average pooling tokenization (ablation study)
     tokenize_kernel: int = 7  # Kernel size for average pooling (default: 7 for weekly aggregation)
     tokenize_stride: int = 7  # Stride for average pooling (default: 7 for non-overlapping weekly tokens)
+    # Parallel feature building for HPO speedup
+    use_parallel: bool = False  # Enable parallel feature building using joblib (default: False for backward compatibility)
+    # WFAN (Frequency-Adaptive Normalization) parameters
+    use_wfan: bool = False  # Enable WFAN frequency-adaptive normalization
+    wfan_k: int = 2  # Number of dominant frequency components to remove (K)
+    wfan_lambda: float = 1.0  # Loss balancing coefficient for pattern-adaptive prediction (λ)
 
     @property
     def seq_len(self):

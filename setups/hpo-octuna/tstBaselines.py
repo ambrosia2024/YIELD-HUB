@@ -107,7 +107,7 @@ Usage:
 
 # Quick test run (2 trials) 
     python tstBaselines.py --crop wheat --country NL --model_type informer --n_trials 4 --epochs 2 --results_dir checkpoints-test/results --forecast_type middle-of-season --aggregation daily --use_exponential_weighting --exponential_tau 3 --multi_year_summaries --multi_year_window 1 --multi_year_features all --optimize features
-    python tstBaselines.py --crop wheat --country NL --model_type patchtst --n_trials 4 --epochs 2 --results_dir checkpoints-test/results --forecast_type middle-of-season --aggregation daily
+    python tstBaselines.py --crop wheat --country NL --model_type patchtst --n_trials 4 --epochs 2 --results_dir checkpoints-test/results --forecast_type middle-of-season --aggregation weekly
 
 ------------
 Core dependencies:
@@ -176,6 +176,11 @@ from validateModel import print_metrics_table
 from loadData import calculate_fixed_split, DailyCYBenchSeqDataModule
 from hpoOptuna import print_best_results, save_results_to_file, save_best_params_to_csv, run_hpo
 from alignment_patch import verify_forecast_horizon_config
+
+# Feature caching for HPO (on-demand only)
+from featureCache import (
+    get_global_cache, reset_global_cache
+)
 
 sys.path.append('../../architectures/')
 from modelconfig import TSTModelConfig
@@ -392,6 +397,18 @@ if __name__ == "__main__":
     print(f"  Val years ({len(fixed_splits['val_years'])}): {sorted(fixed_splits['val_years'])}")
     print(f"  Test years ({len(fixed_splits['test_years'])}): {sorted(fixed_splits['test_years'])}")
 
+    # ==================== CREATE TEMP CONFIG ====================
+    # Create temp config for forecast horizon verification
+    temp_config = TSTModelConfig(
+        crop=args.crop, country=args.country,
+        model_type=args.model_type, aggregation=args.aggregation,
+        data_fraction=data_fraction,
+        use_sota_features=args.use_sota_features,
+        include_spatial_features=args.include_spatial_features,
+        lag_years=args.lag_years,
+    )
+    verify_forecast_horizon_config(temp_config)
+
     # ==================== OPTUNA HPO INTEGRATION ====================
     print(f"\n{'=' * 70}")
     print(f"OPTUNA HYPERPARAMETER OPTIMIZATION")
@@ -422,18 +439,6 @@ if __name__ == "__main__":
     print(f"  Study name: {study_name}")
     print(f"  Results file: {hpo_results_file}")
     print(f"  Storage: {args.hpo_storage if args.hpo_storage else 'In-memory'}")
-
-    # Show forecast horizon configuration (create temporary config for diagnostic)
-    from cybench.architectures.modelconfig import TSTModelConfig
-    temp_config = TSTModelConfig(
-        crop=args.crop, country=args.country,
-        model_type=args.model_type, aggregation=args.aggregation,
-        data_fraction=data_fraction,
-        use_sota_features=args.use_sota_features,
-        include_spatial_features=args.include_spatial_features,
-        lag_years=args.lag_years,
-    )
-    verify_forecast_horizon_config(temp_config)
 
     def optuna_objective(trial):
         """Optuna objective function for hyperparameter optimization"""
@@ -527,6 +532,7 @@ if __name__ == "__main__":
                 patchtst_ffn_dim=patchtst_ffn_dim,
                 patchtst_num_layers=patchtst_num_layers,
                 patchtst_dropout=patchtst_dropout,
+                use_parallel=True,  # Enable parallel feature building for HPO speedup
             )
         else:
             # For non-patchtst models
@@ -562,6 +568,7 @@ if __name__ == "__main__":
                 patchtst_ffn_dim=patchtst_ffn_dim,
                 patchtst_num_layers=patchtst_num_layers,
                 patchtst_dropout=patchtst_dropout,
+                use_parallel=True,  # Enable parallel feature building for HPO speedup
             )
 
         # Create datamodule
@@ -951,6 +958,18 @@ if __name__ == "__main__":
         csv_r2_path = os.path.join(args.save_checkpoint_dir, 'optuna_r2.csv')
         print(f"[HPO] Best RMSE hyperparameters saved to: {csv_rmse_path}")
         print(f"[HPO] Best R² hyperparameters saved to: {csv_r2_path}")
+
+    # Print cache statistics (if cache was used during trials)
+    print(f"\n{'=' * 70}")
+    print(f"FEATURE CACHE STATISTICS")
+    print(f"{'=' * 70}")
+    cache = get_global_cache()
+    cache_stats = cache.stats()
+    print(f"  Cache entries: {cache_stats['size']}")
+    print(f"  Cache hits: {cache_stats['hits']}")
+    print(f"  Cache misses: {cache_stats['misses']}")
+    print(f"  Hit rate: {cache_stats['hit_rate']}")
+    print(f"{'=' * 70}\n")
 
     # Print completion message
     print(f"\n{'=' * 70}")
