@@ -61,6 +61,8 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
         self._most_recent_year: Optional[int] = None
         # Flag for first batch logging
         self._weight_log_done = False
+        # Prediction cache for recursive lag prediction
+        self._yield_predictions_cache: Dict[Tuple[str, int], float] = {}
 
         # Log exponential weighting configuration
         if config.use_exponential_weighting:
@@ -131,12 +133,21 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
 
         self.base_model = self._build_model()
 
-        self.train_metrics = ModelMetrics(prefix="train", include_nrmse=False)
-        self.val_metrics = ModelMetrics(prefix="val")
-        self.test_metrics = ModelMetrics(prefix="test")
+        # Initialize metrics with quantiles if using pinball loss
+        metrics_quantiles = config.quantiles if config.loss_type == 'pinball' else None
+        if config.loss_type == 'pinball':
+            print(f"[Quantile Regression] ENABLED - quantiles: {config.quantiles}")
 
-        # Prediction cache for recursive lag prediction
-        self._yield_predictions_cache: Dict[Tuple[str, int], float] = {}
+        self.train_metrics = ModelMetrics(prefix="train", include_nrmse=False, quantiles=metrics_quantiles)
+        self.val_metrics = ModelMetrics(prefix="val", quantiles=metrics_quantiles)
+        self.test_metrics = ModelMetrics(prefix="test", quantiles=metrics_quantiles)
+
+    @property
+    def output_dim(self) -> int:
+        """Output dimension: 1 for MSE loss, n_quantiles for pinball loss."""
+        if self.config.loss_type == 'pinball':
+            return len(self.config.quantiles)
+        return 1
 
     @abstractmethod
     def _build_model(self) -> nn.Module:
@@ -404,23 +415,74 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
                 KEY_YEAR: year_int
             })
 
-        trend_predictions_orig = self.trend_model._predict_trend(test_items).flatten()
-        trends_z = (trend_predictions_orig - dm.y_mean) / dm.y_std
-        return torch.tensor(trends_z, dtype=torch.float32, device=self.device).unsqueeze(1)
+        trend_predictions_orig = self.trend_model._predict_trend(test_items)
+
+        # DEBUG: Check what _predict_trend actually returned
+        print(f"[DEBUG _compute_batch_trends] len(test_items)={len(test_items)}, _predict_trend returned shape={trend_predictions_orig.shape}, dtype={trend_predictions_orig.dtype}")
+        if hasattr(trend_predictions_orig, 'flatten'):
+            trend_predictions_orig_flat = trend_predictions_orig.flatten()
+            print(f"[DEBUG _compute_batch_trends] After flatten, shape={trend_predictions_orig_flat.shape}")
+        else:
+            trend_predictions_orig_flat = trend_predictions_orig
+
+        # Normalize to z-score space
+        trends_z = (trend_predictions_orig_flat - dm.y_mean) / dm.y_std
+        print(f"[DEBUG _compute_batch_trends] trends_z shape={trends_z.shape if hasattr(trends_z, 'shape') else 'N/A'}")
+
+        # Ensure trends_z is 1D to avoid shape mismatches with quantile predictions
+        if hasattr(trends_z, 'ndim') and trends_z.ndim > 1:
+            print(f"[DEBUG _compute_batch_trends] WARNING: trends_z is {trends_z.ndim}D, flattening...")
+            trends_z = trends_z.flatten()
+        trends_tensor = torch.tensor(trends_z, dtype=torch.float32, device=self.device)
+        # Ensure 2D output (batch, 1) for consistent squeeze(-1) behavior
+        if trends_tensor.dim() == 1:
+            trends_tensor = trends_tensor.unsqueeze(1)
+        print(f"[DEBUG _compute_batch_trends] Final trends_tensor shape={trends_tensor.shape}")
+        return trends_tensor
 
     def _compute_weighted_loss(self, pred: torch.Tensor, y: torch.Tensor,
                                 years: Optional[torch.Tensor] = None) -> torch.Tensor:
         """
-        Compute MSE loss between predictions and targets.
+        Compute loss between predictions and targets (MSE or Pinball).
 
         Args:
-            pred: Predictions of shape (batch,)
-            y: Targets of shape (batch,)
+            pred: Predictions of shape (batch,) for MSE or (batch, n_quantiles) for pinball
+            y: Targets of shape (batch,) or (batch, 1)
             years: Sample years of shape (batch,) for exponential weighting
 
         Returns:
             Loss tensor
         """
+        # Ensure y has correct shape
+        if y.dim() == 1:
+            y = y.unsqueeze(-1)
+
+        # Pinball loss for quantile regression
+        if self.config.loss_type == 'pinball':
+            from cybench.process.uncertainty_metrics import weighted_pinball_loss_torch
+
+            if self.config.use_exponential_weighting and years is not None:
+                # Compute per-sample weights
+                years_int = years.cpu().numpy() if years.is_cuda else years.numpy()
+                weights = np.exp(-(self._most_recent_year - years_int) / self.config.exponential_tau)
+                weights_tensor = torch.tensor(weights, dtype=torch.float32, device=pred.device).unsqueeze(-1)
+
+                # Log first batch sample weights (once)
+                if not self._weight_log_done:
+                    unique_years = np.unique(years_int[:min(16, len(years_int))])  # Sample first 16
+                    logging.info(f"[Exponential Weighting] First batch sample weights:")
+                    for yr in sorted(unique_years, reverse=True)[:6]:  # Show up to 6 years
+                        idx = np.where(years_int == yr)[0][0]
+                        dist = self._most_recent_year - yr
+                        logging.info(f"    Year {yr} (distance {dist}y): weight={weights[idx]:.4f}")
+                    self._weight_log_done = True
+
+                return weighted_pinball_loss_torch(pred, y, self.config.quantiles, weights_tensor)
+            else:
+                from cybench.process.uncertainty_metrics import pinball_loss_torch
+                return pinball_loss_torch(pred, y, self.config.quantiles)
+
+        # MSE loss for point prediction
         if self.config.use_exponential_weighting and years is not None:
             # Compute per-sample losses
             per_sample_loss = F.mse_loss(pred, y, reduction='none')
@@ -454,6 +516,9 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
         x_ts, x_static, y, years, adm_ids, lats, lons, validity_mask = batch
         dm = self.trainer.datamodule
 
+        # DEBUG: Log batch shapes and sizes
+        print(f"[DEBUG _shared_step] x_ts.shape={x_ts.shape}, len(adm_ids)={len(adm_ids)}, years.shape={years.shape if hasattr(years, 'shape') else 'N/A'}")
+
         # Apply tokenization if enabled (ablation study)
         x_ts, validity_mask = self._apply_tokenization(x_ts, observed_mask=validity_mask)
 
@@ -467,8 +532,21 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
         x_static_n = self._normalize_and_impute_static(x_static)
         pred = self.forward(x_ts_n, x_static_n, observed_mask=validity_mask)
 
+        # DEBUG: Log pred shape
+        print(f"[DEBUG _shared_step] pred.shape={pred.shape}")
+
         if batch_trends is not None:
-            final_pred = pred + batch_trends.squeeze(-1).detach()
+            # For pinball loss (quantile regression), pred has shape (batch, n_quantiles)
+            # We need to broadcast trends to all quantiles
+            # batch_trends is (batch, 1), squeeze to (batch,), then expand to (batch, n_quantiles)
+            trends_squeezed = batch_trends.squeeze(-1).detach()  # (batch,)
+            if trends_squeezed.dim() == 1 and pred.dim() == 2:
+                # Broadcast trends to match quantile dimensions
+                trends_broadcast = trends_squeezed.unsqueeze(-1).expand_as(pred)  # (batch, n_quantiles)
+                final_pred = pred + trends_broadcast
+            else:
+                # Fallback to original behavior
+                final_pred = pred + trends_squeezed
         else:
             final_pred = pred
 
@@ -565,7 +643,14 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
 
         for pred, year, adm_id in zip(predictions_orig, years, adm_ids):
             cache_key = (adm_id, int(year))
-            self._yield_predictions_cache[cache_key] = pred.item()
+            # Extract scalar value: use median (index 1) for quantile predictions, otherwise use the value
+            pred_cpu = pred.detach().cpu() if hasattr(pred, 'detach') else pred
+            if pred_cpu.numel() > 1:
+                # Quantile predictions: use median (index 1)
+                pred_value = pred_cpu[1].item()
+            else:
+                pred_value = pred_cpu.item()
+            self._yield_predictions_cache[cache_key] = pred_value
 
     def _eval_step_with_clipping(self, batch, metrics: ModelMetrics, loss_key: str, stage: str,
                                   return_predictions: bool = False, return_orig: bool = False):
@@ -609,7 +694,18 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
         x_static_n = self._normalize_and_impute_static(x_static)
         pred = self.forward(x_ts_n, x_static_n, observed_mask=validity_mask)
 
-        final_pred_z = pred + batch_trends.squeeze(-1).detach() if batch_trends is not None else pred
+        # Add trends with proper broadcasting for quantile regression
+        if batch_trends is not None:
+            trends_squeezed = batch_trends.squeeze(-1).detach()  # (batch,)
+            if trends_squeezed.dim() == 1 and pred.dim() == 2:
+                # Broadcast trends to match quantile dimensions
+                trends_broadcast = trends_squeezed.unsqueeze(-1).expand_as(pred)  # (batch, n_quantiles)
+                final_pred_z = pred + trends_broadcast
+            else:
+                # Fallback for MSE case
+                final_pred_z = pred + trends_squeezed
+        else:
+            final_pred_z = pred
 
         loss = self._compute_weighted_loss(final_pred_z, y_z)
 
@@ -659,7 +755,13 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
                 batch, self.val_metrics, "val_loss", "val", return_orig=True
             )
             # Accumulate predictions in original scale for bias correction fitting
-            self._val_preds.extend(preds_clipped.detach().cpu().tolist())
+            # When quantile predictions are enabled (shape: [n, 3]), use median (index 1) for bias correction
+            preds_np = preds_clipped.detach().cpu()
+            if preds_np.dim() == 2 and preds_np.shape[1] == 3:
+                # Quantile mode: use median (index 1) for bias correction
+                self._val_preds.extend(preds_np[:, 1].tolist())
+            else:
+                self._val_preds.extend(preds_np.tolist())
             self._val_targets.extend(targets.detach().cpu().tolist())
             return loss
         else:
@@ -729,10 +831,16 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
         if not hasattr(self, '_per_year_preds') or not self._per_year_preds:
             return
 
-        # Convert to numpy and iterate
+        # Convert to numpy
         preds_np = preds.cpu().numpy()
-        targets_np = targets.cpu().numpy()
+        targets_np = targets.cpu().numpy().flatten()
         years_np = years.cpu().numpy() if isinstance(years, torch.Tensor) else years
+
+        # For quantile predictions (shape: [n, 3]), extract only the median (index 1)
+        if preds_np.ndim == 2 and preds_np.shape[1] == 3:
+            preds_np = preds_np[:, 1]  # Use median (0.5 quantile)
+        else:
+            preds_np = preds_np.flatten()
 
         for pred, target, year in zip(preds_np, targets_np, years_np):
             year_int = int(year)
@@ -835,17 +943,44 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
         self.log('test/smape', results['smape'], prog_bar=False)
         self.log('test/nrmse', results['nrmse'], prog_bar=False)
         self.test_metrics.log_results("test")
+
+        # Log uncertainty metrics if using quantile regression
+        print(f"[on_test_epoch_end] loss_type={self.config.loss_type}, checking uncertainty metrics")
+        if self.config.loss_type == 'pinball':
+            uq_metrics = self.test_metrics.compute_uncertainty_metrics()
+            print(f"[on_test_epoch_end] uq_metrics={uq_metrics}")
+            if uq_metrics:
+                # Store on model for later retrieval
+                self._test_uncertainty_metrics = uq_metrics
+                print(f"\n[TEST UNCERTAINTY METRICS]")
+                for key, value in sorted(uq_metrics.items()):
+                    # Log all uncertainty metrics, regardless of prefix format
+                    self.log(key, value, prog_bar=False)
+                    # Clean up the key name for printing: remove 'test' or 'test/' prefix
+                    if key.startswith('test/'):
+                        print(f"{key.replace('test/', '').upper()}: {value:.4f}")
+                    elif key.startswith('test'):
+                        print(f"{key[4:].upper()}: {value:.4f}")
+                    else:
+                        print(f"{key.upper()}: {value:.4f}")
+            else:
+                print(f"[on_test_epoch_end] WARNING: uq_metrics is None or empty!")
+
         self.test_metrics.reset()
 
         # Compute per-year metrics and store on model for CSV saving
         if hasattr(self, '_per_year_preds') and self._per_year_preds:
             self._test_results_per_year = self._compute_per_year_metrics_from_preds()
 
-    def predict(self, batch):
+    def predict(self, batch, datamodule=None):
         """
         Generate predictions for a batch of data without updating metrics.
+
         Args:
             batch: Input batch tuple (x_ts, x_static, y_z, years, adm_ids, lats, lons, validity_mask)
+            datamodule: Optional DataModule for trend computation and denormalization.
+                        If not provided, uses stored datamodule from training (if available).
+
         Returns:
             dict: Dictionary containing:
                 - predictions: Predictions in original scale (tons/ha), clipped to >= 0
@@ -857,7 +992,30 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
                 - lons: Longitudes for each sample
         """
         x_ts, x_static, y_z, years, adm_ids, lats, lons, validity_mask = batch
-        dm = self.trainer.datamodule
+
+        # Use provided datamodule, fall back to stored reference, then trainer
+        if datamodule is not None:
+            dm = datamodule
+            # Store for future calls (for inference without trainer)
+            self._datamodule = datamodule
+            # Also store feature_norm_params for _normalize_time_series
+            if hasattr(datamodule, 'feature_norm_params'):
+                self.feature_norm_params = datamodule.feature_norm_params
+        elif hasattr(self, '_datamodule') and self._datamodule is not None:
+            dm = self._datamodule
+        else:
+            try:
+                dm = self.trainer.datamodule
+            except (RuntimeError, AttributeError):
+                raise RuntimeError("No datamodule available. Pass datamodule to predict() or ensure model was trained with a datamodule.")
+
+        # Move inputs to model device (important for predict() after training)
+        device = self.device
+        x_ts = x_ts.to(device)
+        x_static = x_static.to(device)
+        y_z = y_z.to(device)
+        validity_mask = validity_mask.to(device) if validity_mask is not None else None
+        # lats, lons are not used in forward pass, keep as is
 
         # Apply tokenization if enabled (ablation study)
         x_ts, validity_mask = self._apply_tokenization(x_ts, observed_mask=validity_mask)
@@ -873,7 +1031,18 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
         x_static_n = self._normalize_and_impute_static(x_static)
         pred = self.forward(x_ts_n, x_static_n, observed_mask=validity_mask)
 
-        final_pred_z = pred + batch_trends.squeeze(-1).detach() if batch_trends is not None else pred
+        # Add trends with proper broadcasting for quantile regression
+        if batch_trends is not None:
+            trends_squeezed = batch_trends.squeeze(-1).detach()  # (batch,)
+            if trends_squeezed.dim() == 1 and pred.dim() == 2:
+                # Broadcast trends to match quantile dimensions
+                trends_broadcast = trends_squeezed.unsqueeze(-1).expand_as(pred)  # (batch, n_quantiles)
+                final_pred_z = pred + trends_broadcast
+            else:
+                # Fallback for MSE case
+                final_pred_z = pred + trends_squeezed
+        else:
+            final_pred_z = pred
 
         # Denormalize to original scale
         device = final_pred_z.device
@@ -964,10 +1133,12 @@ class NLinearYieldModel(BaseTimeSeriesModel):
             f"base_seq_len={base_seq_len}, "
             f"effective_seq_len={effective_seq_len}, "
             f"n_ts_features={self.n_ts_features}, "
-            f"n_static_features={self.n_static_features}"
+            f"n_static_features={self.n_static_features}, "
+            f"output_dim={self.output_dim}"
         )
 
         # One linear layer maps (effective_seq_len,) = (1,) per channel
+        # The regression head handles the final output_dim (e.g., multiple quantiles)
         self.temporal_linear = nn.Linear(effective_seq_len, 1)
 
         # After pooling across channels: n_ts_features scalars + static features = yield
@@ -977,11 +1148,11 @@ class NLinearYieldModel(BaseTimeSeriesModel):
             nn.LayerNorm(combined_dim // 2),
             nn.ReLU(),
             nn.Dropout(0.1),
-            nn.Linear(combined_dim // 2, 1),
+            nn.Linear(combined_dim // 2, self.output_dim),
         )
 
         logging.info(
-            f"[NLinear BUILD] temporal_linear: ({effective_seq_len} → 1), "
+            f"[NLinear BUILD] temporal_linear: ({effective_seq_len} → {self.output_dim}), "
             f"regression_head input: {combined_dim}"
         )
 
@@ -1074,7 +1245,8 @@ class DLinearYieldModel(BaseTimeSeriesModel):
             f"effective_seq_len={effective_seq_len}, "
             f"kernel_size={kernel_size}, "
             f"n_ts_features={self.n_ts_features}, "
-            f"n_static_features={self.n_static_features}"
+            f"n_static_features={self.n_static_features}, "
+            f"output_dim={self.output_dim}"
         )
 
         self._kernel_size = kernel_size
@@ -1086,6 +1258,8 @@ class DLinearYieldModel(BaseTimeSeriesModel):
             padding=0,
         )
 
+        # Each linear layer maps (effective_seq_len,) = (1,) per channel
+        # The regression head handles the final output_dim (e.g., multiple quantiles)
         self.trend_linear = nn.Linear(effective_seq_len, 1)
         self.remainder_linear = nn.Linear(effective_seq_len, 1)
 
@@ -1095,11 +1269,11 @@ class DLinearYieldModel(BaseTimeSeriesModel):
             nn.LayerNorm(combined_dim // 2),
             nn.ReLU(),
             nn.Dropout(0.1),
-            nn.Linear(combined_dim // 2, 1),
+            nn.Linear(combined_dim // 2, self.output_dim),
         )
 
         logging.info(
-            f"[DLinear BUILD] trend_linear+remainder_linear: ({effective_seq_len} → 1), "
+            f"[DLinear BUILD] trend_linear+remainder_linear: ({effective_seq_len} → {self.output_dim}), "
             f"regression_head input: {combined_dim}"
         )
 
@@ -1255,7 +1429,8 @@ class RLinearYieldModel(BaseTimeSeriesModel):
             f"base_seq_len={base_seq_len}, "
             f"effective_seq_len={effective_seq_len}, "
             f"n_ts_features={self.n_ts_features}, "
-            f"n_static_features={self.n_static_features}"
+            f"n_static_features={self.n_static_features}, "
+            f"output_dim={self.output_dim}"
         )
 
         self.revin = RevIN(
@@ -1264,6 +1439,8 @@ class RLinearYieldModel(BaseTimeSeriesModel):
             affine=True,
         )
 
+        # One linear layer maps (effective_seq_len,) = (1,) per channel
+        # The regression head handles the final output_dim (e.g., multiple quantiles)
         self.temporal_linear = nn.Linear(effective_seq_len, 1)
 
         combined_dim = self.n_ts_features + self.n_static_features
@@ -1272,12 +1449,12 @@ class RLinearYieldModel(BaseTimeSeriesModel):
             nn.LayerNorm(combined_dim // 2),
             nn.ReLU(),
             nn.Dropout(0.1),
-            nn.Linear(combined_dim // 2, 1),
+            nn.Linear(combined_dim // 2, self.output_dim),
         )
 
         logging.info(
             f"[RLinear BUILD] revin channels={self.n_ts_features} (affine=True), "
-            f"temporal_linear: ({effective_seq_len} → 1), "
+            f"temporal_linear: ({effective_seq_len} → {self.output_dim}), "
             f"regression_head input: {combined_dim}"
         )
 
@@ -1429,13 +1606,13 @@ class XLinearYieldModel(BaseTimeSeriesModel):
             nn.LayerNorm(head_input_dim // 4),
             nn.GELU(),
             nn.Dropout(drop),
-            nn.Linear(head_input_dim // 4, 1),
+            nn.Linear(head_input_dim // 4, self.output_dim),
         )
 
         logging.info(
             f"[XLinear BUILD] head_input_dim={head_input_dim} "
             f"(endo_pooled={hidden} + exo_pooled={n_exo * hidden} "
-            f"+ static={self.n_static_features})"
+            f"+ static={self.n_static_features}), output_dim={self.output_dim}"
         )
 
         self._model_ready = True
@@ -1632,7 +1809,8 @@ class OLinearYieldModel(BaseTimeSeriesModel):
         self.embeddings = nn.Parameter(torch.randn(1, self.embed_size))
 
         # Channel correlation matrix (will be initialized during first forward pass)
-        self.channel_corr_mat = None
+        # Register as buffer to ensure it moves to the same device as the model
+        self.register_buffer('channel_corr_mat', None)
         self._corr_mat_initialized = False
 
         # Build OLinear encoder layers
@@ -1673,12 +1851,12 @@ class OLinearYieldModel(BaseTimeSeriesModel):
             nn.LayerNorm(combined_dim // 2),
             nn.ReLU(),
             nn.Dropout(dropout),
-            nn.Linear(combined_dim // 2, 1),
+            nn.Linear(combined_dim // 2, self.output_dim),
         )
 
         logging.info(
             f"[OLinear BUILD] regression_head input: {combined_dim}, "
-            f"output: 1"
+            f"output: {self.output_dim}"
         )
 
         self._model_ready = True

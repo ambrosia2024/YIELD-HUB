@@ -1709,3 +1709,281 @@ def _get_static_feature_names(
         names.extend(multi_year_names)
 
     return names
+
+
+# ============================================================================
+# TABULAR FOUNDATION MODEL HELPERS - Flattening Time Series to Tabular
+# ============================================================================
+
+def get_flattened_time_series_feature_names(
+    seq_len: int,
+    weather_features_list: List[str],
+    use_gdd: bool = False,
+    use_rue: bool = False,
+    use_farquhar: bool = False,
+    aggregation: str = "dekad",
+) -> List[str]:
+    """
+    Generate feature names for flattened time series features.
+
+    Creates names like: dek1_tmin, dek1_tmax, ..., dek36_ndvi, dek1_gdd, ...
+    or week1_tmin, ..., week52_ndvi for weekly aggregation.
+
+    Args:
+        seq_len: Number of time steps (36 for dekad, 52 for weekly, 365 for daily)
+        weather_features_list: List of weather feature names (tmin, tmax, etc.)
+        use_gdd: Include GDD features
+        use_rue: Include RUE features
+        use_farquhar: Include Farquhar features
+        aggregation: Temporal aggregation (dekad, weekly, daily)
+
+    Returns:
+        List of feature names for flattened time series columns
+    """
+    prefix_map = {"daily": "day", "weekly": "week", "dekad": "dek"}
+    prefix = prefix_map.get(aggregation, "t")
+
+    names = []
+    for t in range(seq_len):
+        time_label = f"{prefix}{t+1}"
+        for feat in weather_features_list:
+            names.append(f"{time_label}_{feat}")
+
+        # Domain features at each time step
+        if use_gdd:
+            names.append(f"{time_label}_gdd")
+        if use_rue:
+            names.append(f"{time_label}_rue")
+        if use_farquhar:
+            names.append(f"{time_label}_farquhar")
+
+    return names
+
+
+def flatten_time_series_features(
+    X_ts: np.ndarray,
+    weather_features_list: List[str],
+    use_gdd: bool = False,
+    use_rue: bool = False,
+    use_farquhar: bool = False,
+) -> np.ndarray:
+    """
+    Flatten time series features from (seq_len, channels) to (seq_len * channels,).
+
+    Preserves temporal ordering by flattening in time-major order:
+    [t0_feat0, t0_feat1, ..., t0_featN, t1_feat0, t1_feat1, ..., tM_featN]
+
+    Args:
+        X_ts: Time series features of shape (seq_len, n_features)
+        weather_features_list: List of base weather feature names
+        use_gdd: Whether GDD is included as a feature channel
+        use_rue: Whether RUE is included as a feature channel
+        use_farquhar: Whether Farquhar is included as a feature channel
+
+    Returns:
+        Flattened feature vector of shape (seq_len * n_features,)
+    """
+    # Flatten in time-major order: all features for time 0, then time 1, etc.
+    return X_ts.flatten(order='C')
+
+
+def build_tabular_input(
+    dataset: CYDataset,
+    adm_id: str,
+    year: int,
+    aggregation: str = "dekad",
+    data_fraction: float = 1.0,
+    use_sota_features: bool = False,
+    include_spatial_features: bool = False,
+    lag_years: int = 0,
+    weather_features_list: Optional[List[str]] = None,
+    debug: bool = False,
+    use_gdd: bool = False,
+    use_heat_stress_days: bool = False,
+    use_rue: bool = False,
+    use_farquhar: bool = False,
+    crop: str = 'maize',
+    multi_year_config: Optional[Dict] = None,
+) -> Tuple[np.ndarray, float, Dict]:
+    """
+    Build tabular input for tabular foundation models (TabPFN, TabICL, TabDPT).
+
+    Flattens time series features into a 1D vector while preserving temporal ordering.
+    Combines flattened time series features with static features into a single feature vector.
+
+    Args:
+        dataset: CY-Bench dataset
+        adm_id: Administrative region ID
+        year: Year to extract data for
+        aggregation: Temporal aggregation ('daily', 'weekly', 'dekad')
+        data_fraction: Fraction of season to use (0.25, 0.5, 0.75, 1.0)
+        use_sota_features: Include SOTA temporal features
+        include_spatial_features: Include explicit lat/lon features
+        lag_years: Number of lagged yield features
+        weather_features_list: List of weather features to extract
+        debug: Enable debug logging
+        use_gdd: Add cumulative GDD as time series features
+        use_heat_stress_days: Add heat stress day counts as static features
+        use_rue: Add RUE index as time series features
+        use_farquhar: Add Farquhar proxy as time series features
+        crop: Crop name for crop-specific parameters
+        multi_year_config: Dict with 'enabled', 'window', 'features' for multi-year summaries
+
+    Returns:
+        X_tabular: Flattened feature vector of shape (n_features,)
+        y: Target yield
+        meta: Dictionary with metadata (adm_id, year, lat, lon, feature_names, etc.)
+    """
+    # First, build the standard sequence input using the existing function
+    X_ts, X_static, y, meta, validity_mask = build_daily_input_sequence(
+        dataset=dataset,
+        adm_id=adm_id,
+        year=year,
+        aggregation=aggregation,
+        data_fraction=data_fraction,
+        use_sota_features=use_sota_features,
+        include_spatial_features=include_spatial_features,
+        lag_years=lag_years,
+        weather_features_list=weather_features_list,
+        debug=debug,
+        use_gdd=use_gdd,
+        use_heat_stress_days=use_heat_stress_days,
+        use_rue=use_rue,
+        use_farquhar=use_farquhar,
+        crop=crop,
+        multi_year_config=multi_year_config,
+    )
+
+    # Flatten time series features
+    X_ts_flat = flatten_time_series_features(
+        X_ts,
+        weather_features_list=weather_features_list or WEATHER_FEATURES_BASE,
+        use_gdd=use_gdd,
+        use_rue=use_rue,
+        use_farquhar=use_farquhar,
+    )
+
+    # Concatenate flattened time series + static features
+    X_tabular = np.concatenate([X_ts_flat, X_static])
+
+    # Generate feature names for interpretability
+    seq_len = X_ts.shape[0]
+    ts_feature_names = get_flattened_time_series_feature_names(
+        seq_len=seq_len,
+        weather_features_list=weather_features_list or WEATHER_FEATURES_BASE,
+        use_gdd=use_gdd,
+        use_rue=use_rue,
+        use_farquhar=use_farquhar,
+        aggregation=aggregation,
+    )
+    static_feature_names = _get_static_feature_names(
+        include_spatial_features=include_spatial_features,
+        lag_years=lag_years,
+        use_heat_stress_days=use_heat_stress_days,
+        multi_year_config=multi_year_config,
+    )
+    all_feature_names = ts_feature_names + static_feature_names
+
+    # Update metadata with tabular-specific info
+    meta.update({
+        'X_tabular_shape': X_tabular.shape,
+        'n_flattened_ts_features': len(ts_feature_names),
+        'n_static_features': len(static_feature_names),
+        'feature_names': all_feature_names,
+        'aggregation': aggregation,
+    })
+
+    return X_tabular, y, meta
+
+
+def build_tabular_dataset(
+    dataset: CYDataset,
+    indices: List[Tuple[str, int]],
+    aggregation: str = "dekad",
+    data_fraction: float = 1.0,
+    use_sota_features: bool = False,
+    include_spatial_features: bool = False,
+    lag_years: int = 0,
+    weather_features_list: Optional[List[str]] = None,
+    use_gdd: bool = False,
+    use_heat_stress_days: bool = False,
+    use_rue: bool = False,
+    use_farquhar: bool = False,
+    crop: str = 'maize',
+    multi_year_config: Optional[Dict] = None,
+    verbose: bool = True,
+) -> Tuple[np.ndarray, np.ndarray, List[Dict]]:
+    """
+    Build complete tabular dataset for all samples.
+
+    Args:
+        dataset: CY-Bench dataset
+        indices: List of (adm_id, year) tuples
+        aggregation: Temporal aggregation ('daily', 'weekly', 'dekad')
+        data_fraction: Fraction of season to use
+        use_sota_features: Include SOTA temporal features
+        include_spatial_features: Include explicit lat/lon features
+        lag_years: Number of lagged yield features
+        weather_features_list: List of weather features to extract
+        use_gdd: Add cumulative GDD as time series features
+        use_heat_stress_days: Add heat stress day counts as static features
+        use_rue: Add RUE index as time series features
+        use_farquhar: Add Farquhar proxy as time series features
+        crop: Crop name for crop-specific parameters
+        multi_year_config: Dict with 'enabled', 'window', 'features' for multi-year summaries
+        verbose: Print progress
+
+    Returns:
+        X: Feature matrix of shape (n_samples, n_features)
+        y: Target vector of shape (n_samples,)
+        metadata: List of metadata dicts for each sample
+    """
+    X_list = []
+    y_list = []
+    metadata_list = []
+
+    n_samples = len(indices)
+    if verbose:
+        logging.info(f"Building tabular dataset for {n_samples} samples...")
+
+    for i, (adm_id, year) in enumerate(indices):
+        if verbose and (i + 1) % max(1, n_samples // 10) == 0:
+            logging.info(f"  Progress: {i+1}/{n_samples}")
+
+        try:
+            X_tab, y, meta = build_tabular_input(
+                dataset=dataset,
+                adm_id=adm_id,
+                year=year,
+                aggregation=aggregation,
+                data_fraction=data_fraction,
+                use_sota_features=use_sota_features,
+                include_spatial_features=include_spatial_features,
+                lag_years=lag_years,
+                weather_features_list=weather_features_list,
+                debug=False,
+                use_gdd=use_gdd,
+                use_heat_stress_days=use_heat_stress_days,
+                use_rue=use_rue,
+                use_farquhar=use_farquhar,
+                crop=crop,
+                multi_year_config=multi_year_config,
+            )
+            X_list.append(X_tab)
+            y_list.append(y)
+            metadata_list.append(meta)
+        except Exception as e:
+            logging.warning(f"Error building tabular input for {adm_id}, {year}: {e}")
+            # Skip this sample
+            continue
+
+    if not X_list:
+        raise ValueError("No valid samples could be processed")
+
+    X = np.vstack(X_list)
+    y = np.array(y_list)
+
+    if verbose:
+        logging.info(f"Built tabular dataset: X shape={X.shape}, y shape={y.shape}")
+
+    return X, y, metadata_list

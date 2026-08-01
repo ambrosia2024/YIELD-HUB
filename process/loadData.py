@@ -646,3 +646,262 @@ def generate_walk_forward_splits(all_years, test_years):
         })
 
     return splits
+
+
+# ============================================================================
+# TABULAR DATA MODULE - For Tabular Foundation Models
+# ============================================================================
+
+class TabularCYBenchDataset(Dataset):
+    """
+    PyTorch Dataset for tabular foundation models.
+
+    Wraps flattened feature vectors with metadata.
+    """
+    def __init__(self, X, y, years, adm_ids, lats, lons):
+        """
+        Args:
+            X: Flattened feature matrix (n_samples, n_features)
+            y: Target yields (n_samples,)
+            years: Year for each sample (n_samples,)
+            adm_ids: Administrative region ID for each sample (n_samples,)
+            lats: Latitude for each sample (n_samples,)
+            lons: Longitude for each sample (n_samples,)
+        """
+        self.X = torch.tensor(X, dtype=torch.float32)
+        self.y = torch.tensor(y, dtype=torch.float32)
+        self.years = years
+        self.adm_ids = adm_ids
+        self.lats = lats
+        self.lons = lons
+
+    def __len__(self):
+        return len(self.X)
+
+    def __getitem__(self, idx):
+        return (
+            self.X[idx],
+            self.y[idx],
+            self.years[idx],
+            self.adm_ids[idx],
+            self.lats[idx],
+            self.lons[idx],
+            torch.ones(self.X.shape[1]),  # Validity mask (all features valid)
+        )
+
+
+class TabularCYBenchDataModule(pl.LightningDataModule):
+    """
+    Data module for tabular foundation models (TabPFN, TabICL, TabDPT).
+
+    Provides:
+    - Flattened tabular features (time series + static combined)
+    - Same train/val/test split logic as DailyCYBenchSeqDataModule
+    - Compatibility with same configuration and feature engineering
+    - Method to get raw tabular data for model fitting
+
+    Key difference from DailyCYBenchSeqDataModule:
+    - Flattens time series features into 1D vector per sample
+    - Returns get_tabular_data() method for raw numpy arrays
+    - No normalization (tabular models handle internally)
+    """
+
+    def __init__(self, config):
+        super().__init__()
+        self.config = config
+        self.train_ds = None
+        self.val_ds = None
+        self.test_ds = None
+
+        # Raw data storage
+        self._train_X = None
+        self._train_y = None
+        self._train_indices = None
+        self._val_X = None
+        self._val_y = None
+        self._val_indices = None
+        self._test_X = None
+        self._test_y = None
+        self._test_indices = None
+
+        # Metadata
+        self._all_lats = None
+        self._all_lons = None
+        self._all_adm_ids = None
+        self._all_years = None
+
+        # For YAML serialization
+        self.dataset_kwargs = {}
+        self.all_X_ts = None  # For compatibility with existing code
+
+        print(f"[TabularDataModule] Initialized for {config.crop}-{config.country}")
+
+    def setup(self, stage: Optional[str] = None,
+              train_years: Optional[List[int]] = None,
+              val_years: Optional[List[int]] = None,
+              test_years: Optional[List[int]] = None):
+        """
+        Setup datasets with flattened tabular features.
+
+        Args:
+            stage: 'fit', 'validate', 'test', or None
+            train_years: Years for training split
+            val_years: Years for validation split
+            test_years: Years for test split
+        """
+        cfg = self.config
+
+        # Skip if already set up
+        if train_years is None and self.train_ds is not None:
+            return
+
+        print(f"\n[TabularDataModule] {cfg.crop}-{cfg.country} | {cfg.aggregation.upper()} | "
+              f"Spatial={cfg.include_spatial_features} | Lag={cfg.lag_years}")
+
+        # Load dataset
+        df_y, dfs_x = load_dfs_crop(cfg.crop, [cfg.country])
+        if df_y is None or len(df_y) == 0:
+            raise ValueError(f"No data for {cfg.crop}-{cfg.country}")
+
+        ds = CYDataset(cfg.crop, df_y, dfs_x)
+        all_indices = list(ds.indices())  # [(adm_id, year), ...]
+
+        # Build tabular features for all samples
+        print("  [TabularDataModule] Building flattened tabular features...")
+
+        from cybench.process.featureEngineering import build_tabular_dataset
+
+        X_all, y_all, metadata_list = build_tabular_dataset(
+            dataset=ds,
+            indices=all_indices,
+            aggregation=cfg.aggregation,
+            data_fraction=cfg.data_fraction,
+            use_sota_features=cfg.use_sota_features,
+            include_spatial_features=cfg.include_spatial_features,
+            lag_years=cfg.lag_years,
+            weather_features_list=cfg.weather_features,
+            use_gdd=cfg.use_gdd,
+            use_heat_stress_days=cfg.use_heat_stress_days,
+            use_rue=cfg.use_rue,
+            use_farquhar=cfg.use_farquhar,
+            crop=cfg.crop,
+            multi_year_config=cfg.multi_year_config if hasattr(cfg, 'multi_year_config') else None,
+            verbose=True,
+        )
+
+        # Extract metadata
+        self._all_adm_ids = np.array([meta['adm_id'] for meta in metadata_list])
+        self._all_years = np.array([meta['year'] for meta in metadata_list])
+        self._all_lats = np.array([meta['lat'] for meta in metadata_list])
+        self._all_lons = np.array([meta['lon'] for meta in metadata_list])
+
+        print(f"  Built tabular features: X shape={X_all.shape}, y shape={y_all.shape}")
+
+        # Determine split years
+        if train_years is not None:
+            train_yrs = set(train_years)
+            val_yrs = set(val_years) if val_years is not None else set()
+            test_yrs = set(test_years) if test_years is not None else set()
+        else:
+            # Default split for backward compatibility
+            years_sorted = np.unique(self._all_years)
+            if len(years_sorted) < 6:
+                raise ValueError(
+                    f"Need ≥ 6 years for split (3 test + 3 val + train); got {len(years_sorted)}"
+                )
+            test_yrs = set(years_sorted[-3:])
+            val_yrs = set(years_sorted[-6:-3])
+            train_yrs = set(years_sorted[:-6])
+
+        print(f"  Split: Train {sorted(train_yrs)}, Val {sorted(val_yrs)}, Test {sorted(test_yrs)}")
+
+        # Create masks for each split
+        train_mask = np.isin(self._all_years, list(train_yrs))
+        val_mask = np.isin(self._all_years, list(val_yrs))
+        test_mask = np.isin(self._all_years, list(test_yrs))
+
+        # Extract split data
+        self._train_X = X_all[train_mask]
+        self._train_y = y_all[train_mask]
+        self._train_indices = [all_indices[i] for i in np.where(train_mask)[0]]
+
+        self._val_X = X_all[val_mask]
+        self._val_y = y_all[val_mask]
+        self._val_indices = [all_indices[i] for i in np.where(val_mask)[0]]
+
+        self._test_X = X_all[test_mask]
+        self._test_y = y_all[test_mask]
+        self._test_indices = [all_indices[i] for i in np.where(test_mask)[0]]
+
+        print(f"  Samples: train={len(self._train_X)}, val={len(self._val_X)}, "
+              f"test={len(self._test_X)}")
+
+        # Create PyTorch datasets
+        self.train_ds = TabularCYBenchDataset(
+            self._train_X, self._train_y,
+            self._all_years[train_mask],
+            self._all_adm_ids[train_mask],
+            self._all_lats[train_mask],
+            self._all_lons[train_mask],
+        )
+
+        self.val_ds = TabularCYBenchDataset(
+            self._val_X, self._val_y,
+            self._all_years[val_mask],
+            self._all_adm_ids[val_mask],
+            self._all_lats[val_mask],
+            self._all_lons[val_mask],
+        )
+
+        self.test_ds = TabularCYBenchDataset(
+            self._test_X, self._test_y,
+            self._all_years[test_mask],
+            self._all_adm_ids[test_mask],
+            self._all_lats[test_mask],
+            self._all_lons[test_mask],
+        )
+
+    def get_tabular_data(self, split='train'):
+        """
+        Get raw tabular data as numpy arrays.
+
+        Args:
+            split: 'train', 'val', or 'test'
+
+        Returns:
+            X: Feature matrix (n_samples, n_features)
+            y: Target vector (n_samples,)
+            indices: List of (adm_id, year) tuples
+        """
+        if split == 'train':
+            return self._train_X, self._train_y, self._train_indices
+        elif split == 'val':
+            return self._val_X, self._val_y, self._val_indices
+        elif split == 'test':
+            return self._test_X, self._test_y, self._test_indices
+        else:
+            raise ValueError(f"Unknown split: {split}")
+
+    def train_dataloader(self):
+        return torch.utils.data.DataLoader(
+            self.train_ds,
+            batch_size=self.config.batch_size,
+            shuffle=True,
+            num_workers=self.config.num_workers,
+        )
+
+    def val_dataloader(self):
+        return torch.utils.data.DataLoader(
+            self.val_ds,
+            batch_size=self.config.batch_size,
+            shuffle=False,
+            num_workers=self.config.num_workers,
+        )
+
+    def test_dataloader(self):
+        return torch.utils.data.DataLoader(
+            self.test_ds,
+            batch_size=self.config.batch_size,
+            shuffle=False,
+            num_workers=self.config.num_workers,
+        )

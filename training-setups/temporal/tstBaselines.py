@@ -106,7 +106,7 @@ Usage:
     python tstBaselines.py --crop maize --country NL --model_type tst --use_sota_features --use_residual_trend --use_recursive_lags --use_cwb_feature --aggregation daily
 
 # Quick test run (5 epochs)
-    python tstBaselines.py --crop wheat --country NL --model_type informer --epochs 2 --aggregation daily --lag_years 0 --test_years 5 --results_dir checkpoints-test/results --save_checkpoint_dir checkpoints-test/results --wandb_project test-and-delete-later --forecast_type end-of-season --use_exponential_weighting --exponential_tau 10 --multi_year_summaries --multi_year_window 1 --multi_year_features all
+    python tstBaselines.py --crop wheat --country NL --model_type informer --epochs 2 --aggregation daily --lag_years 0 --test_years 5 --results_dir checkpoints-test/results --save_checkpoint_dir checkpoints-test/results --wandb_project test-and-delete-later --forecast_type middle-of-season --loss pinball --generate_predictions --k_mc_dropouts 50
     python tstBaselines.py --crop wheat --country NL --model_type informer --epochs 2 --aggregation daily --lag_years 2 --test_years 5 --results_dir checkpoints-test/results --save_checkpoint_dir checkpoints-test/results --use_recursive_lags --wandb_project test-and-delete-later --forecast_type middle-of-season --if_tokenize
     python tstBaselines.py --crop wheat --country NL --model_type informer --epochs 2 --aggregation daily --lag_years 2 --test_years 5 --results_dir checkpoints-test/results --save_checkpoint_dir checkpoints-test/results --use_recursive_lags --wandb_project test-and-delete-later --forecast_type middle-of-season --use_wfan
     
@@ -176,10 +176,18 @@ from helpers import generate_checkpoint_name, save_test_results_to_csv
 from validateModel import print_metrics_table
 from loadData import calculate_fixed_split, DailyCYBenchSeqDataModule
 from alignment_patch import verify_forecast_horizon_config
+from spatiotemporal_metrics import (
+    compute_all_spatiotemporal_metrics,
+    save_spatiotemporal_metrics
+)
 
 sys.path.append('../../architectures/')
 from modelconfig import TSTModelConfig
 from tstLayer import create_model
+from MCDropoutLayer import (
+    generate_predictions_for_all_splits,
+    save_predictions_to_csv
+)
 
 # Setting precision
 if torch.cuda.is_available():
@@ -204,8 +212,8 @@ if __name__ == "__main__":
                         choices=['daily', 'weekly', 'dekad'])
     parser.add_argument('--use_sota_features', action='store_true')
     parser.add_argument('--include_spatial_features', action='store_true')
-    parser.add_argument('--lag_years', type=int, default=1, choices=[0, 1, 2],
-                        help='Number of lagged yield years (max 2, default: 1)')
+    parser.add_argument('--lag_years', type=int, default=1, choices=[0, 1, 2, 3],
+                        help='Number of lagged yield years (max 3, default: 1)')
     parser.add_argument('--use_recursive_lags', action='store_true',
                         help='Use predicted yields as lags during testing for true out-of-sample evaluation '
                              '(default: False, uses observed test-set yields as lags)')
@@ -313,6 +321,17 @@ if __name__ == "__main__":
     parser.add_argument('--wfan_lambda', type=float, default=1.0,
                         help='WFAN loss balancing coefficient for pattern-adaptive prediction (default: 1.0). '
                              'Controls the weight of non-stationary prediction loss.')
+    # Quantile regression / Uncertainty quantification arguments
+    parser.add_argument('--loss', default='mse', choices=['mse', 'pinball'],
+                        help='Loss function: "mse" for point prediction, "pinball" for quantile regression (uncertainty quantification).')
+    parser.add_argument('--quantiles', nargs='+', type=float, default=[0.1, 0.5, 0.9],
+                        help='Quantiles to predict when using pinball loss (default: 0.1 0.5 0.9). '
+                             'Example: --quantiles 0.1 0.25 0.5 0.75 0.9 for 5 quantiles.')
+    parser.add_argument('--generate_predictions', action='store_true',
+                        help='Generate predictions.csv for all splits (train/val/test) after testing.')
+    parser.add_argument('--k_mc_dropouts', type=int, default=None,
+                        help='Number of MC dropout forward passes for uncertainty quantification. '
+                             'Requires --generate_predictions. If not specified, only point predictions are generated.')
     args = parser.parse_args()
 
     # The original alignment.py in cybench repo only supports "middle-of-season", "quarter-of-season", and "N-days" predictions. Since, we wanted to have "middle-of-season", "quarter-of-season", "end-of-season" and "three-quarter-of-season", we set lead_time to "0-days" which makes alignment.py load
@@ -407,6 +426,8 @@ if __name__ == "__main__":
         use_wfan=args.use_wfan,
         wfan_k=args.wfan_k,
         wfan_lambda=args.wfan_lambda,
+        loss_type=args.loss,
+        quantiles=args.quantiles,
     )
 
     # Show forecast horizon configuration
@@ -516,6 +537,35 @@ if __name__ == "__main__":
 
     print("\nEvaluating final model...")
     test_results = trainer.test(model_final, dm_final, ckpt_path="best")
+
+    # IMPORTANT: Load the best checkpoint back into model_final
+    # trainer.test() with ckpt_path="best" tests with the best checkpoint,
+    # but model_final still contains weights from the last epoch.
+    # We need to load the best checkpoint so subsequent predictions use the best model.
+    best_checkpoint_path = None
+
+    # Try multiple ways to find the best checkpoint path
+    if hasattr(trainer, 'checkpoint_callback') and trainer.checkpoint_callback:
+        best_checkpoint_path = trainer.checkpoint_callback.best_model_path
+    elif hasattr(trainer, 'checkpoint_callbacks') and trainer.checkpoint_callbacks:
+        for cb in trainer.checkpoint_callbacks:
+            if hasattr(cb, 'best_model_path'):
+                best_checkpoint_path = cb.best_model_path
+                break
+    elif hasattr(trainer, 'callbacks'):
+        for cb in trainer.callbacks:
+            if hasattr(cb, 'best_model_path') and cb.best_model_path:
+                best_checkpoint_path = cb.best_model_path
+                break
+
+    if best_checkpoint_path and os.path.exists(best_checkpoint_path):
+        print(f"\n[Checkpoint] Loading best checkpoint into model: {best_checkpoint_path}")
+        model_final = type(model_final).load_from_checkpoint(best_checkpoint_path)
+    else:
+        print(f"\n[Checkpoint Warning] Best checkpoint not found. Using current model state (may not be best).")
+        if best_checkpoint_path:
+            print(f"  Expected path: {best_checkpoint_path}")
+
     if test_results:
         r = test_results[0]
         final_metrics = {
@@ -529,6 +579,22 @@ if __name__ == "__main__":
         }
     else:
         final_metrics = {}
+
+    # Collect uncertainty metrics if using pinball loss
+    uncertainty_metrics = None
+    if args.loss == 'pinball' and hasattr(model_final, '_test_uncertainty_metrics'):
+        uncertainty_metrics = model_final._test_uncertainty_metrics
+        if uncertainty_metrics:
+            print(f"\n[Uncertainty Metrics]")
+            for key, value in sorted(uncertainty_metrics.items()):
+                # Clean up the key name for printing: remove 'test' or 'test/' prefix
+                if key.startswith('test/'):
+                    metric_name = key.replace('test/', '')
+                elif key.startswith('test'):
+                    metric_name = key[4:]
+                else:
+                    metric_name = key
+                print(f"{metric_name.upper()}: {value:.4f}")
 
     # Save test results to CSV files with per-year metrics
     print(f"\n[CSV Results] Retrieving per-year metrics from test results...")
@@ -562,13 +628,158 @@ if __name__ == "__main__":
         if len(parts) == 2 and parts[1].isdigit():
             actual_test_years.add(int(parts[1]))
 
+    # Determine save directory (use checkpoint directory for organized results)
+    # Use descriptive folder name: {model_type}_{country}_{crop}_{run_id}_metrics
+    metrics_save_dir = os.path.join(args.save_checkpoint_dir, f'{args.model_type}_{args.country}_{args.crop}_{run_id}_metrics')
+
+    # Update config's results_dir for saving
+    config.results_dir = metrics_save_dir
+
     save_test_results_to_csv(
         config=config,
         test_results=per_year_metrics,
         test_years=sorted(actual_test_years),
         run_id=run_id,
-        timestamp=timestamp
+        timestamp=timestamp,
+        uncertainty_metrics=uncertainty_metrics
     )
+
+    # Compute and save spatiotemporal metrics
+    print(f"\n[Spatiotemporal Metrics] Computing spatial, temporal, and anomaly correlations...")
+    try:
+        # Get raw predictions and targets from test set for spatiotemporal analysis
+        test_preds = []
+        test_targets = []
+        test_years_list = []
+        test_regions = []
+
+        # Get predictions for all test samples
+        for batch_idx, batch in enumerate(dm_final.test_dataloader()):
+            x_ts, x_static, y, years, adm_ids, lats, lons, validity_mask = batch
+
+            # Get predictions - pass datamodule directly for trend computation and denormalization
+            pred_dict = model_final.predict(batch, datamodule=dm_final)
+            preds_tensor = pred_dict['predictions'].detach().cpu()
+
+            # Handle quantile predictions (pinball loss returns n_quantiles predictions)
+            if preds_tensor.dim() > 1 and preds_tensor.shape[1] > 1:
+                # Get quantiles from model config to find the median (0.5) index
+                if hasattr(model_final.config, 'quantiles') and model_final.config.quantiles:
+                    quantiles = model_final.config.quantiles
+                    # Find the index closest to 0.5 (median)
+                    median_idx = quantiles.index(min(quantiles, key=lambda x: abs(x - 0.5)))
+                else:
+                    # Fallback: use middle index (assumes symmetric quantiles)
+                    median_idx = preds_tensor.shape[1] // 2
+                preds = preds_tensor[:, median_idx].numpy().flatten()
+            else:
+                preds = preds_tensor.numpy().flatten()
+
+            targets = pred_dict['targets'].detach().cpu().numpy().flatten()
+            batch_years = years.numpy().flatten() if hasattr(years, 'numpy') else years
+
+            # Handle adm_ids - convert to list if it's a tensor
+            if hasattr(adm_ids, 'numpy'):
+                batch_regions = adm_ids.numpy().flatten().tolist()
+            elif isinstance(adm_ids, np.ndarray):
+                batch_regions = adm_ids.flatten().tolist()
+            else:
+                batch_regions = list(adm_ids)
+
+            # Debug: Check batch lengths
+            print(f"[Spatiotemporal Metrics] Batch {batch_idx}: preds={len(preds)}, targets={len(targets)}, years={len(batch_years)}, regions={len(batch_regions)}")
+
+            test_preds.extend(preds)
+            test_targets.extend(targets)
+            test_years_list.extend(batch_years)
+            test_regions.extend(batch_regions)
+
+        test_preds = np.array(test_preds)
+        test_targets = np.array(test_targets)
+        test_years_list = np.array(test_years_list)
+        test_regions = np.array(test_regions)
+
+        print(f"[Spatiotemporal Metrics] Array lengths: preds={len(test_preds)}, targets={len(test_targets)}, years={len(test_years_list)}, regions={len(test_regions)}")
+        if len(test_preds) != len(test_targets) or len(test_preds) != len(test_years_list) or len(test_preds) != len(test_regions):
+            print(f"[Spatiotemporal Metrics] ERROR: Array length mismatch!")
+            print(f"  preds: {len(test_preds)}, targets: {len(test_targets)}, years: {len(test_years_list)}, regions: {len(test_regions)}")
+            raise ValueError(f"Array length mismatch: preds={len(test_preds)}, targets={len(test_targets)}, years={len(test_years_list)}, regions={len(test_regions)}")
+
+        # Compute spatiotemporal metrics
+        spatiotemporal_results = compute_all_spatiotemporal_metrics(
+            y_true=test_targets,
+            y_pred=test_preds,
+            years=test_years_list,
+            regions=test_regions
+        )
+
+        # Print summary
+        print(f"\n[Spatiotemporal Metrics] Summary:")
+        print(f"  Spatial (r_sp): {spatiotemporal_results['spatial']['r_sp_overall']:.4f}")
+        print(f"  Temporal (r_tm): {spatiotemporal_results['temporal']['r_tm_overall']:.4f}")
+        print(f"  Anomaly (r_an): {spatiotemporal_results['anomaly']['r_an_overall']:.4f}")
+
+        # Save to organized CSV files
+        save_spatiotemporal_metrics(
+            metrics=spatiotemporal_results,
+            save_dir=metrics_save_dir,
+            run_id=run_id,
+            timestamp=timestamp
+        )
+
+    except Exception as e:
+        print(f"[Spatiotemporal Metrics] Warning: Could not compute spatiotemporal metrics: {e}")
+        import traceback
+        traceback.print_exc()
+
+    # ========================================================================
+    # Generate Predictions and MC Dropout Predictions (if enabled)
+    # ========================================================================
+    if args.generate_predictions:
+        print(f"\n{'=' * 70}")
+        print(f"GENERATING PREDICTIONS")
+        print(f"{'=' * 70}")
+
+        if best_checkpoint_path and os.path.exists(best_checkpoint_path):
+            checkpoint_dir = os.path.dirname(best_checkpoint_path)
+            print(f"[Checkpoint Directory] {checkpoint_dir}")
+
+            device = 'cuda' if torch.cuda.is_available() else 'cpu'
+            model_final = model_final.to(device)
+
+            # Validate MC dropout requirement
+            if args.k_mc_dropouts is not None and args.k_mc_dropouts > 0:
+                print(f"[MC Dropout] Enabled with {args.k_mc_dropouts} forward passes")
+            else:
+                print(f"[MC Dropout] Disabled (only point predictions will be generated)")
+
+            # Generate predictions for all splits
+            print(f"\n[Generating Predictions] For train/val/test splits...")
+            predictions_df, mc_predictions_df = generate_predictions_for_all_splits(
+                model=model_final,
+                datamodule=dm_final,
+                device=device,
+                k_mc_dropouts=args.k_mc_dropouts
+            )
+
+            # Save predictions to CSV in checkpoint directory
+            save_predictions_to_csv(
+                predictions_df=predictions_df,
+                mc_predictions_df=mc_predictions_df,
+                checkpoint_dir=checkpoint_dir
+            )
+
+            print(f"\n[Prediction Generation Summary]")
+            print(f"  Total samples: {len(predictions_df)}")
+            print(f"  Train: {len(predictions_df[predictions_df['data_type'] == 'train'])}")
+            print(f"  Val: {len(predictions_df[predictions_df['data_type'] == 'val'])}")
+            print(f"  Test: {len(predictions_df[predictions_df['data_type'] == 'test'])}")
+            if mc_predictions_df is not None:
+                print(f"  MC Dropout predictions: {len(mc_predictions_df)} samples × {args.k_mc_dropouts} passes")
+        else:
+            print(f"[Prediction Generation Warning] Skipped - no checkpoint path available")
+    else:
+        print(f"\n[Prediction Generation] Skipped (use --generate_predictions to enable)")
 
     # Print split summary
     print(f"\n{'=' * 70}")
