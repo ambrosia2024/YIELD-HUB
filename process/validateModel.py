@@ -174,10 +174,9 @@ class ModelMetrics(nn.Module):
     Inherits from nn.Module so metrics are moved to device automatically when the parent LightningModule is moved to GPU.
     """
 
-    def __init__(self, prefix: str = "test", include_nrmse: bool = True, quantiles: Optional[List[float]] = None):
+    def __init__(self, prefix: str = "test", include_nrmse: bool = True):
         super().__init__()
         self.prefix = prefix
-        self.quantiles = quantiles
         metrics_dict = {
             'mse': torchmetrics.MeanSquaredError(),
             'mae': torchmetrics.MeanAbsoluteError(),
@@ -190,30 +189,8 @@ class ModelMetrics(nn.Module):
             metrics_dict['nrmse'] = torchmetrics.NormalizedRootMeanSquaredError(normalization='mean')
         self.metrics = torchmetrics.MetricCollection(metrics_dict)
 
-        # For quantile regression: store predictions and targets
-        self._quantile_preds = []
-        self._quantile_targets = []
-        self._use_median_for_point = False  # If True, use median (q=0.5) for point metrics
-
     def update(self, preds: torch.Tensor, targets: torch.Tensor):
-        # Debug: Check quantile regression conditions
-        print(f"[ModelMetrics.update] preds.shape={preds.shape}, preds.dim()={preds.dim()}, quantiles={self.quantiles}")
-
-        # If preds has 2 dimensions (batch, n_quantiles), we're doing quantile regression
-        if preds.dim() > 1 and preds.shape[1] > 1 and self.quantiles is not None:
-            print(f"[ModelMetrics.update] QUANTILE MODE: Storing {preds.shape} predictions")
-            # Store for uncertainty metrics computation
-            self._quantile_preds.append(preds.detach().cpu())
-            self._quantile_targets.append(targets.detach().cpu())
-
-            # Use median (q=0.5) for point metrics
-            median_idx = self.quantiles.index(0.5) if 0.5 in self.quantiles else preds.shape[1] // 2
-            preds_for_point = preds[:, median_idx]
-            self.metrics.update(preds_for_point, targets)
-        else:
-            print(f"[ModelMetrics.update] POINT MODE: preds.dim()={preds.dim()}, shape[1]={preds.shape[1] if preds.dim() > 1 else 'N/A'}, quantiles={self.quantiles}")
-            # Standard point prediction
-            self.metrics.update(preds, targets)
+        self.metrics.update(preds, targets)
 
     def compute(self) -> Dict:
         try:
@@ -241,34 +218,8 @@ class ModelMetrics(nn.Module):
             else:
                 raise
 
-    def compute_uncertainty_metrics(self) -> Optional[Dict[str, float]]:
-        """Compute uncertainty metrics (CRPS, PICP, PINAW, etc.) if quantile predictions available."""
-        print(f"[compute_uncertainty_metrics] _quantile_preds={len(self._quantile_preds) if self._quantile_preds else 0}, quantiles={self.quantiles}")
-        if not self._quantile_preds or not self.quantiles:
-            print(f"[compute_uncertainty_metrics] Returning None - no quantile predictions available")
-            return None
-
-        from uncertainty_metrics import compute_all_uncertainty_metrics
-
-        # Concatenate all batches
-        all_preds = torch.cat(self._quantile_preds, dim=0).numpy()
-        all_targets = torch.cat(self._quantile_targets, dim=0).numpy()
-
-        # Compute all uncertainty metrics
-        uq_metrics = compute_all_uncertainty_metrics(
-            all_targets, all_preds, self.quantiles
-        )
-
-        # Add prefix to all metric names
-        if self.prefix:
-            uq_metrics = {f'{self.prefix}{k}': v for k, v in uq_metrics.items()}
-
-        return uq_metrics
-
     def reset(self):
         self.metrics.reset()
-        self._quantile_preds = []
-        self._quantile_targets = []
 
     def log_results(self, step: str = "val"):
         results = self.compute()
@@ -284,15 +235,6 @@ class ModelMetrics(nn.Module):
         # Only print NRMSE if it exists (excluded for training metrics)
         if 'nrmse' in results:
             print(f"NRMSE: {results['nrmse']:.4f}")
-
-        # Print uncertainty metrics if available
-        uq_metrics = self.compute_uncertainty_metrics()
-        if uq_metrics:
-            print(f"\n{step.upper()} UNCERTAINTY METRICS:")
-            for key, value in sorted(uq_metrics.items()):
-                if key.startswith(self.prefix):
-                    print(f"{key.replace(self.prefix, '').upper()}: {value:.4f}")
-
         print(f"{'-' * 60}")
 
 def format_metrics_dict(results: Dict) -> Dict[str, float]:

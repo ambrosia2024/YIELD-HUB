@@ -206,137 +206,33 @@ class WFANWrapper(pl.LightningModule):
         """
         Forward pass through WFAN-wrapped model.
 
-        The non-stationary trend adjustment (y_non_scalar) is applied to all
-        quantile predictions equally, preserving the quantile spacing.
-
         Args:
             x_ts: Time series features, shape (batch, seq_len, n_vars)
             x_static: Static features, shape (batch, n_static_features)
             observed_mask: Boolean mask for valid timesteps (batch, seq_len)
 
         Returns:
-            Predictions of shape (batch,) for single-output (MSE)
-                          (batch, n_quantiles) for multi-output (quantile regression)
+            Predictions of shape (batch,)
         """
         # Apply frequency normalization
         x_res, x_non = self.apply_frequency_normalization(x_ts)
 
         # Base model predicts stationary residual
+        # Note: base_model expects (x_ts, x_static, observed_mask)
         y_res = self.base_model(x_res, x_static, observed_mask=observed_mask)
 
         # Pattern-adaptive module predicts non-stationary evolution
-        # Output: (batch, 1, n_vars) -> pool to scalar per sample
+        # Takes both non-stationary component and original input
         y_non = self.pattern_adaptive(x_non, x_ts)
 
-        # y_non has shape (batch, 1, n_vars) where n_vars is the TS feature count
-        # We need to aggregate to (batch,) - one scalar per sample
-        if y_non.dim() == 3:
-            # (batch, 1, n_vars) -> (batch, n_vars) -> (batch,)
-            y_non_scalar = y_non.squeeze(1).mean(dim=-1)
-        elif y_non.dim() == 2:
-            # (batch, n_vars) -> (batch,)
-            y_non_scalar = y_non.mean(dim=-1)
-        else:
-            raise ValueError(f"Unexpected y_non shape: {y_non.shape}")
+        # For yield forecasting, we need a scalar prediction per sample
+        # The pattern_adaptive output is (batch, 1, n_vars) - pool over vars
+        y_non_scalar = y_non.squeeze(1).mean(dim=-1)  # (batch,)
 
-        # y_res is either (batch,) for MSE or (batch, n_quantiles) for quantile regression
-        # Need to broadcast y_non_scalar to match y_res's shape
-        if y_res.dim() == 2:
-            # y_res is (batch, n_quantiles), need to expand y_non_scalar to (batch, n_quantiles)
-            # Each quantile gets the same trend adjustment (trend is data-dependent, not quantile-dependent)
-            # Use repeat() instead of expand() to avoid view/memory issues
-            y_non_scalar = y_non_scalar.unsqueeze(1).repeat(1, y_res.size(1))
-
+        # Combine predictions
         y_pred = y_res + y_non_scalar
 
         return y_pred
-
-    def predict(self, batch):
-        """
-        Generate predictions for a batch of data without updating metrics.
-
-        This method matches the interface of BaseTimeSeriesModel.predict() to ensure
-        consistency with tstBaselines and other evaluation scripts.
-
-        Args:
-            batch: Input batch tuple (x_ts, x_static, y_z, years, adm_ids, lats, lons, validity_mask)
-
-        Returns:
-            dict: Dictionary containing:
-                - predictions: Predictions in original scale (tons/ha), clipped to >= 0
-                - predictions_z: Predictions in z-score space (before denormalization)
-                - targets: Ground truth targets in original scale (tons/ha)
-                - years: Years for each sample
-                - adm_ids: Administrative IDs for each sample
-                - lats: Latitudes for each sample
-                - lons: Longitudes for each sample
-        """
-        x_ts, x_static, y_z, years, adm_ids, lats, lons, validity_mask = batch
-
-        # Get datamodule from trainer for target normalization params
-        dm = self.trainer.datamodule if self.trainer else None
-
-        # Move inputs to model device
-        device = self.device
-        x_ts = x_ts.to(device)
-        x_static = x_static.to(device)
-        y_z = y_z.to(device)
-        validity_mask = validity_mask.to(device) if validity_mask is not None else None
-
-        # Apply tokenization if enabled (base model handles this)
-        x_ts, validity_mask = self.base_model._apply_tokenization(x_ts, observed_mask=validity_mask)
-
-        # Compute trends if enabled (base model handles this)
-        batch_trends = None
-        if dm and hasattr(self.base_model, 'trend_model') and self.base_model.trend_model._train_df is not None:
-            batch_trends = self.base_model._compute_batch_trends(adm_ids, years, dm, lats, lons)
-
-        # Normalize input data (handles NaN via torch.nan_to_num)
-        x_ts_n = self.base_model._normalize_time_series(x_ts, observed_mask=validity_mask)
-        x_static_n = self.base_model._normalize_and_impute_static(x_static)
-
-        # Forward pass through WFAN
-        pred_z = self.forward(x_ts_n, x_static_n, observed_mask=validity_mask)
-
-        # Add trend back if applicable
-        if batch_trends is not None:
-            trends_squeezed = batch_trends.squeeze(-1).detach()  # (batch,)
-            if trends_squeezed.dim() == 1 and pred_z.dim() == 2:
-                # Broadcast trends to match quantile dimensions
-                trends_broadcast = trends_squeezed.unsqueeze(-1).repeat(1, pred_z.size(1))
-                final_pred_z = pred_z + trends_broadcast
-            else:
-                final_pred_z = pred_z + trends_squeezed
-        else:
-            final_pred_z = pred_z
-
-        # Denormalize to original scale
-        if dm:
-            y_mean = dm.y_mean
-            y_std = dm.y_std
-        else:
-            # Fallback: use base model's feature norm params
-            y_mean = self.base_model.feature_norm_params['target_mean']
-            y_std = self.base_model.feature_norm_params['target_std']
-
-        # Denormalize: pred = pred_z * std + mean
-        predictions = final_pred_z * y_std + y_mean
-
-        # Clip to ensure non-negative yields
-        predictions = torch.clamp(predictions, min=0.0)
-
-        # Denormalize targets
-        targets = y_z * y_std + y_mean
-
-        return {
-            'predictions': predictions,
-            'predictions_z': final_pred_z,
-            'targets': targets,
-            'years': years,
-            'adm_ids': adm_ids,
-            'lats': lats,
-            'lons': lons
-        }
 
     def training_step(self, batch, batch_idx):
         """

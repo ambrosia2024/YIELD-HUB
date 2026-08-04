@@ -214,22 +214,9 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
 
         # self.criterion (nn.MSELoss) is intentionally absent. Training steps use _compute_weighted_loss() which calls F.mse_loss(reduction='none') to get per-sample losses before weighting.
         # Exclude NRMSE from training metrics since targets are in z-score space (mean≈0 causes division issues)
-
-        # Initialize metrics with quantiles if using pinball loss
-        metrics_quantiles = config.quantiles if config.loss_type == 'pinball' else None
-        if config.loss_type == 'pinball':
-            print(f"[Quantile Regression] ENABLED - quantiles: {config.quantiles}")
-
-        self.train_metrics = ModelMetrics(prefix="train", include_nrmse=False, quantiles=metrics_quantiles)
-        self.val_metrics = ModelMetrics(prefix="val", quantiles=metrics_quantiles)
-        self.test_metrics = ModelMetrics(prefix="test", quantiles=metrics_quantiles)
-
-    @property
-    def output_dim(self) -> int:
-        """Output dimension: 1 for MSE loss, n_quantiles for pinball loss."""
-        if self.config.loss_type == 'pinball':
-            return len(self.config.quantiles)
-        return 1
+        self.train_metrics = ModelMetrics(prefix="train", include_nrmse=False)
+        self.val_metrics = ModelMetrics(prefix="val")
+        self.test_metrics = ModelMetrics(prefix="test")
 
     @staticmethod
     def _get_standardized_context_length(seq_len: int, lags_sequence: List[int]) -> int:
@@ -472,24 +459,15 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
         """
         # Try to get feature_norm_params from datamodule
         if self.feature_norm_params is None:
-            # Try stored datamodule first (for inference without trainer)
-            dm = None
-            if hasattr(self, '_datamodule') and self._datamodule is not None:
-                dm = self._datamodule
+            if hasattr(self, 'trainer') and self.trainer is not None:
+                dm_params = self.trainer.datamodule.feature_norm_params
+                if dm_params is not None:
+                    self.feature_norm_params = dm_params
+                else:
+                    raise RuntimeError("feature_norm_params not set in model or datamodule. "
+                                       "Ensure datamodule.setup() has been called.")
             else:
-                # Try trainer.datamodule as fallback (for training/with trainer)
-                try:
-                    dm = self.trainer.datamodule
-                except (RuntimeError, AttributeError):
-                    raise RuntimeError("feature_norm_params not set and no datamodule available. "
-                                     "Model should store datamodule during training or have datamodule passed to predict().")
-
-            dm_params = dm.feature_norm_params
-            if dm_params is not None:
-                self.feature_norm_params = dm_params
-            else:
-                raise RuntimeError("feature_norm_params not set in model or datamodule. "
-                                   "Ensure datamodule.setup() has been called.")
+                raise RuntimeError("feature_norm_params not set and no trainer available.")
 
         # Use config.weather_features instead of global WEATHER_FEATURES
         names = [f'weather_{f}' for f in self.config.weather_features]
@@ -622,8 +600,6 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
         Added mask verification to ensure HuggingFace models correctly use past_observed_mask to zero out padded positions in attention.
         """
         dm = self.trainer.datamodule
-        # Store datamodule reference for inference without trainer
-        self._datamodule = dm
         train_y_orig = dm.train_ds.y.numpy() * dm.y_std + dm.y_mean
 
         train_items = [
@@ -748,41 +724,20 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
             })
 
         # Use TrendModel's sophisticated prediction logic
-        # DEBUG: Log batch info
-        print(f"[DEBUG _compute_batch_trends] len(adm_ids)={len(adm_ids)}, len(years)={len(years) if hasattr(years, '__len__') else 'N/A'}, years.shape={years.shape if hasattr(years, 'shape') else 'N/A'}")
-        print(f"[DEBUG _compute_batch_trends] test_items sample: {test_items[:3]}")
-
-        trend_predictions_orig = self.trend_model._predict_trend(test_items)
-
-        # DEBUG: Check what _predict_trend actually returned
-        print(f"[DEBUG _compute_batch_trends] _predict_trend returned shape={trend_predictions_orig.shape}, dtype={trend_predictions_orig.dtype}")
-        if hasattr(trend_predictions_orig, 'flatten'):
-            trend_predictions_orig = trend_predictions_orig.flatten()
-            print(f"[DEBUG _compute_batch_trends] After flatten, shape={trend_predictions_orig.shape}")
+        trend_predictions_orig = self.trend_model._predict_trend(test_items).flatten()
 
         # Normalize to z-score space
         trends_z = (trend_predictions_orig - dm.y_mean) / dm.y_std
-        print(f"[DEBUG _compute_batch_trends] trends_z shape={trends_z.shape if hasattr(trends_z, 'shape') else 'N/A'}")
-
-        # Ensure trends_z is 1D to avoid shape mismatches with quantile predictions
-        if hasattr(trends_z, 'ndim') and trends_z.ndim > 1:
-            print(f"[DEBUG _compute_batch_trends] WARNING: trends_z is {trends_z.ndim}D, flattening...")
-            trends_z = trends_z.flatten()
-        trends_tensor = torch.tensor(trends_z, dtype=torch.float32, device=self.device)
-        # Ensure 2D output (batch, 1) for consistent squeeze(-1) behavior
-        if trends_tensor.dim() == 1:
-            trends_tensor = trends_tensor.unsqueeze(1)
-        print(f"[DEBUG _compute_batch_trends] Final trends_tensor shape={trends_tensor.shape}")
-        return trends_tensor
+        return torch.tensor(trends_z, dtype=torch.float32, device=self.device).unsqueeze(1)
 
     def _compute_weighted_loss(self, pred: torch.Tensor, y: torch.Tensor,
                                 years: Optional[torch.Tensor] = None) -> torch.Tensor:
         """
-        Compute loss between predictions and targets (MSE or Pinball).
+        Compute MSE loss between predictions and targets.
 
         Args:
-            pred: Predictions of shape (batch,) for MSE or (batch, n_quantiles) for pinball
-            y: Targets of shape (batch,) or (batch, 1)
+            pred: Predictions of shape (batch,)
+            y: Targets of shape (batch,)
             years: Sample years of shape (batch,) for exponential weighting
 
         Returns:
@@ -795,36 +750,6 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
         a 365-day season. The mask is retained for attention masking in
         forward() but not used for loss computation.
         """
-        # Ensure y has correct shape
-        if y.dim() == 1:
-            y = y.unsqueeze(-1)
-
-        # Pinball loss for quantile regression
-        if self.config.loss_type == 'pinball':
-            from cybench.process.uncertainty_metrics import weighted_pinball_loss_torch
-
-            if self.config.use_exponential_weighting and years is not None:
-                # Compute per-sample weights
-                years_int = years.cpu().numpy() if years.is_cuda else years.numpy()
-                weights = np.exp(-(self._most_recent_year - years_int) / self.config.exponential_tau)
-                weights_tensor = torch.tensor(weights, dtype=torch.float32, device=pred.device).unsqueeze(-1)
-
-                # Log first batch sample weights (once)
-                if not self._weight_log_done:
-                    unique_years = np.unique(years_int[:min(16, len(years_int))])  # Sample first 16
-                    logging.info(f"[Exponential Weighting] First batch sample weights:")
-                    for yr in sorted(unique_years, reverse=True)[:6]:  # Show up to 6 years
-                        idx = np.where(years_int == yr)[0][0]
-                        dist = self._most_recent_year - yr
-                        logging.info(f"    Year {yr} (distance {dist}y): weight={weights[idx]:.4f}")
-                    self._weight_log_done = True
-
-                return weighted_pinball_loss_torch(pred, y, self.config.quantiles, weights_tensor)
-            else:
-                from cybench.process.uncertainty_metrics import pinball_loss_torch
-                return pinball_loss_torch(pred, y, self.config.quantiles)
-
-        # MSE loss for point prediction
         if self.config.use_exponential_weighting and years is not None:
             # Compute per-sample losses
             per_sample_loss = F.mse_loss(pred, y, reduction='none')
@@ -858,9 +783,6 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
         x_ts, x_static, y, years, adm_ids, lats, lons, validity_mask = batch
         dm = self.trainer.datamodule
 
-        # DEBUG: Log batch shapes and sizes
-        print(f"[DEBUG _shared_step] x_ts.shape={x_ts.shape}, len(adm_ids)={len(adm_ids)}, years.shape={years.shape if hasattr(years, 'shape') else 'N/A'}")
-
         # Debug: Check for NaN in targets
         if torch.isnan(y).any():
             print(f"[DEBUG TRAIN] NaN in targets (y): {torch.isnan(y).sum().item()} out of {y.numel()}")
@@ -883,23 +805,10 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
         # Pass observed_mask to forward so models can use it for attention masking
         pred = self.forward(x_ts_n, x_static_n, observed_mask=validity_mask)
 
-        # DEBUG: Log pred shape
-        print(f"[DEBUG _shared_step] pred.shape={pred.shape}")
-
         # Only add trend back when use_residual_trend is True
         # Detach batch_trends to prevent gradient flow through OLS-computed values
         if batch_trends is not None:
-            # For pinball loss (quantile regression), pred has shape (batch, n_quantiles)
-            # We need to broadcast trends to all quantiles
-            # batch_trends is (batch, 1), squeeze to (batch,), then expand to (batch, n_quantiles)
-            trends_squeezed = batch_trends.squeeze(-1).detach()  # (batch,)
-            if trends_squeezed.dim() == 1 and pred.dim() == 2:
-                # Broadcast trends to match quantile dimensions
-                trends_broadcast = trends_squeezed.unsqueeze(-1).expand_as(pred)  # (batch, n_quantiles)
-                final_pred = pred + trends_broadcast
-            else:
-                # Fallback to original behavior
-                final_pred = pred + trends_squeezed
+            final_pred = pred + batch_trends.squeeze(-1).detach()
         else:
             final_pred = pred
 
@@ -956,18 +865,8 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
         x_static_n = self._normalize_and_impute_static(x_static)
         pred = self.forward(x_ts_n, x_static_n, observed_mask=validity_mask)
 
-        # Add trend back with proper broadcasting for quantile regression
-        if batch_trends is not None:
-            trends_squeezed = batch_trends.squeeze(-1).detach()  # (batch,)
-            if trends_squeezed.dim() == 1 and pred.dim() == 2:
-                # Broadcast trends to match quantile dimensions
-                trends_broadcast = trends_squeezed.unsqueeze(-1).expand_as(pred)  # (batch, n_quantiles)
-                final_pred_z = pred + trends_broadcast
-            else:
-                # Fallback for MSE case
-                final_pred_z = pred + trends_squeezed
-        else:
-            final_pred_z = pred
+        # Add trend back
+        final_pred_z = pred + batch_trends.squeeze(-1).detach() if batch_trends is not None else pred
 
         # Compute loss in z-score space (for consistency with training)
         loss = self._compute_weighted_loss(final_pred_z, y_z)
@@ -1031,13 +930,7 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
                 return_orig=True, return_predictions=True
             )
             # Accumulate predictions in original scale for bias correction fitting
-            # When quantile predictions are enabled (shape: [n, 3]), use median (index 1) for bias correction
-            preds_np = preds_clipped.detach().cpu()
-            if preds_np.dim() == 2 and preds_np.shape[1] == 3:
-                # Quantile mode: use median (index 1) for bias correction
-                self._val_preds.extend(preds_np[:, 1].tolist())
-            else:
-                self._val_preds.extend(preds_np.tolist())
+            self._val_preds.extend(preds_clipped.detach().cpu().tolist())
             self._val_targets.extend(targets.detach().cpu().tolist())
             return loss
         else:
@@ -1157,16 +1050,10 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
         if not hasattr(self, '_per_year_preds') or not self._per_year_preds:
             return
 
-        # Convert to numpy
+        # Convert to numpy and iterate
         preds_np = preds.cpu().numpy()
-        targets_np = targets.cpu().numpy().flatten()
+        targets_np = targets.cpu().numpy()
         years_np = years.cpu().numpy() if isinstance(years, torch.Tensor) else years
-
-        # For quantile predictions (shape: [n, 3]), extract only the median (index 1)
-        if preds_np.ndim == 2 and preds_np.shape[1] == 3:
-            preds_np = preds_np[:, 1]  # Use median (0.5 quantile)
-        else:
-            preds_np = preds_np.flatten()
 
         for pred, target, year in zip(preds_np, targets_np, years_np):
             year_int = int(year)
@@ -1184,43 +1071,18 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
         self.log('test/smape', results['smape'], prog_bar=False)
         self.log('test/nrmse', results['nrmse'], prog_bar=False)
         self.test_metrics.log_results(step="test")
-
-        # Log uncertainty metrics if using quantile regression
-        print(f"[on_test_epoch_end] loss_type={self.config.loss_type}, checking uncertainty metrics")
-        if self.config.loss_type == 'pinball':
-            uq_metrics = self.test_metrics.compute_uncertainty_metrics()
-            print(f"[on_test_epoch_end] uq_metrics={uq_metrics}")
-            if uq_metrics:
-                # Store on model for later retrieval
-                self._test_uncertainty_metrics = uq_metrics
-                print(f"\n[TEST UNCERTAINTY METRICS]")
-                for key, value in sorted(uq_metrics.items()):
-                    # Log all uncertainty metrics, regardless of prefix format
-                    self.log(key, value, prog_bar=False)
-                    # Clean up the key name for printing: remove 'test' or 'test/' prefix
-                    if key.startswith('test/'):
-                        print(f"{key.replace('test/', '').upper()}: {value:.4f}")
-                    elif key.startswith('test'):
-                        print(f"{key[4:].upper()}: {value:.4f}")
-                    else:
-                        print(f"{key.upper()}: {value:.4f}")
-            else:
-                print(f"[on_test_epoch_end] WARNING: uq_metrics is None or empty!")
-
         self.test_metrics.reset()
 
         # Compute per-year metrics and store on model for CSV saving
         if hasattr(self, '_per_year_preds') and self._per_year_preds:
             self._test_results_per_year = self._compute_per_year_metrics_from_preds()
 
-    def predict(self, batch, datamodule=None):
+    def predict(self, batch):
         """
         Generate predictions for a batch of data without updating metrics.
 
         Args:
             batch: Input batch tuple (x_ts, x_static, y_z, years, adm_ids, lats, lons, validity_mask)
-            datamodule: Optional DataModule for trend computation and denormalization.
-                        If not provided, uses stored datamodule from training (if available).
 
         Returns:
             dict: Dictionary containing:
@@ -1233,30 +1095,7 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
                 - lons: Longitudes for each sample
         """
         x_ts, x_static, y_z, years, adm_ids, lats, lons, validity_mask = batch
-
-        # Use provided datamodule, fall back to stored reference, then trainer
-        if datamodule is not None:
-            dm = datamodule
-            # Store for future calls (for inference without trainer)
-            self._datamodule = datamodule
-            # Also store feature_norm_params for _normalize_time_series
-            if hasattr(datamodule, 'feature_norm_params'):
-                self.feature_norm_params = datamodule.feature_norm_params
-        elif hasattr(self, '_datamodule') and self._datamodule is not None:
-            dm = self._datamodule
-        else:
-            try:
-                dm = self.trainer.datamodule
-            except (RuntimeError, AttributeError):
-                raise RuntimeError("No datamodule available. Pass datamodule to predict() or ensure model was trained with a datamodule.")
-
-        # Move inputs to model device (important for predict() after training)
-        device = self.device
-        x_ts = x_ts.to(device)
-        x_static = x_static.to(device)
-        y_z = y_z.to(device)
-        validity_mask = validity_mask.to(device) if validity_mask is not None else None
-        # lats, lons are not used in forward pass, keep as is
+        dm = self.trainer.datamodule
 
         # Apply tokenization if enabled (ablation study)
         x_ts, validity_mask = self._apply_tokenization(x_ts, observed_mask=validity_mask)
@@ -1275,18 +1114,8 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
         x_static_n = self._normalize_and_impute_static(x_static)
         pred = self.forward(x_ts_n, x_static_n, observed_mask=validity_mask)
 
-        # Add trend back with proper broadcasting for quantile regression
-        if batch_trends is not None:
-            trends_squeezed = batch_trends.squeeze(-1).detach()  # (batch,)
-            if trends_squeezed.dim() == 1 and pred.dim() == 2:
-                # Broadcast trends to match quantile dimensions
-                trends_broadcast = trends_squeezed.unsqueeze(-1).expand_as(pred)  # (batch, n_quantiles)
-                final_pred_z = pred + trends_broadcast
-            else:
-                # Fallback for MSE case
-                final_pred_z = pred + trends_squeezed
-        else:
-            final_pred_z = pred
+        # Add trend back
+        final_pred_z = pred + batch_trends.squeeze(-1).detach() if batch_trends is not None else pred
 
         # Denormalize to original scale
         device = final_pred_z.device
@@ -1428,21 +1257,14 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
             # Only cache predictions for test years
             if self._test_years and year_int in self._test_years:
                 cache_key = (adm_id, year_int)
-                # Extract scalar value: use median (index 1) for quantile predictions, otherwise use the value
-                pred_cpu = pred.detach().cpu()
-                if pred_cpu.numel() > 1:
-                    # Quantile predictions: use median (index 1)
-                    pred_value = pred_cpu[1].item()
-                else:
-                    pred_value = pred_cpu.item()
-                self._prediction_cache[cache_key] = pred_value
+                self._prediction_cache[cache_key] = pred.detach().cpu().item()
 
                 # Log first few cached predictions for debugging
                 if len(self._prediction_cache) <= 5:
                     bc_status = "bias-corrected" if (self.bias_correction is not None and self.bias_correction.is_fitted) else "raw"
                     logging.debug(
                         f"[Recursive Lags] Cached {bc_status} prediction for {adm_id} year {year_int}: "
-                        f"orig_scale={pred_value:.4f}"
+                        f"orig_scale={pred.detach().cpu().item():.4f}"
                     )
 
     def test_step(self, batch, batch_idx):
@@ -1606,11 +1428,11 @@ class AutoformerYieldModel(BaseTimeSeriesModel):
             nn.LayerNorm(combined_dim // 2),
             nn.ReLU(),
             nn.Dropout(0.1),
-            nn.Linear(combined_dim // 2, self.output_dim)
+            nn.Linear(combined_dim // 2, 1)
         )
 
         logging.info(f"[Autoformer BUILD] Created regression head: d_model={d_model}, "
-                    f"combined_dim={combined_dim}, hidden_dim={combined_dim // 2}, output_dim={self.output_dim}")
+                    f"combined_dim={combined_dim}, hidden_dim={combined_dim // 2}")
 
         self._model_ready = True
         return model
@@ -1749,7 +1571,7 @@ class PatchTSTModel(BaseTimeSeriesModel):
             nn.LayerNorm(combined_dim // 2),
             nn.ReLU(),
             nn.Dropout(0.1),
-            nn.Linear(combined_dim // 2, self.output_dim)
+            nn.Linear(combined_dim // 2, 1)
         )
 
         # Store for validation in forward()
@@ -1877,7 +1699,7 @@ class TSMixerModel(BaseTimeSeriesModel):
             nn.LayerNorm(combined_dim // 2),
             nn.ReLU(),
             nn.Dropout(0.1),
-            nn.Linear(combined_dim // 2, self.output_dim)
+            nn.Linear(combined_dim // 2, 1)
         )
 
         # Store for validation in forward()
@@ -1990,11 +1812,11 @@ class InformerModel(BaseTimeSeriesModel):
             nn.LayerNorm(combined_dim // 2),
             nn.ReLU(),
             nn.Dropout(0.1),
-            nn.Linear(combined_dim // 2, self.output_dim)
+            nn.Linear(combined_dim // 2, 1)
         )
 
         logging.info(f"[Informer BUILD] Created regression head: d_model={d_model}, "
-                    f"combined_dim={combined_dim}, hidden_dim={combined_dim // 2}, output_dim={self.output_dim}")
+                    f"combined_dim={combined_dim}, hidden_dim={combined_dim // 2}")
 
         self._model_ready = True
         return model
@@ -2095,11 +1917,11 @@ class TSTModel(BaseTimeSeriesModel):
             nn.LayerNorm(combined_dim // 2),
             nn.ReLU(),
             nn.Dropout(0.1),
-            nn.Linear(combined_dim // 2, self.output_dim)
+            nn.Linear(combined_dim // 2, 1)
         )
 
         logging.info(f"[TST BUILD] Created regression head: d_model={d_model}, "
-                    f"combined_dim={combined_dim}, hidden_dim={combined_dim // 2}, output_dim={self.output_dim}")
+                    f"combined_dim={combined_dim}, hidden_dim={combined_dim // 2}")
 
         self._model_ready = True
         return model
@@ -2506,10 +2328,9 @@ class iTransformerYieldModel(BaseTimeSeriesModel):
         # Initialize temporal attention
         self._init_temporal_attention(hidden_size)
 
-        # Projection head: from hidden to prediction per channel
-        # For quantile regression, outputs n_quantiles per channel; for MSE, outputs 1
+        # Projection head: from hidden to scalar prediction per channel
         # We'll pool across channels in forward()
-        self.channel_projection = nn.Linear(hidden_size, self.output_dim)
+        self.channel_projection = nn.Linear(hidden_size, 1)
 
         # Final regression head: combines pooled channel representations with static features
         # Standardized to 2-layer MLP for consistency with other models
@@ -2519,13 +2340,13 @@ class iTransformerYieldModel(BaseTimeSeriesModel):
             nn.LayerNorm(head_input_dim // 2),
             nn.ReLU(),
             nn.Dropout(dropout),
-            nn.Linear(head_input_dim // 2, self.output_dim)
+            nn.Linear(head_input_dim // 2, 1)
         )
 
         logging.info(
             f"[iTransformer BUILD] head_input_dim={head_input_dim} "
             f"(n_channels={n_channels} + static={self.n_static_features}), "
-            f"hidden_dim={head_input_dim // 2}, output_dim={self.output_dim}"
+            f"hidden_dim={head_input_dim // 2}"
         )
 
         self._model_ready = True
@@ -2708,7 +2529,7 @@ class TimeXerYieldModel(BaseTimeSeriesModel):
         # Flatten: [B, n_channels, hidden_size * (patch_num + 1)]
         head_nf = hidden_size * (self.patch_num + 1)
         self.flatten = nn.Flatten(start_dim=-2)
-        self.channel_projection = nn.Linear(head_nf, self.output_dim)
+        self.channel_projection = nn.Linear(head_nf, 1)
         self.head_dropout = nn.Dropout(dropout)
 
         # Final regression head: combines channel representations with static features
@@ -2719,13 +2540,13 @@ class TimeXerYieldModel(BaseTimeSeriesModel):
             nn.LayerNorm(head_input_dim // 2),
             nn.ReLU(),
             nn.Dropout(dropout),
-            nn.Linear(head_input_dim // 2, self.output_dim)
+            nn.Linear(head_input_dim // 2, 1)
         )
 
         logging.info(
             f"[TimeXer BUILD] head_input_dim={head_input_dim} "
             f"(n_channels={n_channels} + static={self.n_static_features}), "
-            f"head_nf={head_nf}, hidden_dim={head_input_dim // 2}, output_dim={self.output_dim}"
+            f"head_nf={head_nf}, hidden_dim={head_input_dim // 2}"
         )
 
         self._model_ready = True
@@ -3121,11 +2942,11 @@ class TimesNetModel(BaseTimeSeriesModel):
             nn.LayerNorm(combined_dim // 2),
             nn.ReLU(),
             nn.Dropout(dropout),
-            nn.Linear(combined_dim // 2, self.output_dim)
+            nn.Linear(combined_dim // 2, 1)
         )
 
         logging.info(f"[TimesNet BUILD] Created regression head: d_model={d_model}, "
-                    f"combined_dim={combined_dim}, hidden_dim={combined_dim // 2}, output_dim={self.output_dim}")
+                    f"combined_dim={combined_dim}, hidden_dim={combined_dim // 2}")
 
         self._model_ready = True
 

@@ -138,130 +138,41 @@ def save_test_results_to_csv(
     test_results: Dict[str, float],
     test_years: List[int],
     run_id: str,
-    timestamp: str,
-    uncertainty_metrics: Optional[Dict[str, float]] = None
+    timestamp: str
 ):
-    """
-    Save test results to organized CSV files with per-year metrics.
-
-    Creates the following structure:
-        results_dir/
-            overall/
-                normal_metrics.csv      # MSE, MAE, RMSE, R², MAPE, SMAPE, NRMSE
-                uncertainty_metrics.csv # CRPS, PICP, PINAW, Winkler, etc.
-            spatial/
-                (saved by spatiotemporal module)
-            temporal/
-                (saved by spatiotemporal module)
-            anomaly/
-                (saved by spatiotemporal module)
-    """
-    # Create overall folder
-    overall_dir = os.path.join(config.results_dir, 'overall')
-    os.makedirs(overall_dir, exist_ok=True)
-
+    """Save test results to CSV files with per-year metrics."""
+    os.makedirs(config.results_dir, exist_ok=True)
+    
     base_data = {'timestamp': timestamp, 'run_id': run_id}
     # Exclude results_dir from CSV columns (it's metadata, not a model hyperparameter)
     for field in fields(config):
         if field.name != 'results_dir':
             base_data[field.name] = getattr(config, field.name)
+    
+    for metric in ['nrmse', 'mape', 'r2', 'rmse', 'mae', 'mse', 'smape']:
+        csv_path = os.path.join(config.results_dir, f'{metric}.csv')
+        year_columns = {str(year): test_results.get(f'{metric}_{year}', None) for year in test_years}
+        year_columns['overall'] = test_results.get(f'{metric}_overall', None)
+        row_data = {**base_data, **year_columns}
 
-    # Save normal metrics to overall/normal_metrics.csv
-    normal_metrics = ['nrmse', 'mape', 'r2', 'rmse', 'mae', 'mse', 'smape']
-    normal_rows = []
+        if os.path.exists(csv_path):
+            df = pd.read_csv(csv_path, on_bad_lines='skip')
+            new_df = pd.DataFrame([row_data])
+            # pandas automatically aligns columns and adds new ones
+            df = pd.concat([df, new_df], ignore_index=True)
+        else:
+            df = pd.DataFrame([row_data])
 
-    for year in test_years + ['overall']:
-        year_key = str(year) if year != 'overall' else 'overall'
-        row = {'year': year, **base_data}
-        for metric in normal_metrics:
-            key = f'{metric}_{year_key}' if year != 'overall' else f'{metric}_overall'
-            row[metric] = test_results.get(key, None)
-        normal_rows.append(row)
+        # Enforce consistent column order: metadata -> config -> years (sorted) -> overall
+        def get_column_order(cols):
+            metadata_cols = ['timestamp', 'run_id']
+            year_cols = sorted([c for c in cols if c.isdigit() and len(c) == 4])
+            other_cols = [c for c in cols if c not in metadata_cols + year_cols + ['overall']]
+            return metadata_cols + other_cols + year_cols + ['overall']
 
-    normal_df = pd.DataFrame(normal_rows)
-    normal_path = os.path.join(overall_dir, 'normal_metrics.csv')
-
-    if os.path.exists(normal_path):
-        existing_df = pd.read_csv(normal_path)
-        normal_df = pd.concat([existing_df, normal_df], ignore_index=True)
-
-    normal_df.to_csv(normal_path, index=False)
-    print(f"[CSV Results] Saved normal metrics to {normal_path}")
-
-    # Save uncertainty metrics if provided
-    if uncertainty_metrics:
-        print(f"[CSV Results] Uncertainty metrics keys: {list(uncertainty_metrics.keys())}")
-        uq_rows = []
-
-        # Per-quantile pinball losses
-        # Handle various key formats: 'testpinball_q10', 'test/pinball_q10', 'pinball_q10'
-        quantiles = []
-        for k in uncertainty_metrics.keys():
-            if 'pinball_q' in k and k != 'pinball_avg' and k != 'testpinball_avg':
-                # Remove 'test' or 'test/' prefix, then extract quantile part
-                key_clean = k.replace('test/', '').replace('test', '')
-                q_part = key_clean.split('pinball_q')[-1]
-                quantiles.append(q_part)
-
-        # Also check config for quantiles if available
-        if hasattr(config, 'quantiles') and not quantiles:
-            quantiles = [str(q).replace('.', '_') for q in config.quantiles]
-
-        for q in quantiles:
-            # Try multiple key formats: without prefix, with 'test/', with 'test' (no slash)
-            possible_keys = [
-                f'pinball_q{q}',
-                f'test/pinball_q{q}',
-                f'testpinball_q{q}'
-            ]
-            value = None
-            for key in possible_keys:
-                value = uncertainty_metrics.get(key)
-                if value is not None:
-                    break
-
-            if value is not None:
-                uq_rows.append({
-                    'metric': f'pinball_q{q}',
-                    'value': value,
-                    **base_data
-                })
-
-        # Overall uncertainty metrics
-        for metric_name in ['crps', 'picp', 'pinaw', 'winkler_score',
-                           'calibration_error_mean', 'calibration_error_max',
-                           'mean_interval_width', 'pinball_avg']:
-            # Try multiple key formats: without prefix, with 'test/', with 'test' (no slash)
-            possible_keys = [
-                metric_name,
-                f'test/{metric_name}',
-                f'test{metric_name}'
-            ]
-            value = None
-            for key in possible_keys:
-                value = uncertainty_metrics.get(key)
-                if value is not None:
-                    break
-
-            if value is not None:
-                uq_rows.append({
-                    'metric': metric_name,
-                    'value': value,
-                    **base_data
-                })
-
-        uq_df = pd.DataFrame(uq_rows)
-        print(f"[CSV Results] Uncertainty rows to save: {len(uq_rows)}")
-        if uq_rows:
-            print(f"[CSV Results] Sample uncertainty metrics: {uq_rows[:3]}")
-        uq_path = os.path.join(overall_dir, 'uncertainty_metrics.csv')
-
-        if os.path.exists(uq_path):
-            existing_df = pd.read_csv(uq_path)
-            uq_df = pd.concat([existing_df, uq_df], ignore_index=True)
-
-        uq_df.to_csv(uq_path, index=False)
-        print(f"[CSV Results] Saved uncertainty metrics to {uq_path}")
+        df = df[get_column_order(df.columns)]
+        df.to_csv(csv_path, index=False)
+        print(f"[CSV Results] Saved {metric} results to {csv_path}")
 
 
 def load_best_hps(results_file: str) -> Dict[str, Any]:

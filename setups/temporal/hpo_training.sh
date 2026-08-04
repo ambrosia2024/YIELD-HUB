@@ -9,41 +9,6 @@
 #SBATCH --output=log-without/%x_%j.out
 #SBATCH --error=log-without/%x_%j.err
 
-#–––––––––––––––––––––––––––––––––– Parse Arguments –––––––––––––––––––––––––––––––––#
-#––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––#
-# Usage: sbatch run_baselines.sh <mos|eos> <output_dir>
-#
-# Arguments:
-#   $1 - Configuration type: "mos" or "eos"
-#   $2 - Output directory for checkpoints and results
-#
-# Example:
-#   sbatch run_baselines.sh mos /path/to/output
-#   sbatch run_baselines.sh eos /path/to/output
-
-# Check arguments
-if [ $# -lt 2 ]; then
-    echo "Error: Missing required arguments"
-    echo "Usage: $0 <mos|eos> <output_dir>"
-    echo "Example: $0 mos /path/to/output"
-    exit 1
-fi
-
-CONFIG_TYPE=$1
-OUTPUT_DIR=$2
-
-# Validate CONFIG_TYPE
-if [ "$CONFIG_TYPE" != "mos" ] && [ "$CONFIG_TYPE" != "eos" ]; then
-    echo "Error: CONFIG_TYPE must be 'mos' or 'eos', got '$CONFIG_TYPE'"
-    exit 1
-fi
-
-echo "Configuration: $CONFIG_TYPE"
-echo "Output directory: $OUTPUT_DIR"
-
-#–––––––––––––––––––––––––––––––––– Setup ––––––––––––––––––––––––––––––––––#
-#––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––#
-
 source ~/miniconda3/etc/profile.d/conda.sh
 conda activate cybench
 export CUDA_VISIBLE_DEVICES=0
@@ -60,7 +25,7 @@ YEARS_DICT_FILE="../configurations/years_dict.json"
 declare -A MAIZE_COUNTRIES
 declare -A WHEAT_COUNTRIES
 
-# Filtering countries that have at least 8 or more years of data
+# Filtering countries that have atleast 8 or more years of data
 while IFS='|' read -r crop country; do
     if   [ "$crop" = "maize" ]; then MAIZE_COUNTRIES[$country]=1
     elif [ "$crop" = "wheat" ]; then WHEAT_COUNTRIES[$country]=1
@@ -95,27 +60,8 @@ echo "  EXCLUDED_COUNTRIES: $EXCLUDED_COUNTRIES"
 echo "  Maize countries: $(echo ${!MAIZE_COUNTRIES[@]} | tr ' ' '\n' | sort | tr '\n' ' ')"
 echo "  Wheat countries: $(echo ${!WHEAT_COUNTRIES[@]} | tr ' ' '\n' | sort | tr '\n' ' ')"
 
-#–––––––––––––––––––––––––––––––––– Set config-specific variables ––––––––––––––––––#
-#––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––#
-
-if [ "$CONFIG_TYPE" = "eos" ]; then
-    HPS_FILE="../configurations/eosHyperparameters.json"
-    LOG_DIR="log-${CONFIG_TYPE}"
-    WANDB_PROJECT="AAAI2027-redefiningCYP-HPO-eos-mse"
-    FORECAST_TYPE="end-of-season"
-else
-    HPS_FILE="../configurations/mosHyperparameters.json"
-    LOG_DIR="log-${CONFIG_TYPE}"
-    WANDB_PROJECT="AAAI2027-redefiningCYP-HPO-mse"
-    FORECAST_TYPE="middle-of-season"
-fi
-
-CHECKPOINT_DIR="$OUTPUT_DIR"
-mkdir -p "$CHECKPOINT_DIR" "$LOG_DIR"
-
-#–––––––––––––––––––––––––––––––––– Helper functions ––––––––––––––––––––––––––––––––#
-#––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––#
-
+#–––––––––––––––––––––––––––––––––– Helper functions –––––––––––––––––––––––––––––––––– #
+#–––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––– #
 get_patchtst_flags() {
     local crop=$1
     if [ "$crop" = "wheat" ]; then
@@ -129,7 +75,10 @@ get_xlinear_flags() {
     echo "--use_gdd --use_rue --use_farquhar --use_sota_features --include_spatial_features --use_heat_stress_days --lag_years 2 --use_revin"
 }
 
-# Load hyperparameter overrides from config file
+# Path to eosHyperparameters.json config file
+EOS_HPS_FILE="../configurations/eosHyperparameters.json"
+
+# Load hyperparameter overrides from eosHyperparameters.json
 get_override_hps() {
     local country=$1
     local model=$2
@@ -149,21 +98,14 @@ sys.stdout = open(os.devnull, 'w')
 sys.stdout.close()
 sys.stdout = sys.__stdout__
 
-with open('$HPS_FILE', 'r') as f:
+with open('$EOS_HPS_FILE', 'r') as f:
     data = json.load(f)
 
 try:
-    hps = data['$model']['$country']['$crop']['hyperparameters']
+    hps = data['overrides']['$country']['$model']['$crop']
     for k, v in hps.items():
-        if isinstance(v, bool):
-            if v:  # Only output flag if True
-                print(f'--{k}')
-        elif isinstance(v, list):
-            print(f'--{k}')
-            print(' '.join(map(str, v)))
-        else:
-            print(f'--{k}')
-            print(f'{v}')
+        print(f'--{k}')
+        print(f'{v}')
 except KeyError:
     sys.exit(1)
 ") || return 1
@@ -181,7 +123,7 @@ get_countries_for_crop() {
 sort_countries() { echo "$1" | tr ' ' '\n' | sort | tr '\n' ' '; }
 
 # Train 2 scripts in parallel
-MAX_PARALLEL=5
+MAX_PARALLEL=2
 PIPE=$(mktemp -u)
 mkfifo "$PIPE"
 exec 3<>"$PIPE"
@@ -199,15 +141,18 @@ run_model() {
     } &
 }
 
+#–––––––––––––––––––––––––––––––––– Training –––––––––––––––––––––––––––––––––– #
+#–––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––#
+# Use same directory for checks and saves
+CHECKPOINT_DIR="modelCheckpoints-without/final"
+mkdir -p "$CHECKPOINT_DIR" log-without/final
+
+crops=("wheat" "maize")
+
 # Helper to generate random 6-character alphanumeric string
 generate_random_suffix() {
     cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 6 | head -n 1
 }
-
-#–––––––––––––––––––––––––––––––––– Training ––––––––––––––––––––––––––––––––––#
-#––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––#
-
-crops=("wheat" "maize")
 
 for crop in "${crops[@]}"; do
     countries=$(sort_countries "$(get_countries_for_crop "$crop")")
@@ -227,9 +172,9 @@ for crop in "${crops[@]}"; do
             fi
 
             hps_args=()
-            # Load hyperparameters from config file
+            # Load hyperparameters from eosHyperparameters.json
             if ! get_override_hps "$country" "$model" "$crop" hps_args; then
-                echo "ERROR: Could not load HPS for ${model} ${country} ${crop} from ${HPS_FILE} — skipping"
+                echo "ERROR: Could not load HPS for ${model} ${country} ${crop} from eosHyperparameters.json — skipping"
                 continue
             fi
 
@@ -249,19 +194,20 @@ for crop in "${crops[@]}"; do
                 --country "$country"
                 --model_type "$model"
                 --aggregation daily
-                --epochs 50
+                --epochs 100
+                --drop_tavg
                 --test_years 5
                 "${model_flags[@]}"
                 "${hps_args[@]}"
                 --save_checkpoint_dir "$checkpoint_save_dir"
                 --results_dir "$checkpoint_save_dir"
-                --wandb_project "$WANDB_PROJECT"
+                --wandb_project "AAAI2027-CYP-HPO-without"
                 --run_id "$RUN_ID"
-                --forecast_type "$FORECAST_TYPE"
+                --forecast_type "end-of-season"
             )
 
             run_model \
-                "${LOG_DIR}/final_${RUN_ID}_${model}_${country}_${crop}.txt" \
+                "log-without/final_${RUN_ID}_${model}_${country}_${crop}.txt" \
                 "${cmd[@]}"
 
         done
@@ -270,3 +216,5 @@ done
 
 wait
 echo "Final training completed: $(date)"
+
+
