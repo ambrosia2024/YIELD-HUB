@@ -210,3 +210,17 @@ docs/
 README_old.md
 data/
 wrappers/data/
+
+# Project related folders to ignore
+.claude/
+*checkpoints*/
+*data*/
+random/
+visualize/
+results/
+wandb/
+lightning*/
+
+# Project related files to ignore
+*.txt
+__init__.py

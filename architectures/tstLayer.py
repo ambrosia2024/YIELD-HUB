@@ -71,8 +71,21 @@ from biasCorrectionLayer import BiasCorrection
 from modelconfig import TSTModelConfig
 
 sys.path.append('../process/')
-from validateModel import ModelMetrics
+from validateModel import ModelMetrics, UncertaintyMetrics, compute_uncertainty_metrics
 from featureEngineering import _get_static_feature_names
+from spatiotemporal_metrics import (
+    compute_all_spatiotemporal_metrics,
+    flatten_spatiotemporal_metrics_simple
+)
+
+# Import MQLoss from neuralforecast if available
+try:
+    from neuralforecast.losses.pytorch import MQLoss
+    NEURALFORECAST_AVAILABLE = True
+except ImportError:
+    NEURALFORECAST_AVAILABLE = False
+    logging.warning("neuralforecast not available. Using fallback MQLoss implementation.")
+    MQLoss = None
 
 # Global variables
 SOTA_TEMPORAL_VARS_LIST = [
@@ -210,6 +223,11 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
         # Flag for tracking model build completion (used by _verify_mask_is_used)
         self._model_ready = False
 
+        # Quantile regression configuration (must be set BEFORE _build_model())
+        self.loss_type = config.loss_type if hasattr(config, 'loss_type') else "mse"
+        self.quantiles = config.quantiles if hasattr(config, 'quantiles') else [0.1, 0.5, 0.9]
+        self.n_quantiles = len(self.quantiles) if self.loss_type == "mql" else 1
+
         self.base_model = self._build_model()
 
         # self.criterion (nn.MSELoss) is intentionally absent. Training steps use _compute_weighted_loss() which calls F.mse_loss(reduction='none') to get per-sample losses before weighting.
@@ -217,6 +235,26 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
         self.train_metrics = ModelMetrics(prefix="train", include_nrmse=False)
         self.val_metrics = ModelMetrics(prefix="val")
         self.test_metrics = ModelMetrics(prefix="test")
+
+        if self.loss_type == "mql":
+            print(f"[MQLoss] ENABLED - Quantiles: {self.quantiles}, n_quantiles: {self.n_quantiles}")
+            if NEURALFORECAST_AVAILABLE and MQLoss is not None:
+                self.mq_loss_fn = MQLoss(quantiles=self.quantiles)
+                print(f"[MQLoss] Using neuralforecast MQLoss")
+            else:
+                self.mq_loss_fn = None
+                print(f"[MQLoss] Using fallback pinball loss implementation")
+        else:
+            print(f"[Loss] Standard MSE loss enabled")
+            self.mq_loss_fn = None
+
+        # Initialize uncertainty metrics only for MQLoss (test stage only)
+        if self.loss_type == "mql":
+            # No prefix here - self.log() will add test/ prefix
+            self.test_uncertainty_metrics = UncertaintyMetrics(quantiles=self.quantiles, prefix="")
+            print(f"[Uncertainty Metrics] Initialized for test stage, quantiles: {self.quantiles}")
+        else:
+            self.test_uncertainty_metrics = None
 
     @staticmethod
     def _get_standardized_context_length(seq_len: int, lags_sequence: List[int]) -> int:
@@ -448,6 +486,50 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
             # 4D tensors (PatchTST multivariate) - skip PE for now
             # Could be extended to add PE per-patch if needed
             return h
+
+    def _create_regression_head(self, input_dim: int, hidden_dim: Optional[int] = None) -> nn.Module:
+        """
+        Create regression head with appropriate output dimension.
+
+        Args:
+            input_dim: Input dimension
+            hidden_dim: Hidden dimension (defaults to input_dim // 2)
+
+        Returns:
+            Regression head module
+        """
+        if hidden_dim is None:
+            hidden_dim = input_dim // 2
+
+        output_dim = self.n_quantiles  # 1 for MSE, len(quantiles) for MQLoss
+
+        return nn.Sequential(
+            nn.Linear(input_dim, hidden_dim),
+            nn.LayerNorm(hidden_dim),
+            nn.ReLU(),
+            nn.Dropout(0.1),
+            nn.Linear(hidden_dim, output_dim),
+        )
+
+    def _reshape_output(self, pred: torch.Tensor) -> torch.Tensor:
+        """
+        Reshape predictions for proper output format.
+
+        For MSE (loss_type="mse"): Returns (batch,) - single point prediction
+        For MQLoss (loss_type="mql"): Returns (batch, n_quantiles) - quantile predictions
+
+        Args:
+            pred: Raw output from regression head, shape (batch, output_dim)
+
+        Returns:
+            Properly shaped predictions
+        """
+        if self.loss_type == "mql":
+            # Keep (batch, n_quantiles) shape
+            return pred
+        else:
+            # Squeeze to (batch,) for backward compatibility
+            return pred.squeeze(-1)
 
     def _normalize_time_series(self, x_ts: torch.Tensor,
                                 observed_mask: Optional[torch.Tensor] = None) -> torch.Tensor:
@@ -733,10 +815,10 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
     def _compute_weighted_loss(self, pred: torch.Tensor, y: torch.Tensor,
                                 years: Optional[torch.Tensor] = None) -> torch.Tensor:
         """
-        Compute MSE loss between predictions and targets.
+        Compute loss between predictions and targets (MSE or MQLoss).
 
         Args:
-            pred: Predictions of shape (batch,)
+            pred: Predictions of shape (batch,) for MSE or (batch, n_quantiles) for MQLoss
             y: Targets of shape (batch,)
             years: Sample years of shape (batch,) for exponential weighting
 
@@ -750,34 +832,67 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
         a 365-day season. The mask is retained for attention masking in
         forward() but not used for loss computation.
         """
-        if self.config.use_exponential_weighting and years is not None:
-            # Compute per-sample losses
-            per_sample_loss = F.mse_loss(pred, y, reduction='none')
+        # Handle multi-quantile predictions
+        if self.loss_type == "mql":
+            # pred shape: (batch, n_quantiles), y shape: (batch,) -> expand y to (batch, n_quantiles)
+            if pred.dim() == 1:
+                pred = pred.unsqueeze(-1)  # (batch,) -> (batch, 1)
+            if y.dim() == 1:
+                y = y.unsqueeze(-1)  # (batch,) -> (batch, 1)
 
-            # Compute exponential weights based on year distance
-            # weight = exp(-(current_year - sample_year) / tau)
-            years_int = years.cpu().numpy() if years.is_cuda else years.numpy()
-            weights = np.exp(-(self._most_recent_year - years_int) / self.config.exponential_tau)
-            weights_tensor = torch.tensor(weights, dtype=torch.float32, device=pred.device)
+            # Use neuralforecast MQLoss if available
+            if self.mq_loss_fn is not None:
+                loss = self.mq_loss_fn(y, pred)
+            else:
+                # Fallback: compute average pinball loss
+                losses = []
+                for i, q in enumerate(self.quantiles):
+                    error = y - pred[:, i:i+1]
+                    q_loss = torch.max(q * error, (q - 1) * error).mean()
+                    losses.append(q_loss)
+                loss = torch.stack(losses).mean()
 
-            # Normalize weights to sum to batch size (preserves loss scale)
-            weights_tensor = weights_tensor / (weights_tensor.mean() + 1e-8)
+            # Apply exponential weighting if enabled
+            if self.config.use_exponential_weighting and years is not None:
+                # Sample-level weighting for multi-quantile loss
+                # For simplicity, apply the same weight to all quantiles
+                years_int = years.cpu().numpy() if years.is_cuda else years.numpy()
+                weights = np.exp(-(self._most_recent_year - years_int) / self.config.exponential_tau)
+                weights_tensor = torch.tensor(weights, dtype=torch.float32, device=pred.device)
+                weights_tensor = weights_tensor / (weights_tensor.mean() + 1e-8)
+                loss = loss * weights_tensor.mean()
 
-            # Log first batch sample weights (once)
-            if not self._weight_log_done:
-                unique_years = np.unique(years_int[:min(16, len(years_int))])  # Sample first 16
-                logging.info(f"[Exponential Weighting] First batch sample weights:")
-                for yr in sorted(unique_years, reverse=True)[:6]:  # Show up to 6 years
-                    idx = np.where(years_int == yr)[0][0]
-                    dist = self._most_recent_year - yr
-                    logging.info(f"    Year {yr} (distance {dist}y): weight={weights[idx]:.4f}")
-                self._weight_log_done = True
-
-            # Apply weighted loss
-            weighted_loss = (per_sample_loss * weights_tensor).mean()
-            return weighted_loss
+            return loss
         else:
-            return F.mse_loss(pred, y)
+            # Standard MSE loss
+            if self.config.use_exponential_weighting and years is not None:
+                # Compute per-sample losses
+                per_sample_loss = F.mse_loss(pred, y, reduction='none')
+
+                # Compute exponential weights based on year distance
+                # weight = exp(-(current_year - sample_year) / tau)
+                years_int = years.cpu().numpy() if years.is_cuda else years.numpy()
+                weights = np.exp(-(self._most_recent_year - years_int) / self.config.exponential_tau)
+                weights_tensor = torch.tensor(weights, dtype=torch.float32, device=pred.device)
+
+                # Normalize weights to sum to batch size (preserves loss scale)
+                weights_tensor = weights_tensor / (weights_tensor.mean() + 1e-8)
+
+                # Log first batch sample weights (once)
+                if not self._weight_log_done:
+                    unique_years = np.unique(years_int[:min(16, len(years_int))])  # Sample first 16
+                    logging.info(f"[Exponential Weighting] First batch sample weights:")
+                    for yr in sorted(unique_years, reverse=True)[:6]:  # Show up to 6 years
+                        idx = np.where(years_int == yr)[0][0]
+                        dist = self._most_recent_year - yr
+                        logging.info(f"    Year {yr} (distance {dist}y): weight={weights[idx]:.4f}")
+                    self._weight_log_done = True
+
+                # Apply weighted loss
+                weighted_loss = (per_sample_loss * weights_tensor).mean()
+                return weighted_loss
+            else:
+                return F.mse_loss(pred, y)
 
     def _shared_step(self, batch, metrics: ModelMetrics, loss_key: str):
         x_ts, x_static, y, years, adm_ids, lats, lons, validity_mask = batch
@@ -808,14 +923,27 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
         # Only add trend back when use_residual_trend is True
         # Detach batch_trends to prevent gradient flow through OLS-computed values
         if batch_trends is not None:
-            final_pred = pred + batch_trends.squeeze(-1).detach()
+            # batch_trends is (batch, 1), pred is (batch, n_quantiles) for MQL
+            # Broadcast batch_trends to match pred's shape
+            if self.loss_type == "mql":
+                final_pred = pred + batch_trends.detach()  # (B, n_q) + (B, 1) broadcasts to (B, n_q)
+            else:
+                final_pred = pred + batch_trends.squeeze(-1).detach()  # Both (B,)
         else:
             final_pred = pred
 
         # Pass years for exponential weighting
         loss = self._compute_weighted_loss(final_pred, y, years=years)
 
-        metrics.update(final_pred.detach(), y.detach())
+        # Update standard metrics (use median/0.5 quantile for MQL)
+        if self.loss_type == "mql":
+            # final_pred is (B, n_quantiles), use median for point metrics
+            median_idx = self.quantiles.index(0.5)
+            point_predictions = final_pred[:, median_idx].detach()
+            metrics.update(point_predictions, y.detach())
+        else:
+            metrics.update(final_pred.detach(), y.detach())
+
         self.log(loss_key, loss, prog_bar=True)
         return loss
 
@@ -866,7 +994,13 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
         pred = self.forward(x_ts_n, x_static_n, observed_mask=validity_mask)
 
         # Add trend back
-        final_pred_z = pred + batch_trends.squeeze(-1).detach() if batch_trends is not None else pred
+        if batch_trends is not None:
+            if self.loss_type == "mql":
+                final_pred_z = pred + batch_trends.detach()  # (B, n_q) + (B, 1) broadcasts
+            else:
+                final_pred_z = pred + batch_trends.squeeze(-1).detach()  # Both (B,)
+        else:
+            final_pred_z = pred
 
         # Compute loss in z-score space (for consistency with training)
         loss = self._compute_weighted_loss(final_pred_z, y_z)
@@ -893,8 +1027,18 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
         negative_rate = (final_pred_orig < 0).float().mean()
         self.log(f'{stage}/negative_rate', negative_rate, prog_bar=False)
 
-        # Update metrics with clipped predictions (in original scale)
-        metrics.update(final_pred_clipped, y_orig)
+        # Update metrics based on loss type
+        if self.loss_type == "mql":
+            # Use median (0.5 quantile) for standard metrics
+            median_idx = self.quantiles.index(0.5)
+            point_predictions = final_pred_clipped[:, median_idx]
+            metrics.update(point_predictions, y_orig)
+
+            # Update uncertainty metrics only for test stage
+            if stage == "test":
+                self.test_uncertainty_metrics.update(y_orig, final_pred_clipped)
+        else:
+            metrics.update(final_pred_clipped, y_orig)
 
         self.log(loss_key, loss, prog_bar=True)
 
@@ -930,7 +1074,12 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
                 return_orig=True, return_predictions=True
             )
             # Accumulate predictions in original scale for bias correction fitting
-            self._val_preds.extend(preds_clipped.detach().cpu().tolist())
+            if self.loss_type == "mql":
+                # For MQL, extract only the median (0.5 quantile) prediction for bias correction
+                median_idx = self.quantiles.index(0.5)
+                self._val_preds.extend(preds_clipped[:, median_idx].detach().cpu().tolist())
+            else:
+                self._val_preds.extend(preds_clipped.detach().cpu().tolist())
             self._val_targets.extend(targets.detach().cpu().tolist())
             return loss
         else:
@@ -1043,10 +1192,56 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
             results['mse_overall'] = mse_val.item()
             results['smape_overall'] = smape_val.item()
 
+        # Compute uncertainty metrics for MQL
+        if self.loss_type == "mql":
+            # Collect all quantile predictions and targets
+            all_quantile_preds = []
+            all_targets_for_unc = []
+            quantile_preds_by_year = {year: [] for year in self._per_year_preds.keys()}
+            targets_by_year = {year: [] for year in self._per_year_preds.keys()}
+
+            for year, data in self._per_year_preds.items():
+                if 'quantile_preds' in data and data['quantile_preds']:
+                    # Convert list of lists to numpy array
+                    year_quantile_preds = np.array(data['quantile_preds'])
+                    year_targets = np.array(data['targets'])
+
+                    if len(year_quantile_preds) > 0:
+                        quantile_preds_by_year[year] = year_quantile_preds
+                        targets_by_year[year] = year_targets
+                        all_quantile_preds.append(year_quantile_preds)
+                        all_targets_for_unc.append(year_targets)
+
+            # Compute per-year uncertainty metrics
+            for year in quantile_preds_by_year.keys():
+                if len(quantile_preds_by_year[year]) > 0:
+                    year_preds = quantile_preds_by_year[year]  # (n_samples, n_quantiles)
+                    year_targets = targets_by_year[year]  # (n_samples,)
+
+                    # Use the compute_uncertainty_metrics function from validateModel
+                    year_unc_metrics = compute_uncertainty_metrics(
+                        year_targets, year_preds, self.quantiles
+                    )
+
+                    for metric_name, value in year_unc_metrics.items():
+                        results[f'{metric_name}_{year}'] = value
+
+            # Compute overall uncertainty metrics
+            if all_quantile_preds:
+                all_quantile_preds_combined = np.vstack(all_quantile_preds)
+                all_targets_combined = np.concatenate(all_targets_for_unc)
+
+                overall_unc_metrics = compute_uncertainty_metrics(
+                    all_targets_combined, all_quantile_preds_combined, self.quantiles
+                )
+
+                for metric_name, value in overall_unc_metrics.items():
+                    results[f'{metric_name}_overall'] = value
+
         return results
 
-    def _accumulate_per_year_predictions(self, preds: torch.Tensor, targets: torch.Tensor, years: torch.Tensor):
-        """Accumulate predictions and targets per year for later metrics computation."""
+    def _accumulate_per_year_predictions(self, preds: torch.Tensor, targets: torch.Tensor, years: torch.Tensor, adm_ids: List[str] = None):
+        """Accumulate predictions, targets, and regions per year for later metrics computation."""
         if not hasattr(self, '_per_year_preds') or not self._per_year_preds:
             return
 
@@ -1054,12 +1249,94 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
         preds_np = preds.cpu().numpy()
         targets_np = targets.cpu().numpy()
         years_np = years.cpu().numpy() if isinstance(years, torch.Tensor) else years
+        if adm_ids is None:
+            adm_ids_np = [None] * len(years_np)
+        else:
+            adm_ids_np = adm_ids if isinstance(adm_ids, list) else list(adm_ids)
 
-        for pred, target, year in zip(preds_np, targets_np, years_np):
-            year_int = int(year)
-            if year_int in self._per_year_preds:
-                self._per_year_preds[year_int]['preds'].append(float(pred))
-                self._per_year_preds[year_int]['targets'].append(float(target))
+        # Handle MQL multi-quantile predictions
+        if self.loss_type == "mql" and preds_np.ndim > 1:
+            # preds_np is (batch, n_quantiles)
+            # Store full quantile predictions for uncertainty metrics
+            # Initialize quantile_preds storage if not exists
+            for year_int in set(years_np):
+                if year_int not in self._per_year_preds:
+                    continue
+                if 'quantile_preds' not in self._per_year_preds[year_int]:
+                    self._per_year_preds[year_int]['quantile_preds'] = []
+                if 'adm_ids' not in self._per_year_preds[year_int]:
+                    self._per_year_preds[year_int]['adm_ids'] = []
+
+            for pred, target, year, adm_id in zip(preds_np, targets_np, years_np, adm_ids_np):
+                year_int = int(year)
+                if year_int in self._per_year_preds:
+                    self._per_year_preds[year_int]['quantile_preds'].append(pred.tolist())
+                    self._per_year_preds[year_int]['targets'].append(float(target))
+                    self._per_year_preds[year_int]['adm_ids'].append(adm_id)
+                    # Also store median (0.5 quantile) for standard metrics
+                    median_idx = self.quantiles.index(0.5)
+                    if 'preds' not in self._per_year_preds[year_int]:
+                        self._per_year_preds[year_int]['preds'] = []
+                    self._per_year_preds[year_int]['preds'].append(float(pred[median_idx]))
+        else:
+            # Standard MSE predictions (batch,) or (batch, 1)
+            if preds_np.ndim > 1:
+                preds_np = preds_np.squeeze(-1)
+            for year_int in set(years_np):
+                if year_int in self._per_year_preds:
+                    if 'adm_ids' not in self._per_year_preds[year_int]:
+                        self._per_year_preds[year_int]['adm_ids'] = []
+
+            for pred, target, year, adm_id in zip(preds_np, targets_np, years_np, adm_ids_np):
+                year_int = int(year)
+                if year_int in self._per_year_preds:
+                    self._per_year_preds[year_int]['preds'].append(float(pred))
+                    self._per_year_preds[year_int]['targets'].append(float(target))
+                    self._per_year_preds[year_int]['adm_ids'].append(adm_id)
+
+    def _compute_spatiotemporal_metrics_from_preds(self) -> Dict[str, float]:
+        """Compute spatiotemporal metrics from accumulated predictions."""
+        if not hasattr(self, '_per_year_preds') or not self._per_year_preds:
+            return {}
+
+        # Collect all predictions, targets, years, and regions
+        all_preds = []
+        all_targets = []
+        all_years = []
+        all_regions = []
+
+        for year, data in self._per_year_preds.items():
+            if len(data['preds']) == 0:
+                continue
+            all_preds.extend(data['preds'])
+            all_targets.extend(data['targets'])
+            if 'adm_ids' in data:
+                all_regions.extend(data['adm_ids'])
+                all_years.extend([year] * len(data['preds']))
+            else:
+                # No region info, cannot compute spatiotemporal metrics
+                return {}
+
+        # Check if we have region information
+        if not all_regions or all_regions[0] is None:
+            return {}
+
+        # Convert to numpy arrays
+        y_true = np.array(all_targets)
+        y_pred = np.array(all_preds)
+        years_arr = np.array(all_years)
+        regions_arr = np.array(all_regions)
+
+        # Compute spatiotemporal metrics
+        try:
+            st_metrics = compute_all_spatiotemporal_metrics(
+                y_true, y_pred, years_arr, regions_arr
+            )
+            # Flatten for logging (simple version with only overall correlations)
+            return flatten_spatiotemporal_metrics_simple(st_metrics)
+        except Exception as e:
+            logging.warning(f"[Spatiotemporal Metrics] Failed to compute: {e}")
+            return {}
 
     def on_test_epoch_end(self):
         results = self.test_metrics.compute()
@@ -1073,9 +1350,24 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
         self.test_metrics.log_results(step="test")
         self.test_metrics.reset()
 
+        # Log uncertainty metrics if MQLoss is enabled (only for test)
+        if self.loss_type == "mql" and self.test_uncertainty_metrics is not None:
+            uncertainty_results = self.test_uncertainty_metrics.compute()
+            for metric_name, value in uncertainty_results.items():
+                self.log(f'test/{metric_name}', value, prog_bar=False)
+            self.test_uncertainty_metrics.reset()
+
         # Compute per-year metrics and store on model for CSV saving
         if hasattr(self, '_per_year_preds') and self._per_year_preds:
             self._test_results_per_year = self._compute_per_year_metrics_from_preds()
+
+            # Compute and log spatiotemporal metrics
+            st_metrics = self._compute_spatiotemporal_metrics_from_preds()
+            if st_metrics:
+                for metric_name, value in st_metrics.items():
+                    self.log(f'test/{metric_name}', value, prog_bar=False)
+                # Store for final results display
+                self._spatiotemporal_metrics = st_metrics
 
     def predict(self, batch):
         """
@@ -1142,12 +1434,13 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
         # Initialize per-year prediction storage for CSV results
         dm = self.trainer.datamodule
         if hasattr(dm, '_test_years') and dm._test_years is not None:
-            self._test_years = dm._test_years
+            # Convert all years to Python int for consistent key matching
+            self._test_years = [int(y) for y in dm._test_years]
             self._per_year_preds = {year: {'preds': [], 'targets': []} for year in self._test_years}
             logging.info(f"[Per-Year Metrics] Initialized storage for test years: {sorted(self._test_years)}")
         else:
             logging.warning("[Per-Year Metrics] Datamodule has no _test_years set, per-year metrics will not be computed")
-            self._test_years = set()  # Initialize as empty set to prevent AttributeError in downstream methods
+            self._test_years = []  # Initialize as empty list to prevent AttributeError
             self._per_year_preds = {}
 
         if self.config.use_recursive_lags:
@@ -1251,7 +1544,14 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
             predictions_orig_np = self.bias_correction.correct(predictions_orig_np)
             predictions_orig = torch.tensor(predictions_orig_np, device=device, dtype=predictions_orig.dtype)
 
-        for pred, year, adm_id in zip(predictions_orig, years, adm_ids):
+        # For MQL, extract median prediction for caching (recursive lags use point estimates)
+        if self.loss_type == "mql":
+            median_idx = self.quantiles.index(0.5)
+            predictions_to_cache = predictions_orig[:, median_idx]
+        else:
+            predictions_to_cache = predictions_orig
+
+        for pred, year, adm_id in zip(predictions_to_cache, years, adm_ids):
             year_int = int(year.item()) if hasattr(year, 'item') else int(year)
 
             # Only cache predictions for test years
@@ -1271,11 +1571,12 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
         """Test step with optional recursive lag prediction and per-year accumulation."""
         if not self.config.use_recursive_lags or self.config.lag_years == 0:
             # Use standard evaluation and accumulate per-year predictions
-            loss, preds, targets, years = self._eval_step_with_clipping(
+            x_ts, x_static, y_z, years, adm_ids, lats, lons, validity_mask = batch
+            loss, preds, targets, years_out = self._eval_step_with_clipping(
                 batch, self.test_metrics, 'test_loss', stage='test', return_orig=True
             )
             # Accumulate per-year predictions for CSV results
-            self._accumulate_per_year_predictions(preds, targets, years)
+            self._accumulate_per_year_predictions(preds, targets, years_out, adm_ids)
             return loss
 
         # Recursive lag mode: modify batch to use cached predictions
@@ -1289,7 +1590,7 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
         modified_batch = (x_ts, x_static_modified, y_z, years, adm_ids, lats, lons, validity_mask)
 
         # Run evaluation step and get both z-score and original predictions
-        loss, preds_z, preds_clipped, targets, years = self._eval_step_with_clipping(
+        loss, preds_z, preds_clipped, targets, years_out = self._eval_step_with_clipping(
             modified_batch, self.test_metrics, 'test_loss', stage='test',
             return_orig=True, return_predictions=True
         )
@@ -1299,7 +1600,7 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
         self._cache_predictions(preds_z, years, adm_ids, dm)
 
         # Accumulate per-year predictions for CSV results (using clipped predictions in original scale)
-        self._accumulate_per_year_predictions(preds_clipped, targets, years)
+        self._accumulate_per_year_predictions(preds_clipped, targets, years_out, adm_ids)
 
         return loss
 
@@ -1423,16 +1724,10 @@ class AutoformerYieldModel(BaseTimeSeriesModel):
         # d_model is hardcoded to 64 in the config above
         d_model = 64
         combined_dim = d_model + self.n_static_features
-        self.regression_head = nn.Sequential(
-            nn.Linear(combined_dim, combined_dim // 2),
-            nn.LayerNorm(combined_dim // 2),
-            nn.ReLU(),
-            nn.Dropout(0.1),
-            nn.Linear(combined_dim // 2, 1)
-        )
+        self.regression_head = self._create_regression_head(combined_dim)
 
         logging.info(f"[Autoformer BUILD] Created regression head: d_model={d_model}, "
-                    f"combined_dim={combined_dim}, hidden_dim={combined_dim // 2}")
+                    f"combined_dim={combined_dim}, hidden_dim={combined_dim // 2}, output: {self.n_quantiles}")
 
         self._model_ready = True
         return model
@@ -1483,7 +1778,7 @@ class AutoformerYieldModel(BaseTimeSeriesModel):
 
         #  Concatenate with static features and pass through regression head
         combined = torch.cat([pooled, x_static], dim=-1)
-        predictions = self.regression_head(combined).squeeze(-1)
+        predictions = self._reshape_output(self.regression_head(combined))
 
         return predictions
 
@@ -1566,19 +1861,13 @@ class PatchTSTModel(BaseTimeSeriesModel):
 
         # Build regression head with correct dimension (always created, even when loading from checkpoint)
         combined_dim = pooled_dim + self.n_static_features
-        self.regression_head = nn.Sequential(
-            nn.Linear(combined_dim, combined_dim // 2),
-            nn.LayerNorm(combined_dim // 2),
-            nn.ReLU(),
-            nn.Dropout(0.1),
-            nn.Linear(combined_dim // 2, 1)
-        )
+        self.regression_head = self._create_regression_head(combined_dim)
 
         # Store for validation in forward()
         self._pooled_dim = pooled_dim
 
         logging.info(f"[PatchTST BUILD] Created regression head: pooled_dim={pooled_dim}, "
-                    f"combined_dim={combined_dim}, hidden_dim={combined_dim // 2}")
+                    f"combined_dim={combined_dim}, hidden_dim={combined_dim // 2}, output: {self.n_quantiles}")
 
         self._model_ready = True
         return model
@@ -1622,7 +1911,7 @@ class PatchTSTModel(BaseTimeSeriesModel):
 
         #  Concatenate with static features and pass through regression head
         combined = torch.cat([pooled, x_static], dim=-1)
-        predictions = self.regression_head(combined).squeeze(-1)
+        predictions = self._reshape_output(self.regression_head(combined))
 
         return predictions
 
@@ -1694,19 +1983,13 @@ class TSMixerModel(BaseTimeSeriesModel):
 
         # Build regression head with correct dimension
         combined_dim = pooled_dim + self.n_static_features
-        self.regression_head = nn.Sequential(
-            nn.Linear(combined_dim, combined_dim // 2),
-            nn.LayerNorm(combined_dim // 2),
-            nn.ReLU(),
-            nn.Dropout(0.1),
-            nn.Linear(combined_dim // 2, 1)
-        )
+        self.regression_head = self._create_regression_head(combined_dim)
 
         # Store for validation in forward()
         self._pooled_dim = pooled_dim
 
         logging.info(f"[TSMixer BUILD] Created regression head: pooled_dim={pooled_dim}, "
-                    f"combined_dim={combined_dim}, hidden_dim={combined_dim // 2}")
+                    f"combined_dim={combined_dim}, hidden_dim={combined_dim // 2}, output: {self.n_quantiles}")
 
         self._model_ready = True
         return model
@@ -1757,7 +2040,7 @@ class TSMixerModel(BaseTimeSeriesModel):
 
         #  Concatenate with static features and pass through regression head
         combined = torch.cat([pooled, x_static], dim=-1)
-        predictions = self.regression_head(combined).squeeze(-1)
+        predictions = self._reshape_output(self.regression_head(combined))
 
         return predictions
 
@@ -1807,16 +2090,10 @@ class InformerModel(BaseTimeSeriesModel):
         # Always create regression head, even when loading from checkpoint
         d_model = 64  # from config above
         combined_dim = d_model + self.n_static_features
-        self.regression_head = nn.Sequential(
-            nn.Linear(combined_dim, combined_dim // 2),
-            nn.LayerNorm(combined_dim // 2),
-            nn.ReLU(),
-            nn.Dropout(0.1),
-            nn.Linear(combined_dim // 2, 1)
-        )
+        self.regression_head = self._create_regression_head(combined_dim)
 
         logging.info(f"[Informer BUILD] Created regression head: d_model={d_model}, "
-                    f"combined_dim={combined_dim}, hidden_dim={combined_dim // 2}")
+                    f"combined_dim={combined_dim}, hidden_dim={combined_dim // 2}, output: {self.n_quantiles}")
 
         self._model_ready = True
         return model
@@ -1851,7 +2128,7 @@ class InformerModel(BaseTimeSeriesModel):
 
         #  Concatenate with static features and pass through regression head
         combined = torch.cat([pooled, x_static], dim=-1)
-        predictions = self.regression_head(combined).squeeze(-1)
+        predictions = self._reshape_output(self.regression_head(combined))
 
         return predictions
 
@@ -1912,16 +2189,10 @@ class TSTModel(BaseTimeSeriesModel):
         # Always create regression head, even when loading from checkpoint
         d_model = 64  # from config above
         combined_dim = d_model + self.n_static_features
-        self.regression_head = nn.Sequential(
-            nn.Linear(combined_dim, combined_dim // 2),
-            nn.LayerNorm(combined_dim // 2),
-            nn.ReLU(),
-            nn.Dropout(0.1),
-            nn.Linear(combined_dim // 2, 1)
-        )
+        self.regression_head = self._create_regression_head(combined_dim)
 
         logging.info(f"[TST BUILD] Created regression head: d_model={d_model}, "
-                    f"combined_dim={combined_dim}, hidden_dim={combined_dim // 2}")
+                    f"combined_dim={combined_dim}, hidden_dim={combined_dim // 2}, output: {self.n_quantiles}")
 
         self._model_ready = True
         return model
@@ -1955,7 +2226,7 @@ class TSTModel(BaseTimeSeriesModel):
 
         #  Concatenate with static features and pass through regression head
         combined = torch.cat([pooled, x_static], dim=-1)
-        predictions = self.regression_head(combined).squeeze(-1)
+        predictions = self._reshape_output(self.regression_head(combined))
 
         return predictions
 
@@ -2335,18 +2606,12 @@ class iTransformerYieldModel(BaseTimeSeriesModel):
         # Final regression head: combines pooled channel representations with static features
         # Standardized to 2-layer MLP for consistency with other models
         head_input_dim = n_channels + self.n_static_features
-        self.regression_head = nn.Sequential(
-            nn.Linear(head_input_dim, head_input_dim // 2),
-            nn.LayerNorm(head_input_dim // 2),
-            nn.ReLU(),
-            nn.Dropout(dropout),
-            nn.Linear(head_input_dim // 2, 1)
-        )
+        self.regression_head = self._create_regression_head(head_input_dim)
 
         logging.info(
             f"[iTransformer BUILD] head_input_dim={head_input_dim} "
             f"(n_channels={n_channels} + static={self.n_static_features}), "
-            f"hidden_dim={head_input_dim // 2}"
+            f"hidden_dim={head_input_dim // 2}, output: {self.n_quantiles}"
         )
 
         self._model_ready = True
@@ -2424,7 +2689,7 @@ class iTransformerYieldModel(BaseTimeSeriesModel):
 
         #  Concatenate with static features and predict
         combined = torch.cat([filled_channels, x_static], dim=-1)  # [B, C + n_static]
-        return self.regression_head(combined).squeeze(-1)  # [B]
+        return self._reshape_output(self.regression_head(combined))  # [B] or [B, n_quantiles]
 
 
 
@@ -2535,18 +2800,12 @@ class TimeXerYieldModel(BaseTimeSeriesModel):
         # Final regression head: combines channel representations with static features
         # Standardized to 2-layer MLP for consistency with other models
         head_input_dim = n_channels + self.n_static_features
-        self.regression_head = nn.Sequential(
-            nn.Linear(head_input_dim, head_input_dim // 2),
-            nn.LayerNorm(head_input_dim // 2),
-            nn.ReLU(),
-            nn.Dropout(dropout),
-            nn.Linear(head_input_dim // 2, 1)
-        )
+        self.regression_head = self._create_regression_head(head_input_dim)
 
         logging.info(
             f"[TimeXer BUILD] head_input_dim={head_input_dim} "
             f"(n_channels={n_channels} + static={self.n_static_features}), "
-            f"head_nf={head_nf}, hidden_dim={head_input_dim // 2}"
+            f"head_nf={head_nf}, hidden_dim={head_input_dim // 2}, output: {self.n_quantiles}"
         )
 
         self._model_ready = True
@@ -2675,7 +2934,7 @@ class TimeXerYieldModel(BaseTimeSeriesModel):
 
         #  Concatenate with static features and predict
         combined = torch.cat([filled_channels, x_static], dim=-1)  # [B, C + n_static]
-        return self.regression_head(combined).squeeze(-1)  # [B]
+        return self._reshape_output(self.regression_head(combined))  # [B] or [B, n_quantiles]
 
     def _build_endogenous_series_lag(
         self,
@@ -2937,16 +3196,10 @@ class TimesNetModel(BaseTimeSeriesModel):
 
         # Create regression head: pooled temporal features + static features
         combined_dim = d_model + self.n_static_features
-        self.regression_head = nn.Sequential(
-            nn.Linear(combined_dim, combined_dim // 2),
-            nn.LayerNorm(combined_dim // 2),
-            nn.ReLU(),
-            nn.Dropout(dropout),
-            nn.Linear(combined_dim // 2, 1)
-        )
+        self.regression_head = self._create_regression_head(combined_dim)
 
         logging.info(f"[TimesNet BUILD] Created regression head: d_model={d_model}, "
-                    f"combined_dim={combined_dim}, hidden_dim={combined_dim // 2}")
+                    f"combined_dim={combined_dim}, hidden_dim={combined_dim // 2}, output: {self.n_quantiles}")
 
         self._model_ready = True
 
@@ -2997,7 +3250,7 @@ class TimesNetModel(BaseTimeSeriesModel):
         combined = torch.cat([pooled, x_static], dim=-1)
 
         #  Regression head
-        predictions = self.regression_head(combined).squeeze(-1)
+        predictions = self._reshape_output(self.regression_head(combined))
 
         return predictions
 

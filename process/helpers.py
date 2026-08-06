@@ -142,13 +142,14 @@ def save_test_results_to_csv(
 ):
     """Save test results to CSV files with per-year metrics."""
     os.makedirs(config.results_dir, exist_ok=True)
-    
+
     base_data = {'timestamp': timestamp, 'run_id': run_id}
     # Exclude results_dir from CSV columns (it's metadata, not a model hyperparameter)
     for field in fields(config):
         if field.name != 'results_dir':
             base_data[field.name] = getattr(config, field.name)
-    
+
+    # Standard metrics
     for metric in ['nrmse', 'mape', 'r2', 'rmse', 'mae', 'mse', 'smape']:
         csv_path = os.path.join(config.results_dir, f'{metric}.csv')
         year_columns = {str(year): test_results.get(f'{metric}_{year}', None) for year in test_years}
@@ -173,6 +174,38 @@ def save_test_results_to_csv(
         df = df[get_column_order(df.columns)]
         df.to_csv(csv_path, index=False)
         print(f"[CSV Results] Saved {metric} results to {csv_path}")
+
+    # Uncertainty metrics (only if present, i.e., MQLoss was enabled)
+    uncertainty_metrics = ['pinball_avg', 'crps', 'picp', 'pinaw', 'winkler_score', 'mean_interval_width']
+    uncertainty_metrics.extend([f'pinball_q{int(q*100)}' for q in [0.1, 0.5, 0.9]])  # Individual quantile pinball losses
+
+    for metric in uncertainty_metrics:
+        # Check if this metric exists in test_results
+        metric_keys = [k for k in test_results.keys() if k.startswith(metric)]
+        if not metric_keys:
+            continue  # Skip if this metric wasn't computed
+
+        csv_path = os.path.join(config.results_dir, f'{metric}.csv')
+        year_columns = {str(year): test_results.get(f'{metric}_{year}', None) for year in test_years}
+        year_columns['overall'] = test_results.get(f'{metric}_overall', None)
+        row_data = {**base_data, **year_columns}
+
+        if os.path.exists(csv_path):
+            df = pd.read_csv(csv_path, on_bad_lines='skip')
+            new_df = pd.DataFrame([row_data])
+            df = pd.concat([df, new_df], ignore_index=True)
+        else:
+            df = pd.DataFrame([row_data])
+
+        def get_column_order(cols):
+            metadata_cols = ['timestamp', 'run_id']
+            year_cols = sorted([c for c in cols if c.isdigit() and len(c) == 4])
+            other_cols = [c for c in cols if c not in metadata_cols + year_cols + ['overall']]
+            return metadata_cols + other_cols + year_cols + ['overall']
+
+        df = df[get_column_order(df.columns)]
+        df.to_csv(csv_path, index=False)
+        print(f"[CSV Results] Saved uncertainty metric {metric} to {csv_path}")
 
 
 def load_best_hps(results_file: str) -> Dict[str, Any]:

@@ -73,6 +73,9 @@ class TSTModelConfig:
     use_wfan: bool = False  # Enable WFAN frequency-adaptive normalization
     wfan_k: int = 2  # Number of dominant frequency components to remove (K)
     wfan_lambda: float = 1.0  # Loss balancing coefficient for pattern-adaptive prediction (λ)
+    # Loss type for quantile regression
+    loss_type: str = "mse"  # Loss function: "mse" for standard MSE, "mql" for Multi-Quantile Loss
+    quantiles: List[float] = field(default_factory=lambda: [0.1, 0.5, 0.9])  # Quantile levels for MQLoss
 
     @property
     def seq_len(self):
@@ -187,6 +190,9 @@ class LinearModelConfig:
     use_wfan: bool = False  # Enable WFAN frequency-adaptive normalization
     wfan_k: int = 2  # Number of dominant frequency components to remove (K)
     wfan_lambda: float = 1.0  # Loss balancing coefficient for pattern-adaptive prediction (λ)
+    # Loss type for quantile regression
+    loss_type: str = "mse"  # Loss function: "mse" for standard MSE, "mql" for Multi-Quantile Loss
+    quantiles: List[float] = field(default_factory=lambda: [0.1, 0.5, 0.9])  # Quantile levels for MQLoss
 
     @property
     def seq_len(self):

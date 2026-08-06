@@ -300,6 +300,16 @@ if __name__ == "__main__":
     parser.add_argument('--wfan_lambda', type=float, default=1.0,
                         help='WFAN loss balancing coefficient for pattern-adaptive prediction (default: 1.0). '
                              'Controls the weight of non-stationary prediction loss.')
+    # Loss type argument
+    parser.add_argument('--loss_type', default='mse', type=str, choices=['mse', 'mql'],
+                        help='Loss function to use: "mse" for standard MSE loss, "mql" for Multi-Quantile Loss. '
+                             'When "mql" is used, the model outputs 3 quantiles (0.1, 0.5, 0.9) and '
+                             'uncertainty metrics (Pinball Loss, CRPS, PICP, PINAW, Winkler Score) are logged. '
+                             'Default: "mse"')
+    # Load and test trained model
+    parser.add_argument('--load_and_test_trained_model', action='store_true',
+                        help='If enabled, load the best trained model from checkpoint and evaluate on test set again. '
+                             'This happens at the end of training. Useful for verifying model loading and getting final test metrics.')
     args = parser.parse_args()
 
     # The original alignment.py in cybench repo only supports "middle-of-season", "quarter-of-season", and "N-days" predictions. Since, we wanted to have "middle-of-season", "quarter-of-season", "end-of-season" and "three-quarter-of-season", we set lead_time to "0-days" which makes alignment.py load
@@ -395,6 +405,7 @@ if __name__ == "__main__":
         use_wfan=args.use_wfan,
         wfan_k=args.wfan_k,
         wfan_lambda=args.wfan_lambda,
+        loss_type=args.loss_type,
     )
 
     # Show forecast horizon configuration
@@ -474,7 +485,7 @@ if __name__ == "__main__":
 
     # Setup callbacks
     final_callbacks = [
-        EarlyStopping(monitor='val_loss', patience=3, mode='min', verbose=True),
+        EarlyStopping(monitor='val_loss', patience=5, mode='min', min_delta=0.001, verbose=True),
         ModelCheckpoint(
             monitor='val_loss',
             save_top_k=1,
@@ -515,6 +526,21 @@ if __name__ == "__main__":
             'smape': r.get('test/smape'),
             'nrmse': r.get('test/nrmse'),
         }
+        # Add uncertainty metrics if using MQL
+        if config.loss_type == "mql":
+            final_metrics.update({
+                'crps': r.get('test/crps'),
+                'picp': r.get('test/picp'),
+                'pinaw': r.get('test/pinaw'),
+                'pinball_avg': r.get('test/pinball_avg'),
+                'winkler_score': r.get('test/winkler_score'),
+                'mean_interval_width': r.get('test/mean_interval_width'),
+            })
+
+        # Add spatiotemporal metrics if available
+        if hasattr(model_final, '_spatiotemporal_metrics') and model_final._spatiotemporal_metrics:
+            for key, value in model_final._spatiotemporal_metrics.items():
+                final_metrics[key] = value
     else:
         final_metrics = {}
 
@@ -543,6 +569,42 @@ if __name__ == "__main__":
             key = f'{metric}_overall'
             if key in per_year_metrics:
                 print(f"{metric.upper()}: {per_year_metrics[key]:.4f}")
+
+    # Log uncertainty metrics if MQLoss was enabled
+    uncertainty_metric_keys = [k for k in per_year_metrics.keys() if k.startswith('pinball_') or k in ['crps', 'picp', 'pinaw', 'winkler_score', 'mean_interval_width']]
+    if uncertainty_metric_keys:
+        print(f"\n[Uncertainty Metrics] Per-Year Uncertainty Metrics:")
+        for year in sorted(fixed_splits['test_years']):
+            print(f"Year {year}:")
+            year_unc_metrics = {}
+            for key in uncertainty_metric_keys:
+                if key.endswith(f'_{year}'):
+                    metric_name = key.replace(f'_{year}', '')
+                    year_unc_metrics[metric_name] = per_year_metrics[key]
+
+            if year_unc_metrics:
+                for metric_name in ['pinball_avg', 'crps', 'picp', 'pinaw', 'winkler_score', 'mean_interval_width']:
+                    if metric_name in year_unc_metrics:
+                        print(f"  {metric_name}: {year_unc_metrics[metric_name]:.4f}")
+                # Individual quantile pinball losses
+                for q in ['pinball_q10', 'pinball_q50', 'pinball_q90']:
+                    if q in year_unc_metrics:
+                        print(f"  {q}: {year_unc_metrics[q]:.4f}")
+
+        print(f"\n  Overall:")
+        overall_unc_metrics = {}
+        for key in uncertainty_metric_keys:
+            if key.endswith('_overall'):
+                metric_name = key.replace('_overall', '')
+                overall_unc_metrics[metric_name] = per_year_metrics[key]
+
+        if overall_unc_metrics:
+            for metric_name in ['pinball_avg', 'crps', 'picp', 'pinaw', 'winkler_score', 'mean_interval_width']:
+                if metric_name in overall_unc_metrics:
+                    print(f"  {metric_name}: {overall_unc_metrics[metric_name]:.4f}")
+            for q in ['pinball_q10', 'pinball_q50', 'pinball_q90']:
+                if q in overall_unc_metrics:
+                    print(f"  {q}: {overall_unc_metrics[q]:.4f}")
 
     # Save to CSV - extract actual years from test results (not from fixed_splits)
     actual_test_years = set()
@@ -576,6 +638,61 @@ if __name__ == "__main__":
         f"FINAL RESULTS: {args.crop}-{args.country}",
         final_metrics
     )
+
+    # Load and test trained model if requested
+    if args.load_and_test_trained_model:
+        print(f"\n{'=' * 70}")
+        print("RE-TEST TRAINED MODEL")
+        print(f"{'=' * 70}")
+        print(f"Checkpoint directory: {args.save_checkpoint_dir}")
+
+        # The model_final is already loaded with best weights from training
+        # Just re-run the test to get fresh metrics
+        print("\nRe-evaluating trained model on test set...")
+        retest_results = trainer.test(model_final, dm_final)
+
+        if retest_results:
+            r_retest = retest_results[0]
+            retest_metrics = {
+                'mse': r_retest.get('test/mse'),
+                'mae': r_retest.get('test/mae'),
+                'rmse': r_retest.get('test/rmse'),
+                'r2': r_retest.get('test/r2'),
+                'mape': r_retest.get('test/mape'),
+                'smape': r_retest.get('test/smape'),
+                'nrmse': r_retest.get('test/nrmse'),
+            }
+
+            # Add uncertainty metrics if using MQL
+            if config.loss_type == "mql":
+                retest_metrics.update({
+                    'crps': r_retest.get('test/crps'),
+                    'picp': r_retest.get('test/picp'),
+                    'pinaw': r_retest.get('test/pinaw'),
+                    'pinball_avg': r_retest.get('test/pinball_avg'),
+                    'winkler_score': r_retest.get('test/winkler_score'),
+                    'mean_interval_width': r_retest.get('test/mean_interval_width'),
+                })
+
+            # Add spatiotemporal metrics if available
+            if hasattr(model_final, '_spatiotemporal_metrics') and model_final._spatiotemporal_metrics:
+                for key, value in model_final._spatiotemporal_metrics.items():
+                    retest_metrics[key] = value
+
+            print(f"\n{'=' * 70}")
+            print("RE-TEST RESULTS")
+            print(f"{'=' * 70}")
+            print_metrics_table(
+                f"RE-TEST: {args.crop}-{args.country}",
+                retest_metrics
+            )
+
+    # Log final metrics to wandB
+    if wandb_logger is not None:
+        import wandb
+        if wandb.run is not None:
+            wandb.log(final_metrics)
+            wandb.finish()
 
     # Print experiment completion message
     print(f"\n{'=' * 70}")

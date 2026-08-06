@@ -1,13 +1,13 @@
 """
 --------------------
 Author: XYZ
-Description: Script to import different validation helper functions and classes. 
+Description: Script to import different validation helper functions and classes.
 Python version: 3.12.0
 """
 
 import os, sys
 from tqdm import tqdm
-from typing import Optional, Dict, List, Tuple
+from typing import Optional, Dict, List, Tuple, Union
 import logging
 
 import numpy as np
@@ -26,6 +26,21 @@ from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
 # Custom library
 from loadData import prepare_features_and_targets
 from eb_criterion import EBCriterionCallbackV2
+
+# Uncertainty metrics imports
+try:
+    from neuralforecast.losses.pytorch import MQLoss
+    NEURALFORECAST_AVAILABLE = True
+except ImportError:
+    NEURALFORECAST_AVAILABLE = False
+    logging.warning("neuralforecast not available. MQLoss will use fallback implementation.")
+
+try:
+    from torchmetrics import CRPS
+    TORCHMETRICS_CRPS_AVAILABLE = True
+except ImportError:
+    TORCHMETRICS_CRPS_AVAILABLE = False
+    logging.warning("torchmetrics CRPS not available. Will use fallback implementation.")
 
 # Import forecast horizon verification
 from cybench.process.alignment_patch import verify_forecast_horizon_config, test_alignment_patch
@@ -284,6 +299,43 @@ def print_metrics_table(title: str, metrics: Dict, step: str = "test"):
         print(f"SMAPE: {metrics['smape']:.2f}%")
     if metrics.get('nrmse') is not None:
         print(f"NRMSE: {metrics['nrmse']:.4f}")
+
+    # Print uncertainty metrics if available
+    if metrics.get('crps') is not None or metrics.get('picp') is not None:
+        print(f"\n{'=' * 70}")
+        print("UNCERTAINTY METRICS")
+        print(f"{'=' * 70}")
+        if metrics.get('crps') is not None:
+            print(f"CRPS:  {metrics['crps']:.4f}")
+        if metrics.get('picp') is not None:
+            print(f"PICP:  {metrics['picp']:.2%}")
+        if metrics.get('pinaw') is not None:
+            print(f"PINAW: {metrics['pinaw']:.4f}")
+        if metrics.get('pinball_avg') is not None:
+            print(f"Pinball Loss (avg): {metrics['pinball_avg']:.4f}")
+        if metrics.get('winkler_score') is not None:
+            print(f"Winkler Score:     {metrics['winkler_score']:.4f}")
+        if metrics.get('mean_interval_width') is not None:
+            print(f"Mean Interval Width: {metrics['mean_interval_width']:.4f}")
+
+    # Print spatiotemporal metrics if available
+    st_keys = [k for k in metrics.keys() if k.startswith('spatial/') or k.startswith('temporal/') or k.startswith('anomaly/')]
+    if st_keys:
+        print(f"\n{'=' * 70}")
+        print("SPATIOTEMPORAL METRICS")
+        print(f"{'=' * 70}")
+
+        # Spatial correlation
+        if metrics.get('spatial/r_sp_overall') is not None:
+            print(f"Spatial Correlation (r_sp):  {metrics['spatial/r_sp_overall']:.4f}")
+
+        # Temporal correlation
+        if metrics.get('temporal/r_tm_overall') is not None:
+            print(f"Temporal Correlation (r_tm): {metrics['temporal/r_tm_overall']:.4f}")
+
+        # Anomaly correlation
+        if metrics.get('anomaly/r_an_overall') is not None:
+            print(f"Anomaly Correlation (r_an):  {metrics['anomaly/r_an_overall']:.4f}")
 
     print(f"{'-' * 70}")
 
@@ -808,3 +860,263 @@ def _log_walk_forward_to_wandb(loggers: List, aggregated: Dict, run_id: str,
             if metrics_to_log:
                 logger.experiment.log(metrics_to_log)
                 print(f"[WandB] Logged overall metrics to WandB")
+
+
+# ============================================================================
+# UNCERTAINTY METRICS FOR QUANTILE REGRESSION
+# ============================================================================
+
+class UncertaintyMetrics(nn.Module):
+    """
+    Uncertainty metrics for quantile regression evaluation.
+
+    Computes:
+    - Pinball Loss (per quantile and average)
+    - CRPS (Continuous Ranked Probability Score)
+    - PICP (Prediction Interval Coverage Probability)
+    - PINAW (Prediction Interval Normalized Average Width)
+    - Winkler Score
+
+    Compatible with PyTorch Lightning for logging during training/validation.
+    """
+
+    def __init__(self, quantiles: List[float] = None, prefix: str = ''):
+        """
+        Args:
+            quantiles: List of quantile levels (default: [0.1, 0.5, 0.9])
+            prefix: Prefix for metric names (e.g., 'val_', 'test_')
+        """
+        super().__init__()
+        if quantiles is None:
+            quantiles = [0.1, 0.5, 0.9]
+
+        self.quantiles = quantiles
+        self.prefix = prefix
+        self.reset()
+
+        # Initialize MQLoss from neuralforecast if available
+        if NEURALFORECAST_AVAILABLE:
+            self.mq_loss = MQLoss(quantiles=quantiles)
+        else:
+            self.mq_loss = None
+
+    def reset(self):
+        """Reset all accumulated values."""
+        self.y_true = []
+        self.y_pred = []
+
+    def update(self, y_true: torch.Tensor, y_pred: torch.Tensor):
+        """
+        Add predictions and targets.
+
+        Args:
+            y_true: Ground truth, shape (batch,)
+            y_pred: Predictions, shape (batch, n_quantiles)
+        """
+        if isinstance(y_true, torch.Tensor):
+            y_true = y_true.detach().cpu()
+        if isinstance(y_pred, torch.Tensor):
+            y_pred = y_pred.detach().cpu()
+
+        self.y_true.append(y_true)
+        self.y_pred.append(y_pred)
+
+    def compute(self) -> Dict[str, float]:
+        """
+        Compute all metrics from accumulated predictions.
+
+        Returns:
+            Dictionary of metric names to values
+        """
+        if len(self.y_true) == 0:
+            return {}
+
+        y_true_all = torch.cat(self.y_true, dim=0).numpy()
+        y_pred_all = torch.cat(self.y_pred, dim=0).numpy()
+
+        metrics = self._compute_all_uncertainty_metrics(
+            y_true_all, y_pred_all, self.quantiles
+        )
+
+        # Add prefix to all metric names
+        if self.prefix:
+            metrics = {f'{self.prefix}{k}': v for k, v in metrics.items()}
+
+        return metrics
+
+    def _compute_all_uncertainty_metrics(
+        self, y_true: np.ndarray, y_pred: np.ndarray, quantiles: List[float]
+    ) -> Dict[str, float]:
+        """Compute all uncertainty metrics."""
+        results = {}
+
+        # 1. Pinball loss for each quantile
+        for i, q in enumerate(quantiles):
+            q_loss = self._pinball_loss(y_true, y_pred[:, i], q)
+            results[f'pinball_q{int(q*100)}'] = float(np.mean(q_loss))
+
+        # Average pinball loss
+        pinball_losses = [self._pinball_loss(y_true, y_pred[:, i], q)
+                          for i, q in enumerate(quantiles)]
+        results['pinball_avg'] = float(np.mean(pinball_losses))
+
+        # 2. CRPS
+        results['crps'] = self._compute_crps(y_true, y_pred, quantiles)
+
+        # 3. PICP (using extreme quantiles for interval)
+        q_lower_idx = 0
+        q_upper_idx = -1
+        results['picp'] = self._compute_picp(
+            y_true, y_pred[:, q_lower_idx], y_pred[:, q_upper_idx]
+        )
+
+        # 4. PINAW
+        results['pinaw'] = self._compute_pinaw(
+            y_pred[:, q_lower_idx], y_pred[:, q_upper_idx], y_true
+        )
+
+        # 5. Winkler Score
+        coverage_level = 1 - (quantiles[q_upper_idx] - quantiles[q_lower_idx])
+        results['winkler_score'] = self._compute_winkler_score(
+            y_true, y_pred[:, q_lower_idx], y_pred[:, q_upper_idx], coverage_level
+        )
+
+        # 6. Mean interval width
+        results['mean_interval_width'] = float(
+            np.mean(y_pred[:, q_upper_idx] - y_pred[:, q_lower_idx])
+        )
+
+        return results
+
+    @staticmethod
+    def _pinball_loss(y_true: np.ndarray, y_pred: np.ndarray, quantile: float) -> np.ndarray:
+        """Compute pinball loss for a single quantile."""
+        error = y_true - y_pred
+        return np.maximum(quantile * error, (quantile - 1) * error)
+
+    @staticmethod
+    def _compute_crps(
+        y_true: np.ndarray, y_pred: np.ndarray, quantiles: List[float]
+    ) -> float:
+        """
+        Compute Continuous Ranked Probability Score (CRPS).
+
+        Uses trapezoidal integration over quantiles.
+        """
+        n_samples = len(y_true)
+        crps_values = np.zeros(n_samples)
+
+        # Ensure quantiles are sorted
+        sorted_indices = np.argsort(quantiles)
+        sorted_quantiles = np.array(quantiles)[sorted_indices]
+        sorted_preds = y_pred[:, sorted_indices]
+
+        for i in range(n_samples):
+            y_i = y_true[i]
+            preds_i = sorted_preds[i]
+
+            # Compute CRPS using trapezoidal integration
+            integral = 0.0
+            for j in range(len(sorted_quantiles) - 1):
+                # CDF at quantile j: indicator if y_true >= predicted value
+                cdf_j = 1.0 if y_i >= preds_i[j] else 0.0
+                cdf_j1 = 1.0 if y_i >= preds_i[j + 1] else 0.0
+
+                # CDF difference
+                dq = sorted_quantiles[j + 1] - sorted_quantiles[j]
+
+                # Trapezoid area: average height * width
+                avg_height = ((cdf_j - sorted_quantiles[j])**2 +
+                             (cdf_j1 - sorted_quantiles[j + 1])**2) / 2
+                integral += avg_height * dq
+
+            crps_values[i] = integral
+
+        return float(np.mean(crps_values))
+
+    @staticmethod
+    def _compute_picp(
+        y_true: np.ndarray, y_pred_lower: np.ndarray, y_pred_upper: np.ndarray
+    ) -> float:
+        """Compute Prediction Interval Coverage Probability."""
+        in_interval = (y_true >= y_pred_lower) & (y_true <= y_pred_upper)
+        return float(np.mean(in_interval))
+
+    @staticmethod
+    def _compute_pinaw(
+        y_pred_lower: np.ndarray, y_pred_upper: np.ndarray,
+        y_true: Optional[np.ndarray] = None
+    ) -> float:
+        """Compute Prediction Interval Normalized Average Width."""
+        interval_width = y_pred_upper - y_pred_lower
+        mean_width = np.mean(interval_width)
+
+        # Compute normalization range
+        if y_true is not None:
+            range_width = y_true.max() - y_true.min()
+        else:
+            range_width = y_pred_upper.max() - y_pred_lower.min()
+
+        if range_width == 0:
+            return 0.0
+
+        return float(mean_width / range_width)
+
+    @staticmethod
+    def _compute_winkler_score(
+        y_true: np.ndarray, y_pred_lower: np.ndarray, y_pred_upper: np.ndarray,
+        alpha: float = 0.1
+    ) -> float:
+        """Compute Winkler score for prediction intervals."""
+        interval_width = y_pred_upper - y_pred_lower
+        penalty = 2.0 / alpha
+
+        # Compute score for each sample
+        scores = np.where(
+            y_true < y_pred_lower,
+            interval_width + penalty * (y_pred_lower - y_true),
+            np.where(
+                y_true > y_pred_upper,
+                interval_width + penalty * (y_true - y_pred_upper),
+                interval_width
+            )
+        )
+
+        return float(np.mean(scores))
+
+
+def compute_uncertainty_metrics(
+    y_true: Union[np.ndarray, torch.Tensor],
+    y_pred_quantiles: Union[np.ndarray, torch.Tensor],
+    quantiles: List[float] = None
+) -> Dict[str, float]:
+    """
+    Compute all uncertainty metrics for quantile regression.
+
+    This is a convenience function for one-shot metric computation.
+
+    Args:
+        y_true: Ground truth values (in original scale), shape (n_samples,)
+        y_pred_quantiles: Predicted values for each quantile (in original scale),
+                          shape (n_samples, n_quantiles)
+        quantiles: List of quantile levels (default: [0.1, 0.5, 0.9])
+
+    Returns:
+        Dictionary with all uncertainty metrics
+
+    Example:
+        >>> y_pred = np.random.randn(100, 3)  # 100 samples, 3 quantiles
+        >>> y_true = np.random.randn(100)
+        >>> metrics = compute_uncertainty_metrics(y_true, y_pred)
+    """
+    if quantiles is None:
+        quantiles = [0.1, 0.5, 0.9]
+
+    if isinstance(y_pred_quantiles, torch.Tensor):
+        y_pred_quantiles = y_pred_quantiles.detach().cpu().numpy()
+    if isinstance(y_true, torch.Tensor):
+        y_true = y_true.detach().cpu().numpy()
+
+    # Use the UncertaintyMetrics class for computation
+    metrics_obj = UncertaintyMetrics(quantiles=quantiles)
+    return metrics_obj._compute_all_uncertainty_metrics(y_true, y_pred_quantiles, quantiles)
