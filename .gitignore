@@ -220,6 +220,9 @@ visualize/
 results/
 wandb/
 lightning*/
+log-eos/
+log-without/
+modelCheckpoints-eos-final/
 
 # Project related files to ignore
 *.txt

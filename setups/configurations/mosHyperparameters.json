@@ -1,1549 +1,3856 @@
 {
-  "overrides": {
+  "patchtst": {
+    "FR": {
+      "maize": {
+        "trial_number": 65,
+        "objective_value": 0.135889,
+        "hyperparameters": {
+          "use_gdd": true,
+          "use_heat_stress_days": false,
+          "use_rue": false,
+          "use_farquhar": true,
+          "use_sota_features": false,
+          "include_spatial_features": true,
+          "use_residual_trend": false,
+          "use_cwb_feature": false,
+          "drop_tavg": true,
+          "lag_years": 0,
+          "use_exponential_weighting": true,
+          "exponential_tau": 75,
+          "multi_year_summaries": false,
+          "multi_year_window": 1,
+          "multi_year_features": "weather",
+          "patchtst_d_model": 256,
+          "patchtst_num_attention_heads": 8,
+          "patchtst_ffn_dim": 128,
+          "patchtst_num_layers": 3,
+          "patchtst_dropout": 0.02666092214861568,
+          "batch_size": 16,
+          "lr": 8.394037524205376e-05,
+          "weight_decay": 1.7432027926570382e-06
+        }
+      },
+      "wheat": {
+        "trial_number": 17,
+        "objective_value": 0.096642,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": false,
+          "use_rue": true,
+          "use_farquhar": true,
+          "use_sota_features": false,
+          "include_spatial_features": true,
+          "use_residual_trend": true,
+          "use_cwb_feature": true,
+          "drop_tavg": true,
+          "lag_years": 3,
+          "use_exponential_weighting": false,
+          "exponential_tau": 100,
+          "multi_year_summaries": true,
+          "multi_year_window": 3,
+          "multi_year_features": "all",
+          "patchtst_d_model": 64,
+          "patchtst_num_attention_heads": 16,
+          "patchtst_ffn_dim": 512,
+          "patchtst_num_layers": 3,
+          "patchtst_dropout": 0.349531800292643,
+          "batch_size": 64,
+          "lr": 0.00011522911024422815,
+          "weight_decay": 5.127418671869421e-06,
+          "use_recursive_lags": true
+        }
+      }
+    },
     "US": {
-      "patchtst": {
-        "maize": {
-          "patchtst_d_model": 128,
-          "patchtst_num_attention_heads": 8,
-          "patchtst_ffn_dim": 1024,
-          "patchtst_num_layers": 6,
-          "patchtst_dropout": 0.05025101959649188,
-          "batch_size": 64,
-          "lr": 0.0003738723738733459,
-          "weight_decay": 1.7142568644128065e-05,
-          "seed": 500
-        },
-        "wheat": {
+      "maize": {
+        "trial_number": 22,
+        "objective_value": 0.136498,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": true,
+          "use_rue": true,
+          "use_farquhar": false,
+          "use_sota_features": true,
+          "include_spatial_features": false,
+          "use_residual_trend": false,
+          "use_cwb_feature": true,
+          "drop_tavg": false,
+          "lag_years": 2,
+          "use_exponential_weighting": false,
+          "exponential_tau": 75,
+          "multi_year_summaries": false,
+          "multi_year_window": 1,
+          "multi_year_features": "phenology",
           "patchtst_d_model": 32,
-          "patchtst_num_attention_heads": 16,
-          "patchtst_ffn_dim": 256,
-          "patchtst_num_layers": 6,
-          "patchtst_dropout": 0.1246131177741307,
-          "batch_size": 64,
-          "lr": 0.0003295905542203191,
-          "weight_decay": 4.2845310863271814e-06,
-          "seed": 5555
-        }
-      },
-      "xlinear": {
-        "maize": {
-          "xlinear_hidden_size": 32,
-          "xlinear_temporal_ff": 512,
-          "xlinear_channel_ff": 16,
-          "xlinear_dropout": 0.382263491727002,
-          "batch_size": 128,
-          "lr": 0.00010056630418510286,
-          "weight_decay": 1.7126230177404794e-05,
-          "seed": 42
-        },
-        "wheat": {
-          "xlinear_hidden_size": 128,
-          "xlinear_temporal_ff": 64,
-          "xlinear_channel_ff": 64,
-          "xlinear_dropout": 0.4781220944497726,
-          "batch_size": 64,
-          "lr": 0.00019743403249583623,
-          "weight_decay": 6.778437995597862e-06,
-          "seed": 42
-        }
-      }
-    },
-    "BR": {
-      "patchtst": {
-        "maize": {
-          "patchtst_d_model": 64,
-          "patchtst_num_attention_heads": 16,
-          "patchtst_ffn_dim": 256,
-          "patchtst_num_layers": 8,
-          "patchtst_dropout": 0.29561342202845337,
-          "batch_size": 32,
-          "lr": 5.160194594784239e-05,
-          "weight_decay": 1.0373942615189604e-06,
-          "seed": 500
-        },
-        "wheat": {
-          "patchtst_d_model": 256,
-          "patchtst_num_attention_heads": 8,
-          "patchtst_ffn_dim": 128,
-          "patchtst_num_layers": 8,
-          "patchtst_dropout": 0.011722819071068369,
-          "batch_size": 64,
-          "lr": 0.00010236053440259602,
-          "weight_decay": 2.0057092392802598e-06,
-          "seed": 1111
-        }
-      },
-      "xlinear": {
-        "maize": {
-          "xlinear_hidden_size": 64,
-          "xlinear_temporal_ff": 128,
-          "xlinear_channel_ff": 64,
-          "xlinear_dropout": 0.36781822218893134,
-          "batch_size": 16,
-          "lr": 5.523511423613136e-05,
-          "weight_decay": 1.935158428053053e-05,
-          "seed": 42
-        },
-        "wheat": {
-          "xlinear_hidden_size": 256,
-          "xlinear_temporal_ff": 64,
-          "xlinear_channel_ff": 8,
-          "xlinear_dropout": 0.21715132326918682,
-          "batch_size": 64,
-          "lr": 5.060947693561777e-05,
-          "weight_decay": 3.345594570833457e-06,
-          "seed": 500
-        }
-      }
-    },
-    "AO": {
-      "patchtst": {
-        "maize": {
-          "patchtst_d_model": 32,
-          "patchtst_num_attention_heads": 8,
-          "patchtst_ffn_dim": 128,
-          "patchtst_num_layers": 6,
-          "patchtst_dropout": 0.227474556281544,
-          "batch_size": 128,
-          "lr": 5.0261813991348004e-05,
-          "weight_decay": 3.124808244764575e-06,
-          "seed": 100
-        }
-      },
-      "xlinear": {
-        "maize": {
-          "xlinear_hidden_size": 128,
-          "xlinear_temporal_ff": 128,
-          "xlinear_channel_ff": 16,
-          "xlinear_dropout": 0.3227896413246944,
-          "batch_size": 16,
-          "lr": 9.618013047231237e-05,
-          "weight_decay": 8.918267963015141e-06,
-          "seed": 1111
-        }
-      }
-    },
-    "AR": {
-      "patchtst": {
-        "maize": {
-          "patchtst_d_model": 128,
           "patchtst_num_attention_heads": 2,
+          "patchtst_ffn_dim": 128,
+          "patchtst_num_layers": 4,
+          "patchtst_dropout": 0.19979604166655174,
+          "batch_size": 16,
+          "lr": 0.00027226839653073884,
+          "weight_decay": 1.043159538251598e-06,
+          "use_recursive_lags": true
+        }
+      },
+      "wheat": {
+        "trial_number": 6,
+        "objective_value": 0.158522,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": false,
+          "use_rue": false,
+          "use_farquhar": false,
+          "use_sota_features": false,
+          "include_spatial_features": true,
+          "use_residual_trend": false,
+          "use_cwb_feature": true,
+          "drop_tavg": true,
+          "lag_years": 2,
+          "use_exponential_weighting": true,
+          "exponential_tau": 10,
+          "multi_year_summaries": true,
+          "multi_year_window": 1,
+          "multi_year_features": "remote_sensing",
+          "patchtst_d_model": 32,
+          "patchtst_num_attention_heads": 8,
           "patchtst_ffn_dim": 128,
           "patchtst_num_layers": 3,
-          "patchtst_dropout": 0.051580053056231576,
-          "batch_size": 64,
-          "lr": 0.00015037555607637484,
-          "weight_decay": 1.3319343479337694e-06,
-          "seed": 1111
-        },
-        "wheat": {
-          "patchtst_d_model": 64,
-          "patchtst_num_attention_heads": 4,
-          "patchtst_ffn_dim": 256,
-          "patchtst_num_layers": 4,
-          "patchtst_dropout": 0.1584690759678236,
+          "patchtst_dropout": 0.41389436102041577,
           "batch_size": 32,
-          "lr": 0.00016227710993992653,
-          "weight_decay": 1.0761771772345041e-05,
-          "seed": 100
-        }
-      },
-      "xlinear": {
-        "maize": {
-          "xlinear_hidden_size": 128,
-          "xlinear_temporal_ff": 512,
-          "xlinear_channel_ff": 8,
-          "xlinear_dropout": 0.4972756982668586,
-          "batch_size": 32,
-          "lr": 0.00018071477221174995,
-          "weight_decay": 5.0058261021408786e-05,
-          "seed": 500
-        },
-        "wheat": {
-          "xlinear_hidden_size": 256,
-          "xlinear_temporal_ff": 512,
-          "xlinear_channel_ff": 8,
-          "xlinear_dropout": 0.4445435436460854,
-          "batch_size": 64,
-          "lr": 0.00018905717462965036,
-          "weight_decay": 2.497238533094195e-06,
-          "seed": 500
-        }
-      }
-    },
-    "AT": {
-      "patchtst": {
-        "maize": {
-          "patchtst_d_model": 128,
-          "patchtst_num_attention_heads": 2,
-          "patchtst_ffn_dim": 1024,
-          "patchtst_num_layers": 8,
-          "patchtst_dropout": 0.2603194391000275,
-          "batch_size": 32,
-          "lr": 0.0003606297010918837,
-          "weight_decay": 2.7260894618950273e-05,
-          "seed": 42
-        },
-        "wheat": {
-          "patchtst_d_model": 128,
-          "patchtst_num_attention_heads": 4,
-          "patchtst_ffn_dim": 512,
-          "patchtst_num_layers": 4,
-          "patchtst_dropout": 0.27612374767695164,
-          "batch_size": 128,
-          "lr": 0.0002758292724289474,
-          "weight_decay": 6.648166134033367e-05,
-          "seed": 100
-        }
-      },
-      "xlinear": {
-        "maize": {
-          "xlinear_hidden_size": 64,
-          "xlinear_temporal_ff": 128,
-          "xlinear_channel_ff": 16,
-          "xlinear_dropout": 0.11232564396436721,
-          "batch_size": 16,
-          "lr": 0.00036234582519228703,
-          "weight_decay": 9.443695075813573e-06,
-          "seed": 42
-        },
-        "wheat": {
-          "xlinear_hidden_size": 64,
-          "xlinear_temporal_ff": 64,
-          "xlinear_channel_ff": 16,
-          "xlinear_dropout": 0.19743273684982596,
-          "batch_size": 16,
-          "lr": 0.0001467319789362155,
-          "weight_decay": 1.3720957288443442e-05,
-          "seed": 100
-        }
-      }
-    },
-    "AU": {
-      "patchtst": {
-        "wheat": {
-          "patchtst_d_model": 256,
-          "patchtst_num_attention_heads": 4,
-          "patchtst_ffn_dim": 128,
-          "patchtst_num_layers": 2,
-          "patchtst_dropout": 0.020041116048235885,
-          "batch_size": 128,
-          "lr": 0.0001958560992601652,
-          "weight_decay": 5.253897471262306e-06,
-          "seed": 500
-        }
-      },
-      "xlinear": {
-        "wheat": {
-          "xlinear_hidden_size": 64,
-          "xlinear_temporal_ff": 64,
-          "xlinear_channel_ff": 64,
-          "xlinear_dropout": 0.22659502872548254,
-          "batch_size": 128,
-          "lr": 0.00018575461748148226,
-          "weight_decay": 2.083938907581509e-06,
-          "seed": 42
-        }
-      }
-    },
-    "BE": {
-      "patchtst": {
-        "maize": {
-          "patchtst_d_model": 32,
-          "patchtst_num_attention_heads": 16,
-          "patchtst_ffn_dim": 256,
-          "patchtst_num_layers": 3,
-          "patchtst_dropout": 0.34137605797500276,
-          "batch_size": 64,
-          "lr": 5.903749987759378e-05,
-          "weight_decay": 7.848571780685202e-06,
-          "seed": 42
-        },
-        "wheat": {
-          "patchtst_d_model": 64,
-          "patchtst_num_attention_heads": 2,
-          "patchtst_ffn_dim": 256,
-          "patchtst_num_layers": 4,
-          "patchtst_dropout": 0.2015304316582548,
-          "batch_size": 16,
-          "lr": 0.000453156595076273,
-          "weight_decay": 9.863981046505741e-06,
-          "seed": 1111
-        }
-      },
-      "xlinear": {
-        "maize": {
-          "xlinear_hidden_size": 256,
-          "xlinear_temporal_ff": 64,
-          "xlinear_channel_ff": 16,
-          "xlinear_dropout": 0.26502636877790614,
-          "batch_size": 16,
-          "lr": 0.00011001058819457277,
-          "weight_decay": 8.055339921757431e-05,
-          "seed": 42
-        },
-        "wheat": {
-          "xlinear_hidden_size": 32,
-          "xlinear_temporal_ff": 128,
-          "xlinear_channel_ff": 8,
-          "xlinear_dropout": 0.17908769059356738,
-          "batch_size": 32,
-          "lr": 0.00021896891558767886,
-          "weight_decay": 1.603035046420712e-05,
-          "seed": 500
-        }
-      }
-    },
-    "BF": {
-      "patchtst": {
-        "maize": {
-          "patchtst_d_model": 128,
-          "patchtst_num_attention_heads": 4,
-          "patchtst_ffn_dim": 1024,
-          "patchtst_num_layers": 6,
-          "patchtst_dropout": 0.1087215037059382,
-          "batch_size": 16,
-          "lr": 7.011462481998579e-05,
-          "weight_decay": 4.3924692943816575e-06,
-          "seed": 100
-        }
-      },
-      "xlinear": {
-        "maize": {
-          "xlinear_hidden_size": 64,
-          "xlinear_temporal_ff": 512,
-          "xlinear_channel_ff": 16,
-          "xlinear_dropout": 0.1422319561404597,
-          "batch_size": 16,
-          "lr": 6.5398304577749e-05,
-          "weight_decay": 2.2773740186821868e-06,
-          "seed": 5555
-        }
-      }
-    },
-    "BG": {
-      "patchtst": {
-        "maize": {
-          "patchtst_d_model": 256,
-          "patchtst_num_attention_heads": 4,
-          "patchtst_ffn_dim": 1024,
-          "patchtst_num_layers": 8,
-          "patchtst_dropout": 0.34447140238223406,
-          "batch_size": 32,
-          "lr": 0.00011772442622811614,
-          "weight_decay": 9.515551904130815e-06,
-          "seed": 1111
-        },
-        "wheat": {
-          "patchtst_d_model": 32,
-          "patchtst_num_attention_heads": 4,
-          "patchtst_ffn_dim": 128,
-          "patchtst_num_layers": 8,
-          "patchtst_dropout": 0.4643707997091312,
-          "batch_size": 128,
-          "lr": 0.00011973228075292733,
-          "weight_decay": 2.5866090393141624e-05,
-          "seed": 100
-        }
-      },
-      "xlinear": {
-        "maize": {
-          "xlinear_hidden_size": 64,
-          "xlinear_temporal_ff": 128,
-          "xlinear_channel_ff": 64,
-          "xlinear_dropout": 0.10201471252077354,
-          "batch_size": 16,
-          "lr": 9.369085550719489e-05,
-          "weight_decay": 1.4174949990034762e-06,
-          "seed": 500
-        },
-        "wheat": {
-          "xlinear_hidden_size": 64,
-          "xlinear_temporal_ff": 128,
-          "xlinear_channel_ff": 16,
-          "xlinear_dropout": 0.27285072766931473,
-          "batch_size": 16,
-          "lr": 0.00011119092923883089,
-          "weight_decay": 3.191178695982893e-05,
-          "seed": 5555
-        }
-      }
-    },
-    "CN": {
-      "patchtst": {
-        "maize": {
-          "patchtst_d_model": 32,
-          "patchtst_num_attention_heads": 4,
-          "patchtst_ffn_dim": 512,
-          "patchtst_num_layers": 2,
-          "patchtst_dropout": 0.2248529602293411,
-          "batch_size": 16,
-          "lr": 5.691538292314585e-05,
-          "weight_decay": 1.0035170946183705e-05,
-          "seed": 5555
-        },
-        "wheat": {
-          "patchtst_d_model": 32,
-          "patchtst_num_attention_heads": 8,
-          "patchtst_ffn_dim": 128,
-          "patchtst_num_layers": 6,
-          "patchtst_dropout": 0.3054857556463625,
-          "batch_size": 16,
-          "lr": 0.00014141099134726726,
-          "weight_decay": 8.964337859224162e-05,
-          "seed": 42
-        }
-      },
-      "xlinear": {
-        "maize": {
-          "xlinear_hidden_size": 32,
-          "xlinear_temporal_ff": 64,
-          "xlinear_channel_ff": 64,
-          "xlinear_dropout": 0.11882524151617085,
-          "batch_size": 64,
-          "lr": 6.756349506432695e-05,
-          "weight_decay": 5.414258031660561e-05,
-          "seed": 500
-        },
-        "wheat": {
-          "xlinear_hidden_size": 64,
-          "xlinear_temporal_ff": 128,
-          "xlinear_channel_ff": 16,
-          "xlinear_dropout": 0.2921570619540782,
-          "batch_size": 16,
-          "lr": 0.00010464095823940007,
-          "weight_decay": 3.472871664250205e-05,
-          "seed": 5555
+          "lr": 7.077946362929469e-05,
+          "weight_decay": 4.677893514688762e-06,
+          "use_recursive_lags": true
         }
       }
     },
     "CZ": {
-      "patchtst": {
-        "maize": {
-          "patchtst_d_model": 32,
-          "patchtst_num_attention_heads": 4,
-          "patchtst_ffn_dim": 256,
-          "patchtst_num_layers": 3,
-          "patchtst_dropout": 0.27521481586226665,
-          "batch_size": 128,
-          "lr": 7.77000965370437e-05,
-          "weight_decay": 1.2723454822951913e-06,
-          "seed": 5555
-        },
-        "wheat": {
-          "patchtst_d_model": 256,
-          "patchtst_num_attention_heads": 8,
-          "patchtst_ffn_dim": 256,
-          "patchtst_num_layers": 2,
-          "patchtst_dropout": 0.47593086631430614,
-          "batch_size": 64,
-          "lr": 0.00033595646135878483,
-          "weight_decay": 2.385100975591479e-06,
-          "seed": 100
-        }
-      },
-      "xlinear": {
-        "maize": {
-          "xlinear_hidden_size": 32,
-          "xlinear_temporal_ff": 128,
-          "xlinear_channel_ff": 16,
-          "xlinear_dropout": 0.06265571747242621,
-          "batch_size": 16,
-          "lr": 0.00017490282690945313,
-          "weight_decay": 3.4488812077477677e-06,
-          "seed": 500
-        },
-        "wheat": {
-          "xlinear_hidden_size": 128,
-          "xlinear_temporal_ff": 256,
-          "xlinear_channel_ff": 32,
-          "xlinear_dropout": 0.05960156631830271,
-          "batch_size": 128,
-          "lr": 0.00019456865476009223,
-          "weight_decay": 3.060232510245573e-06,
-          "seed": 5555
-        }
-      }
-    },
-    "DE": {
-      "patchtst": {
-        "maize": {
+      "maize": {
+        "trial_number": 92,
+        "objective_value": 0.128481,
+        "hyperparameters": {
+          "use_gdd": true,
+          "use_heat_stress_days": true,
+          "use_rue": true,
+          "use_farquhar": false,
+          "use_sota_features": true,
+          "include_spatial_features": true,
+          "use_residual_trend": false,
+          "use_cwb_feature": true,
+          "drop_tavg": false,
+          "lag_years": 3,
+          "use_exponential_weighting": true,
+          "exponential_tau": 100,
+          "multi_year_summaries": false,
+          "multi_year_window": 3,
+          "multi_year_features": "weather",
           "patchtst_d_model": 128,
-          "patchtst_num_attention_heads": 8,
-          "patchtst_ffn_dim": 256,
-          "patchtst_num_layers": 4,
-          "patchtst_dropout": 0.21228171819353167,
-          "batch_size": 16,
-          "lr": 0.0003965550931538007,
-          "weight_decay": 2.7999041685290278e-05,
-          "seed": 1111
-        },
-        "wheat": {
-          "patchtst_d_model": 64,
           "patchtst_num_attention_heads": 2,
-          "patchtst_ffn_dim": 256,
-          "patchtst_num_layers": 2,
-          "patchtst_dropout": 0.21868870689675113,
-          "batch_size": 32,
-          "lr": 0.000290706753084877,
-          "weight_decay": 8.29645284053914e-05,
-          "seed": 5555
+          "patchtst_ffn_dim": 1024,
+          "patchtst_num_layers": 6,
+          "patchtst_dropout": 0.15283791263768126,
+          "batch_size": 16,
+          "lr": 0.000145143854368907,
+          "weight_decay": 5.5014368001169047e-05,
+          "use_recursive_lags": true
         }
       },
-      "xlinear": {
-        "maize": {
-          "xlinear_hidden_size": 128,
-          "xlinear_temporal_ff": 128,
-          "xlinear_channel_ff": 32,
-          "xlinear_dropout": 0.005267316265223504,
-          "batch_size": 128,
-          "lr": 7.028986609943198e-05,
-          "weight_decay": 8.989848214605839e-05,
-          "seed": 100
-        },
-        "wheat": {
-          "xlinear_hidden_size": 128,
-          "xlinear_temporal_ff": 128,
-          "xlinear_channel_ff": 8,
-          "xlinear_dropout": 0.3395303121471965,
-          "batch_size": 128,
-          "lr": 0.00012072614443596968,
-          "weight_decay": 3.891357242019361e-06,
-          "seed": 100
-        }
-      }
-    },
-    "DK": {
-      "patchtst": {
-        "maize": {
-          "patchtst_d_model": 32,
-          "patchtst_num_attention_heads": 2,
-          "patchtst_ffn_dim": 512,
-          "patchtst_num_layers": 4,
-          "patchtst_dropout": 0.44337922641632327,
-          "batch_size": 16,
-          "lr": 0.00020685447132771855,
-          "weight_decay": 1.2632333017451214e-05,
-          "seed": 500
-        },
-        "wheat": {
+      "wheat": {
+        "trial_number": 87,
+        "objective_value": 0.163496,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": true,
+          "use_rue": false,
+          "use_farquhar": true,
+          "use_sota_features": false,
+          "include_spatial_features": false,
+          "use_residual_trend": false,
+          "use_cwb_feature": true,
+          "drop_tavg": true,
+          "lag_years": 0,
+          "use_exponential_weighting": false,
+          "exponential_tau": 10,
+          "multi_year_summaries": false,
+          "multi_year_window": 3,
+          "multi_year_features": "all",
           "patchtst_d_model": 64,
           "patchtst_num_attention_heads": 4,
-          "patchtst_ffn_dim": 256,
-          "patchtst_num_layers": 6,
-          "patchtst_dropout": 0.3202946512239715,
-          "batch_size": 16,
-          "lr": 0.00022114271535973905,
-          "weight_decay": 2.4189644313927093e-06,
-          "seed": 1111
-        }
-      },
-      "xlinear": {
-        "maize": {
-          "xlinear_hidden_size": 32,
-          "xlinear_temporal_ff": 512,
-          "xlinear_channel_ff": 64,
-          "xlinear_dropout": 0.143865790702714,
-          "batch_size": 16,
-          "lr": 5.650693424766128e-05,
-          "weight_decay": 5.545554955592102e-05,
-          "seed": 42
-        },
-        "wheat": {
-          "xlinear_hidden_size": 64,
-          "xlinear_temporal_ff": 64,
-          "xlinear_channel_ff": 16,
-          "xlinear_dropout": 0.10432283284515415,
-          "batch_size": 16,
-          "lr": 7.871676560126829e-05,
-          "weight_decay": 3.2320371975768386e-05,
-          "seed": 5555
-        }
-      }
-    },
-    "EE": {
-      "patchtst": {
-        "wheat": {
-          "patchtst_d_model": 64,
-          "patchtst_num_attention_heads": 16,
           "patchtst_ffn_dim": 1024,
           "patchtst_num_layers": 8,
-          "patchtst_dropout": 0.1135317391050013,
+          "patchtst_dropout": 0.34351146015634043,
           "batch_size": 16,
-          "lr": 8.993266665211501e-05,
-          "weight_decay": 3.1773093540498286e-05,
-          "seed": 100
-        }
-      },
-      "xlinear": {
-        "wheat": {
-          "xlinear_hidden_size": 64,
-          "xlinear_temporal_ff": 512,
-          "xlinear_channel_ff": 16,
-          "xlinear_dropout": 0.14244624958532495,
-          "batch_size": 16,
-          "lr": 7.703365519954762e-05,
-          "weight_decay": 5.682982498036887e-05,
-          "seed": 42
+          "lr": 0.00011709548632144486,
+          "weight_decay": 2.2065852466596102e-05
         }
       }
     },
-    "EL": {
-      "patchtst": {
-        "maize": {
-          "patchtst_d_model": 32,
-          "patchtst_num_attention_heads": 4,
-          "patchtst_ffn_dim": 128,
-          "patchtst_num_layers": 8,
-          "patchtst_dropout": 0.29816042361213924,
-          "batch_size": 64,
-          "lr": 8.404030625930725e-05,
-          "weight_decay": 6.586370054325024e-06,
-          "seed": 500
-        },
-        "wheat": {
-          "patchtst_d_model": 64,
-          "patchtst_num_attention_heads": 8,
-          "patchtst_ffn_dim": 256,
-          "patchtst_num_layers": 6,
-          "patchtst_dropout": 0.4021298591519716,
-          "batch_size": 64,
-          "lr": 8.312105390427977e-05,
-          "weight_decay": 4.349877376983007e-05,
-          "seed": 1111
-        }
-      },
-      "xlinear": {
-        "maize": {
-          "xlinear_hidden_size": 32,
-          "xlinear_temporal_ff": 256,
-          "xlinear_channel_ff": 16,
-          "xlinear_dropout": 0.4317182851087196,
-          "batch_size": 64,
-          "lr": 0.00014839347939703246,
-          "weight_decay": 5.306033973994085e-05,
-          "seed": 42
-        },
-        "wheat": {
-          "xlinear_hidden_size": 64,
-          "xlinear_temporal_ff": 512,
-          "xlinear_channel_ff": 16,
-          "xlinear_dropout": 0.17783663830989044,
-          "batch_size": 32,
-          "lr": 0.00016705503734346715,
-          "weight_decay": 9.343828849949001e-05,
-          "seed": 42
-        }
-      }
-    },
-    "ES": {
-      "patchtst": {
-        "maize": {
-          "patchtst_d_model": 32,
-          "patchtst_num_attention_heads": 2,
-          "patchtst_ffn_dim": 128,
-          "patchtst_num_layers": 4,
-          "patchtst_dropout": 0.0006752894195999615,
-          "batch_size": 32,
-          "lr": 0.00014940258816848189,
-          "weight_decay": 4.308025213747214e-06,
-          "seed": 500
-        },
-        "wheat": {
-          "patchtst_d_model": 32,
-          "patchtst_num_attention_heads": 16,
-          "patchtst_ffn_dim": 256,
-          "patchtst_num_layers": 4,
-          "patchtst_dropout": 0.32239089333151016,
-          "batch_size": 16,
-          "lr": 0.0003676359740368888,
-          "weight_decay": 1.6222460315238383e-06,
-          "seed": 42
-        }
-      },
-      "xlinear": {
-        "maize": {
-          "xlinear_hidden_size": 32,
-          "xlinear_temporal_ff": 64,
-          "xlinear_channel_ff": 64,
-          "xlinear_dropout": 0.2815856112935898,
-          "batch_size": 32,
-          "lr": 0.0002621983651139459,
-          "weight_decay": 1.1009105721056454e-05,
-          "seed": 100
-        },
-        "wheat": {
-          "xlinear_hidden_size": 64,
-          "xlinear_temporal_ff": 128,
-          "xlinear_channel_ff": 16,
-          "xlinear_dropout": 0.1,
-          "batch_size": 16,
-          "lr": 0.0001,
-          "weight_decay": 1e-05,
-          "seed": 42
-        }
-      }
-    },
-    "ET": {
-      "patchtst": {
-        "maize": {
-          "patchtst_d_model": 64,
-          "patchtst_num_attention_heads": 4,
-          "patchtst_ffn_dim": 256,
-          "patchtst_num_layers": 2,
-          "patchtst_dropout": 0.060036031983394,
-          "batch_size": 16,
-          "lr": 0.00012302074776902533,
-          "weight_decay": 2.33500319458416e-06,
-          "seed": 100
-        }
-      },
-      "xlinear": {
-        "maize": {
-          "xlinear_hidden_size": 64,
-          "xlinear_temporal_ff": 128,
-          "xlinear_channel_ff": 64,
-          "xlinear_dropout": 0.0498207595926983,
-          "batch_size": 32,
-          "lr": 0.00011121614104383804,
-          "weight_decay": 1.3014751933760643e-05,
-          "seed": 5555
-        }
-      }
-    },
-    "FI": {
-      "patchtst": {
-        "wheat": {
-          "patchtst_d_model": 32,
-          "patchtst_num_attention_heads": 16,
-          "patchtst_ffn_dim": 512,
-          "patchtst_num_layers": 8,
-          "patchtst_dropout": 0.2456758553644195,
-          "batch_size": 32,
-          "lr": 0.00043537290306251025,
-          "weight_decay": 5.259107836647715e-06,
-          "seed": 1111
-        }
-      },
-      "xlinear": {
-        "wheat": {
-          "xlinear_hidden_size": 64,
-          "xlinear_temporal_ff": 256,
-          "xlinear_channel_ff": 8,
-          "xlinear_dropout": 0.12806586385505986,
-          "batch_size": 32,
-          "lr": 7.518416817568662e-05,
-          "weight_decay": 2.0358374381056603e-06,
-          "seed": 42
-        }
-      }
-    },
-    "FR": {
-      "patchtst": {
-        "maize": {
-          "patchtst_d_model": 32,
-          "patchtst_num_attention_heads": 8,
-          "patchtst_ffn_dim": 256,
-          "patchtst_num_layers": 6,
-          "patchtst_dropout": 0.167685500995655,
-          "batch_size": 64,
-          "lr": 0.0001288344080087962,
-          "weight_decay": 2.19166833834644e-05,
-          "seed": 100
-        },
-        "wheat": {
-          "patchtst_d_model": 32,
-          "patchtst_num_attention_heads": 2,
-          "patchtst_ffn_dim": 512,
-          "patchtst_num_layers": 2,
-          "patchtst_dropout": 0.1965350216832714,
-          "batch_size": 32,
-          "lr": 6.728742569081423e-05,
-          "weight_decay": 1.7014307379205435e-06,
-          "seed": 500
-        }
-      },
-      "xlinear": {
-        "maize": {
-          "xlinear_hidden_size": 256,
-          "xlinear_temporal_ff": 256,
-          "xlinear_channel_ff": 32,
-          "xlinear_dropout": 0.49946332235721824,
-          "batch_size": 64,
-          "lr": 7.66096734919695e-05,
-          "weight_decay": 2.54062264925967e-06,
-          "seed": 500
-        },
-        "wheat": {
-          "xlinear_hidden_size": 32,
-          "xlinear_temporal_ff": 512,
-          "xlinear_channel_ff": 32,
-          "xlinear_dropout": 0.27056638130788485,
-          "batch_size": 64,
-          "lr": 6.727917819449794e-05,
-          "weight_decay": 8.462595493640165e-05,
-          "seed": 100
-        }
-      }
-    },
-    "HR": {
-      "patchtst": {
-        "maize": {
-          "patchtst_d_model": 32,
-          "patchtst_num_attention_heads": 2,
-          "patchtst_ffn_dim": 256,
-          "patchtst_num_layers": 2,
-          "patchtst_dropout": 0.39770337230841085,
-          "batch_size": 64,
-          "lr": 5.0177400818208896e-05,
-          "weight_decay": 5.411521364553948e-05,
-          "seed": 100
-        },
-        "wheat": {
-          "patchtst_d_model": 32,
-          "patchtst_num_attention_heads": 16,
-          "patchtst_ffn_dim": 512,
-          "patchtst_num_layers": 2,
-          "patchtst_dropout": 0.49454835777657585,
-          "batch_size": 128,
-          "lr": 7.882706398321952e-05,
-          "weight_decay": 1.8130652504535027e-05,
-          "seed": 5555
-        }
-      },
-      "xlinear": {
-        "maize": {
-          "xlinear_hidden_size": 128,
-          "xlinear_temporal_ff": 512,
-          "xlinear_channel_ff": 32,
-          "xlinear_dropout": 0.3505764701044891,
-          "batch_size": 64,
-          "lr": 0.00016905534149895155,
-          "weight_decay": 1.2070944752753408e-05,
-          "seed": 100
-        },
-        "wheat": {
-          "xlinear_hidden_size": 64,
-          "xlinear_temporal_ff": 128,
-          "xlinear_channel_ff": 16,
-          "xlinear_dropout": 0.1,
-          "batch_size": 16,
-          "lr": 0.0001,
-          "weight_decay": 1e-05,
-          "seed": 42
-        }
-      }
-    },
-    "HU": {
-      "patchtst": {
-        "maize": {
-          "patchtst_d_model": 64,
-          "patchtst_num_attention_heads": 4,
-          "patchtst_ffn_dim": 256,
-          "patchtst_num_layers": 3,
-          "patchtst_dropout": 0.1,
-          "batch_size": 16,
-          "lr": 0.0001,
-          "weight_decay": 1e-05,
-          "seed": 42
-        },
-        "wheat": {
-          "patchtst_d_model": 256,
-          "patchtst_num_attention_heads": 4,
-          "patchtst_ffn_dim": 256,
-          "patchtst_num_layers": 2,
-          "patchtst_dropout": 0.12124599504210815,
-          "batch_size": 64,
-          "lr": 0.00013438933498133187,
-          "weight_decay": 2.059638238165845e-05,
-          "seed": 1111
-        }
-      },
-      "xlinear": {
-        "maize": {
-          "xlinear_hidden_size": 32,
-          "xlinear_temporal_ff": 64,
-          "xlinear_channel_ff": 64,
-          "xlinear_dropout": 0.2902066007263496,
-          "batch_size": 32,
-          "lr": 0.0004949350710158792,
-          "weight_decay": 2.0674212786131364e-06,
-          "seed": 1111
-        },
-        "wheat": {
-          "xlinear_hidden_size": 128,
-          "xlinear_temporal_ff": 128,
-          "xlinear_channel_ff": 32,
-          "xlinear_dropout": 0.0021780952423898804,
-          "batch_size": 16,
-          "lr": 0.00018800592974061914,
-          "weight_decay": 1.0025189857127243e-06,
-          "seed": 42
-        }
-      }
-    },
-    "IN": {
-      "patchtst": {
-        "maize": {
-          "patchtst_d_model": 32,
-          "patchtst_num_attention_heads": 16,
-          "patchtst_ffn_dim": 256,
-          "patchtst_num_layers": 2,
-          "patchtst_dropout": 0.45035190781282197,
-          "batch_size": 16,
-          "lr": 0.0001449167404484441,
-          "weight_decay": 2.7062668076995366e-05,
-          "seed": 100
-        },
-        "wheat": {
-          "patchtst_d_model": 32,
-          "patchtst_num_attention_heads": 4,
-          "patchtst_ffn_dim": 256,
-          "patchtst_num_layers": 4,
-          "patchtst_dropout": 0.2992126558300025,
-          "batch_size": 16,
-          "lr": 0.00010386698811005385,
-          "weight_decay": 2.29612064555125e-06,
-          "seed": 42
-        }
-      },
-      "xlinear": {
-        "maize": {
-          "xlinear_hidden_size": 64,
-          "xlinear_temporal_ff": 128,
-          "xlinear_channel_ff": 16,
-          "xlinear_dropout": 0.35304058173631914,
-          "batch_size": 16,
-          "lr": 8.735362378630607e-05,
-          "weight_decay": 9.93059934818578e-06,
-          "seed": 42
-        },
-        "wheat": {
-          "xlinear_hidden_size": 256,
-          "xlinear_temporal_ff": 64,
-          "xlinear_channel_ff": 32,
-          "xlinear_dropout": 0.3704387091550601,
-          "batch_size": 32,
-          "lr": 8.467444225158295e-05,
-          "weight_decay": 1.7190818149494834e-05,
-          "seed": 1111
-        }
-      }
-    },
-    "IT": {
-      "patchtst": {
-        "maize": {
-          "patchtst_d_model": 64,
-          "patchtst_num_attention_heads": 2,
-          "patchtst_ffn_dim": 256,
-          "patchtst_num_layers": 3,
-          "patchtst_dropout": 0.16742245114825224,
-          "batch_size": 16,
-          "lr": 6.533992726185169e-05,
-          "weight_decay": 5.9049223056766225e-06,
-          "seed": 500
-        },
-        "wheat": {
-          "patchtst_d_model": 32,
-          "patchtst_num_attention_heads": 4,
-          "patchtst_ffn_dim": 256,
-          "patchtst_num_layers": 6,
-          "patchtst_dropout": 0.20554193803230736,
-          "batch_size": 16,
-          "lr": 0.0001443721830244463,
-          "weight_decay": 5.303127456938092e-05,
-          "seed": 1111
-        }
-      },
-      "xlinear": {
-        "maize": {
-          "xlinear_hidden_size": 32,
-          "xlinear_temporal_ff": 512,
-          "xlinear_channel_ff": 32,
-          "xlinear_dropout": 0.46482130882581435,
-          "batch_size": 64,
-          "lr": 0.00024429996788117117,
-          "weight_decay": 1.1902909157681562e-06,
-          "seed": 500
-        },
-        "wheat": {
-          "xlinear_hidden_size": 32,
-          "xlinear_temporal_ff": 256,
-          "xlinear_channel_ff": 32,
-          "xlinear_dropout": 0.31910051267900824,
-          "batch_size": 128,
-          "lr": 0.00019122825867705785,
-          "weight_decay": 2.2069787984993094e-05,
-          "seed": 500
-        }
-      }
-    },
-    "LS": {
-      "patchtst": {
-        "maize": {
-          "patchtst_d_model": 64,
-          "patchtst_num_attention_heads": 2,
-          "patchtst_ffn_dim": 256,
-          "patchtst_num_layers": 2,
-          "patchtst_dropout": 0.2022740825273266,
-          "batch_size": 64,
-          "lr": 0.000285046776372594,
-          "weight_decay": 1.0530238539836286e-05,
-          "seed": 1111
-        }
-      },
-      "xlinear": {
-        "maize": {
-          "xlinear_hidden_size": 128,
-          "xlinear_temporal_ff": 512,
-          "xlinear_channel_ff": 64,
-          "xlinear_dropout": 0.13995056676107348,
-          "batch_size": 64,
-          "lr": 0.0002311125873269007,
-          "weight_decay": 3.734520791385446e-05,
-          "seed": 5555
-        }
-      }
-    },
-    "LT": {
-      "patchtst": {
-        "maize": {
+    "AR": {
+      "maize": {
+        "trial_number": 97,
+        "objective_value": 0.182275,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": false,
+          "use_rue": false,
+          "use_farquhar": false,
+          "use_sota_features": true,
+          "include_spatial_features": false,
+          "use_residual_trend": false,
+          "use_cwb_feature": true,
+          "drop_tavg": false,
+          "lag_years": 2,
+          "use_exponential_weighting": false,
+          "exponential_tau": 10,
+          "multi_year_summaries": false,
+          "multi_year_window": 2,
+          "multi_year_features": "remote_sensing",
           "patchtst_d_model": 128,
-          "patchtst_num_attention_heads": 8,
-          "patchtst_ffn_dim": 512,
-          "patchtst_num_layers": 6,
-          "patchtst_dropout": 0.09922709258764946,
-          "batch_size": 64,
-          "lr": 8.562579604437967e-05,
-          "weight_decay": 2.3868933131725636e-06,
-          "seed": 42
-        },
-        "wheat": {
-          "patchtst_d_model": 128,
-          "patchtst_num_attention_heads": 4,
+          "patchtst_num_attention_heads": 16,
           "patchtst_ffn_dim": 128,
-          "patchtst_num_layers": 8,
-          "patchtst_dropout": 0.19392276079152804,
-          "batch_size": 16,
-          "lr": 0.00014026835428164843,
-          "weight_decay": 4.4510534245173077e-05,
-          "seed": 42
-        }
-      },
-      "xlinear": {
-        "maize": {
-          "xlinear_hidden_size": 128,
-          "xlinear_temporal_ff": 256,
-          "xlinear_channel_ff": 32,
-          "xlinear_dropout": 0.14630089648375497,
-          "batch_size": 32,
-          "lr": 5.529235963990078e-05,
-          "weight_decay": 1.3195585800651253e-05,
-          "seed": 5555
-        },
-        "wheat": {
-          "xlinear_hidden_size": 64,
-          "xlinear_temporal_ff": 512,
-          "xlinear_channel_ff": 16,
-          "xlinear_dropout": 0.06969328480998613,
-          "batch_size": 16,
-          "lr": 0.00015973225234742211,
-          "weight_decay": 9.580213536369442e-06,
-          "seed": 42
-        }
-      }
-    },
-    "LV": {
-      "patchtst": {
-        "wheat": {
-          "patchtst_d_model": 64,
-          "patchtst_num_attention_heads": 4,
-          "patchtst_ffn_dim": 1024,
-          "patchtst_num_layers": 3,
-          "patchtst_dropout": 0.337620676149746,
-          "batch_size": 16,
-          "lr": 9.77540572680001e-05,
-          "weight_decay": 1.9604911637616576e-05,
-          "seed": 1111
-        }
-      },
-      "xlinear": {
-        "wheat": {
-          "xlinear_hidden_size": 64,
-          "xlinear_temporal_ff": 64,
-          "xlinear_channel_ff": 16,
-          "xlinear_dropout": 0.3598536021924672,
-          "batch_size": 128,
-          "lr": 0.0003351324747396782,
-          "weight_decay": 2.713994692590126e-06,
-          "seed": 500
-        }
-      }
-    },
-    "ML": {
-      "patchtst": {
-        "maize": {
-          "patchtst_d_model": 32,
-          "patchtst_num_attention_heads": 2,
-          "patchtst_ffn_dim": 128,
-          "patchtst_num_layers": 3,
-          "patchtst_dropout": 0.21649056753236004,
-          "batch_size": 64,
-          "lr": 0.00043595176261567445,
-          "weight_decay": 2.2315284504007195e-05,
-          "seed": 42
-        }
-      },
-      "xlinear": {
-        "maize": {
-          "xlinear_hidden_size": 32,
-          "xlinear_temporal_ff": 64,
-          "xlinear_channel_ff": 16,
-          "xlinear_dropout": 0.39085686635051864,
-          "batch_size": 128,
-          "lr": 0.00010794677011168022,
-          "weight_decay": 3.388120868207291e-06,
-          "seed": 5555
-        }
-      }
-    },
-    "MZ": {
-      "patchtst": {
-        "maize": {
-          "patchtst_d_model": 32,
-          "patchtst_num_attention_heads": 8,
-          "patchtst_ffn_dim": 1024,
           "patchtst_num_layers": 4,
-          "patchtst_dropout": 0.1499289921889178,
-          "batch_size": 128,
-          "lr": 0.00010410963236089425,
-          "weight_decay": 1.780162709982496e-06,
-          "seed": 100
-        }
-      },
-      "xlinear": {
-        "maize": {
-          "xlinear_hidden_size": 256,
-          "xlinear_temporal_ff": 64,
-          "xlinear_channel_ff": 16,
-          "xlinear_dropout": 0.3738487415228902,
-          "batch_size": 32,
-          "lr": 0.00019519166293853355,
-          "weight_decay": 1.0950764758075909e-05,
-          "seed": 1111
-        }
-      }
-    },
-    "NE": {
-      "patchtst": {
-        "maize": {
-          "patchtst_d_model": 32,
-          "patchtst_num_attention_heads": 2,
-          "patchtst_ffn_dim": 1024,
-          "patchtst_num_layers": 2,
-          "patchtst_dropout": 0.397448477449694,
+          "patchtst_dropout": 0.3684528494579801,
           "batch_size": 64,
-          "lr": 0.0003411991744411201,
-          "weight_decay": 9.887273033472313e-06,
-          "seed": 100
+          "lr": 0.0002430947860210809,
+          "weight_decay": 7.047464292717978e-06,
+          "use_recursive_lags": true
         }
       },
-      "xlinear": {
-        "maize": {
-          "xlinear_hidden_size": 32,
-          "xlinear_temporal_ff": 64,
-          "xlinear_channel_ff": 8,
-          "xlinear_dropout": 0.10924786448271936,
+      "wheat": {
+        "trial_number": 21,
+        "objective_value": 0.172243,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": true,
+          "use_rue": true,
+          "use_farquhar": false,
+          "use_sota_features": false,
+          "include_spatial_features": true,
+          "use_residual_trend": false,
+          "use_cwb_feature": true,
+          "drop_tavg": true,
+          "lag_years": 2,
+          "use_exponential_weighting": true,
+          "exponential_tau": 25,
+          "multi_year_summaries": true,
+          "multi_year_window": 2,
+          "multi_year_features": "all",
+          "patchtst_d_model": 32,
+          "patchtst_num_attention_heads": 8,
+          "patchtst_ffn_dim": 128,
+          "patchtst_num_layers": 6,
+          "patchtst_dropout": 0.2978554958583113,
           "batch_size": 16,
-          "lr": 0.00011249673956237122,
-          "weight_decay": 3.729257845918755e-05,
-          "seed": 42
+          "lr": 0.00033991193481061957,
+          "weight_decay": 1.0993862326274823e-06,
+          "use_recursive_lags": true
         }
       }
     },
     "NL": {
-      "patchtst": {
-        "maize": {
-          "patchtst_d_model": 32,
-          "patchtst_num_attention_heads": 4,
+      "wheat": {
+        "trial_number": 46,
+        "objective_value": 0.051997,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": true,
+          "use_rue": false,
+          "use_farquhar": false,
+          "use_sota_features": false,
+          "include_spatial_features": true,
+          "use_residual_trend": true,
+          "use_cwb_feature": false,
+          "drop_tavg": true,
+          "lag_years": 2,
+          "use_exponential_weighting": true,
+          "exponential_tau": 75,
+          "multi_year_summaries": false,
+          "multi_year_window": 3,
+          "multi_year_features": "phenology",
+          "patchtst_d_model": 256,
+          "patchtst_num_attention_heads": 2,
           "patchtst_ffn_dim": 128,
-          "patchtst_num_layers": 4,
-          "patchtst_dropout": 0.10451591240859073,
-          "batch_size": 16,
-          "lr": 0.00043521635272784876,
-          "weight_decay": 1.5007663335521559e-05,
-          "seed": 100
-        },
-        "wheat": {
-          "patchtst_d_model": 32,
-          "patchtst_num_attention_heads": 4,
-          "patchtst_ffn_dim": 1024,
-          "patchtst_num_layers": 3,
-          "patchtst_dropout": 0.3939146639359304,
-          "batch_size": 128,
-          "lr": 5.029049948076456e-05,
-          "weight_decay": 5.654404148968631e-05,
-          "seed": 500
+          "patchtst_num_layers": 6,
+          "patchtst_dropout": 0.04570395285190734,
+          "batch_size": 64,
+          "lr": 0.0001121566094865061,
+          "weight_decay": 7.455999023586288e-06,
+          "use_recursive_lags": true
         }
       },
-      "xlinear": {
-        "maize": {
-          "xlinear_hidden_size": 32,
-          "xlinear_temporal_ff": 512,
-          "xlinear_channel_ff": 16,
-          "xlinear_dropout": 0.07130225135365276,
-          "batch_size": 128,
-          "lr": 6.247007378361746e-05,
-          "weight_decay": 1.3378572832570164e-05,
-          "seed": 1111
-        },
-        "wheat": {
-          "xlinear_hidden_size": 32,
-          "xlinear_temporal_ff": 512,
-          "xlinear_channel_ff": 64,
-          "xlinear_dropout": 0.2635002190732411,
-          "batch_size": 128,
-          "lr": 0.0003553181513323813,
-          "weight_decay": 7.461914795797462e-05,
-          "seed": 5555
-        }
-      }
-    },
-    "PL": {
-      "patchtst": {
-        "maize": {
+      "maize": {
+        "trial_number": 93,
+        "objective_value": 0.128914,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": true,
+          "use_rue": true,
+          "use_farquhar": true,
+          "use_sota_features": false,
+          "include_spatial_features": false,
+          "use_residual_trend": false,
+          "use_cwb_feature": false,
+          "drop_tavg": false,
+          "lag_years": 2,
+          "use_exponential_weighting": true,
+          "exponential_tau": 10,
+          "multi_year_summaries": true,
+          "multi_year_window": 1,
+          "multi_year_features": "remote_sensing",
           "patchtst_d_model": 128,
           "patchtst_num_attention_heads": 16,
           "patchtst_ffn_dim": 512,
-          "patchtst_num_layers": 6,
-          "patchtst_dropout": 0.40654178744378394,
-          "batch_size": 16,
-          "lr": 9.478814745129466e-05,
-          "weight_decay": 3.309853981657407e-05,
-          "seed": 500
-        },
-        "wheat": {
-          "patchtst_d_model": 128,
-          "patchtst_num_attention_heads": 2,
-          "patchtst_ffn_dim": 128,
-          "patchtst_num_layers": 2,
-          "patchtst_dropout": 0.0401966781136692,
-          "batch_size": 64,
-          "lr": 0.0001874517390909498,
-          "weight_decay": 1.1261768623022549e-05,
-          "seed": 5555
-        }
-      },
-      "xlinear": {
-        "maize": {
-          "xlinear_hidden_size": 64,
-          "xlinear_temporal_ff": 512,
-          "xlinear_channel_ff": 8,
-          "xlinear_dropout": 0.314503884866754,
-          "batch_size": 64,
-          "lr": 5.69334112083727e-05,
-          "weight_decay": 1.3584901604056569e-06,
-          "seed": 42
-        },
-        "wheat": {
-          "xlinear_hidden_size": 64,
-          "xlinear_temporal_ff": 256,
-          "xlinear_channel_ff": 16,
-          "xlinear_dropout": 0.22340711079697106,
-          "batch_size": 16,
-          "lr": 6.506512599803586e-05,
-          "weight_decay": 3.1335086182035753e-06,
-          "seed": 5555
-        }
-      }
-    },
-    "PT": {
-      "patchtst": {
-        "maize": {
-          "patchtst_d_model": 64,
-          "patchtst_num_attention_heads": 4,
-          "patchtst_ffn_dim": 512,
           "patchtst_num_layers": 3,
-          "patchtst_dropout": 0.11538932609256378,
+          "patchtst_dropout": 0.12812102343946324,
           "batch_size": 16,
-          "lr": 0.00018049408980222703,
-          "weight_decay": 1.0036092851669072e-05,
-          "seed": 42
-        },
-        "wheat": {
-          "patchtst_d_model": 32,
-          "patchtst_num_attention_heads": 2,
-          "patchtst_ffn_dim": 512,
-          "patchtst_num_layers": 4,
-          "patchtst_dropout": 0.24472987354025455,
-          "batch_size": 16,
-          "lr": 0.0003745510126472798,
-          "weight_decay": 1.1311660671940757e-06,
-          "seed": 42
-        }
-      },
-      "xlinear": {
-        "maize": {
-          "xlinear_hidden_size": 64,
-          "xlinear_temporal_ff": 64,
-          "xlinear_channel_ff": 32,
-          "xlinear_dropout": 0.22437293209688208,
-          "batch_size": 16,
-          "lr": 0.0001810049231923317,
-          "weight_decay": 1.075092886315941e-05,
-          "seed": 5555
-        },
-        "wheat": {
-          "xlinear_hidden_size": 32,
-          "xlinear_temporal_ff": 512,
-          "xlinear_channel_ff": 16,
-          "xlinear_dropout": 0.2102737526145469,
-          "batch_size": 128,
-          "lr": 0.00016196474264939232,
-          "weight_decay": 3.4986307169323174e-05,
-          "seed": 100
+          "lr": 0.0001277415531906808,
+          "weight_decay": 3.047677467619754e-05,
+          "use_recursive_lags": true
         }
       }
     },
     "RO": {
-      "patchtst": {
-        "maize": {
+      "maize": {
+        "trial_number": 41,
+        "objective_value": 0.18768,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": true,
+          "use_rue": true,
+          "use_farquhar": true,
+          "use_sota_features": false,
+          "include_spatial_features": false,
+          "use_residual_trend": false,
+          "use_cwb_feature": false,
+          "drop_tavg": true,
+          "lag_years": 1,
+          "use_exponential_weighting": true,
+          "exponential_tau": 50,
+          "multi_year_summaries": true,
+          "multi_year_window": 1,
+          "multi_year_features": "weather",
+          "patchtst_d_model": 256,
+          "patchtst_num_attention_heads": 8,
+          "patchtst_ffn_dim": 128,
+          "patchtst_num_layers": 3,
+          "patchtst_dropout": 0.1424858243066653,
+          "batch_size": 32,
+          "lr": 8.329914769161762e-05,
+          "weight_decay": 4.28798299269918e-06,
+          "use_recursive_lags": true
+        }
+      },
+      "wheat": {
+        "trial_number": 86,
+        "objective_value": 0.10854,
+        "hyperparameters": {
+          "use_gdd": true,
+          "use_heat_stress_days": true,
+          "use_rue": true,
+          "use_farquhar": false,
+          "use_sota_features": true,
+          "include_spatial_features": true,
+          "use_residual_trend": false,
+          "use_cwb_feature": true,
+          "drop_tavg": true,
+          "lag_years": 3,
+          "use_exponential_weighting": true,
+          "exponential_tau": 100,
+          "multi_year_summaries": false,
+          "multi_year_window": 2,
+          "multi_year_features": "remote_sensing",
+          "patchtst_d_model": 256,
+          "patchtst_num_attention_heads": 8,
+          "patchtst_ffn_dim": 512,
+          "patchtst_num_layers": 3,
+          "patchtst_dropout": 0.15773831884869804,
+          "batch_size": 64,
+          "lr": 7.998364738725281e-05,
+          "weight_decay": 5.083597667757287e-05,
+          "use_recursive_lags": true
+        }
+      }
+    },
+    "ES": {
+      "wheat": {
+        "trial_number": 51,
+        "objective_value": 0.318932,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": false,
+          "use_rue": false,
+          "use_farquhar": true,
+          "use_sota_features": false,
+          "include_spatial_features": true,
+          "use_residual_trend": true,
+          "use_cwb_feature": true,
+          "drop_tavg": false,
+          "lag_years": 3,
+          "use_exponential_weighting": false,
+          "exponential_tau": 75,
+          "multi_year_summaries": true,
+          "multi_year_window": 3,
+          "multi_year_features": "phenology",
+          "patchtst_d_model": 128,
+          "patchtst_num_attention_heads": 4,
+          "patchtst_ffn_dim": 512,
+          "patchtst_num_layers": 6,
+          "patchtst_dropout": 0.022209856657927646,
+          "batch_size": 128,
+          "lr": 0.00021796699215050676,
+          "weight_decay": 4.307942148611333e-05,
+          "use_recursive_lags": true
+        }
+      },
+      "maize": {
+        "trial_number": 60,
+        "objective_value": 0.114127,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": false,
+          "use_rue": false,
+          "use_farquhar": true,
+          "use_sota_features": false,
+          "include_spatial_features": false,
+          "use_residual_trend": false,
+          "use_cwb_feature": true,
+          "drop_tavg": false,
+          "lag_years": 3,
+          "use_exponential_weighting": true,
+          "exponential_tau": 50,
+          "multi_year_summaries": false,
+          "multi_year_window": 1,
+          "multi_year_features": "phenology",
+          "patchtst_d_model": 32,
+          "patchtst_num_attention_heads": 16,
+          "patchtst_ffn_dim": 128,
+          "patchtst_num_layers": 4,
+          "patchtst_dropout": 0.024416468684984025,
+          "batch_size": 64,
+          "lr": 0.00022372579914347194,
+          "weight_decay": 4.674035151688195e-06,
+          "use_recursive_lags": true
+        }
+      }
+    },
+    "AU": {
+      "wheat": {
+        "trial_number": 53,
+        "objective_value": 0.245054,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": false,
+          "use_rue": true,
+          "use_farquhar": true,
+          "use_sota_features": false,
+          "include_spatial_features": false,
+          "use_residual_trend": false,
+          "use_cwb_feature": true,
+          "drop_tavg": false,
+          "lag_years": 0,
+          "use_exponential_weighting": false,
+          "exponential_tau": 75,
+          "multi_year_summaries": true,
+          "multi_year_window": 3,
+          "multi_year_features": "remote_sensing",
           "patchtst_d_model": 32,
           "patchtst_num_attention_heads": 4,
           "patchtst_ffn_dim": 256,
           "patchtst_num_layers": 3,
-          "patchtst_dropout": 0.06272962255265044,
-          "batch_size": 16,
-          "lr": 0.00011482911950276396,
-          "weight_decay": 1.0051520322713646e-05,
-          "seed": 42
-        },
-        "wheat": {
+          "patchtst_dropout": 0.22936966302181197,
+          "batch_size": 128,
+          "lr": 0.00044554800942519666,
+          "weight_decay": 5.428595290781751e-05
+        }
+      }
+    },
+    "BG": {
+      "maize": {
+        "trial_number": 33,
+        "objective_value": 0.152336,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": true,
+          "use_rue": false,
+          "use_farquhar": true,
+          "use_sota_features": true,
+          "include_spatial_features": true,
+          "use_residual_trend": false,
+          "use_cwb_feature": true,
+          "drop_tavg": false,
+          "lag_years": 2,
+          "use_exponential_weighting": true,
+          "exponential_tau": 100,
+          "multi_year_summaries": true,
+          "multi_year_window": 3,
+          "multi_year_features": "all",
           "patchtst_d_model": 128,
           "patchtst_num_attention_heads": 8,
           "patchtst_ffn_dim": 128,
-          "patchtst_num_layers": 3,
-          "patchtst_dropout": 0.17563811132241236,
-          "batch_size": 16,
-          "lr": 0.00025522948926759654,
-          "weight_decay": 4.785886615402266e-06,
-          "seed": 100
-        }
-      },
-      "xlinear": {
-        "maize": {
-          "xlinear_hidden_size": 64,
-          "xlinear_temporal_ff": 64,
-          "xlinear_channel_ff": 8,
-          "xlinear_dropout": 0.14778010566240996,
-          "batch_size": 16,
-          "lr": 7.310439987426851e-05,
-          "weight_decay": 2.017904300400799e-05,
-          "seed": 5555
-        },
-        "wheat": {
-          "xlinear_hidden_size": 128,
-          "xlinear_temporal_ff": 512,
-          "xlinear_channel_ff": 64,
-          "xlinear_dropout": 0.2831850991782829,
-          "batch_size": 128,
-          "lr": 7.911512819718792e-05,
-          "weight_decay": 1.481141858295578e-06,
-          "seed": 5555
-        }
-      }
-    },
-    "SE": {
-      "patchtst": {
-        "maize": {
-          "patchtst_d_model": 32,
-          "patchtst_num_attention_heads": 4,
-          "patchtst_ffn_dim": 512,
-          "patchtst_num_layers": 2,
-          "patchtst_dropout": 0.30385134000489644,
-          "batch_size": 32,
-          "lr": 5.078669283109466e-05,
-          "weight_decay": 5.997973153640713e-05,
-          "seed": 5555
-        },
-        "wheat": {
-          "patchtst_d_model": 64,
-          "patchtst_num_attention_heads": 16,
-          "patchtst_ffn_dim": 256,
           "patchtst_num_layers": 4,
-          "patchtst_dropout": 0.34091387929580513,
+          "patchtst_dropout": 0.11642253734864455,
           "batch_size": 16,
-          "lr": 0.0003508544498001095,
-          "weight_decay": 1.0910832864037283e-05,
-          "seed": 5555
+          "lr": 0.00018238937035503725,
+          "weight_decay": 1.594832473087192e-06,
+          "use_recursive_lags": true
         }
       },
-      "xlinear": {
-        "maize": {
-          "xlinear_hidden_size": 256,
-          "xlinear_temporal_ff": 512,
-          "xlinear_channel_ff": 32,
-          "xlinear_dropout": 0.398494723400863,
-          "batch_size": 128,
-          "lr": 0.0002706483749015852,
-          "weight_decay": 2.4051957507828238e-05,
-          "seed": 42
-        },
-        "wheat": {
-          "xlinear_hidden_size": 64,
-          "xlinear_temporal_ff": 128,
-          "xlinear_channel_ff": 16,
-          "xlinear_dropout": 0.08957051569369343,
-          "batch_size": 16,
-          "lr": 8.275090331027005e-05,
-          "weight_decay": 1.0125308914652553e-05,
-          "seed": 42
-        }
-      }
-    },
-    "SK": {
-      "patchtst": {
-        "maize": {
+      "wheat": {
+        "trial_number": 7,
+        "objective_value": 0.095491,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": true,
+          "use_rue": false,
+          "use_farquhar": false,
+          "use_sota_features": false,
+          "include_spatial_features": true,
+          "use_residual_trend": true,
+          "use_cwb_feature": false,
+          "drop_tavg": true,
+          "lag_years": 0,
+          "use_exponential_weighting": false,
+          "exponential_tau": 50,
+          "multi_year_summaries": true,
+          "multi_year_window": 1,
+          "multi_year_features": "remote_sensing",
           "patchtst_d_model": 32,
           "patchtst_num_attention_heads": 8,
-          "patchtst_ffn_dim": 128,
-          "patchtst_num_layers": 4,
-          "patchtst_dropout": 0.007049442490942609,
-          "batch_size": 16,
-          "lr": 0.0002854083651828687,
-          "weight_decay": 1.2349204055236436e-06,
-          "seed": 1111
-        }
-      },
-      "xlinear": {
-        "maize": {
-          "xlinear_hidden_size": 256,
-          "xlinear_temporal_ff": 256,
-          "xlinear_channel_ff": 16,
-          "xlinear_dropout": 0.0671476766037952,
-          "batch_size": 16,
-          "lr": 6.871531053430935e-05,
-          "weight_decay": 2.7407993181067296e-05,
-          "seed": 42
+          "patchtst_ffn_dim": 512,
+          "patchtst_num_layers": 3,
+          "patchtst_dropout": 0.2258945422522397,
+          "batch_size": 32,
+          "lr": 0.0003839566418027786,
+          "weight_decay": 2.2288141221112827e-06
         }
       }
     },
-    "SN": {
-      "patchtst": {
-        "maize": {
+    "PT": {
+      "wheat": {
+        "trial_number": 86,
+        "objective_value": 0.082351,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": false,
+          "use_rue": false,
+          "use_farquhar": false,
+          "use_sota_features": false,
+          "include_spatial_features": true,
+          "use_residual_trend": false,
+          "use_cwb_feature": true,
+          "drop_tavg": false,
+          "lag_years": 1,
+          "use_exponential_weighting": false,
+          "exponential_tau": 10,
+          "multi_year_summaries": false,
+          "multi_year_window": 3,
+          "multi_year_features": "weather",
           "patchtst_d_model": 32,
-          "patchtst_num_attention_heads": 2,
-          "patchtst_ffn_dim": 256,
-          "patchtst_num_layers": 8,
-          "patchtst_dropout": 0.010474064301857156,
-          "batch_size": 32,
-          "lr": 0.00022582097908855863,
-          "weight_decay": 9.28919917613855e-05,
-          "seed": 500
+          "patchtst_num_attention_heads": 16,
+          "patchtst_ffn_dim": 128,
+          "patchtst_num_layers": 3,
+          "patchtst_dropout": 0.15628105297498854,
+          "batch_size": 16,
+          "lr": 0.00015744271375199857,
+          "weight_decay": 1.583467464376715e-06,
+          "use_recursive_lags": true
         }
       },
-      "xlinear": {
-        "maize": {
-          "xlinear_hidden_size": 32,
-          "xlinear_temporal_ff": 512,
-          "xlinear_channel_ff": 64,
-          "xlinear_dropout": 0.16293635707611448,
+      "maize": {
+        "trial_number": 81,
+        "objective_value": 0.122636,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": false,
+          "use_rue": true,
+          "use_farquhar": false,
+          "use_sota_features": true,
+          "include_spatial_features": false,
+          "use_residual_trend": false,
+          "use_cwb_feature": true,
+          "drop_tavg": true,
+          "lag_years": 2,
+          "use_exponential_weighting": true,
+          "exponential_tau": 10,
+          "multi_year_summaries": true,
+          "multi_year_window": 2,
+          "multi_year_features": "phenology",
+          "patchtst_d_model": 32,
+          "patchtst_num_attention_heads": 8,
+          "patchtst_ffn_dim": 512,
+          "patchtst_num_layers": 4,
+          "patchtst_dropout": 0.43268479152421346,
           "batch_size": 32,
-          "lr": 0.00012526564051692875,
-          "weight_decay": 4.674368072351499e-06,
-          "seed": 42
+          "lr": 0.0004156696829833315,
+          "weight_decay": 6.649157852974302e-05,
+          "use_recursive_lags": true
+        }
+      }
+    },
+    "EE": {
+      "wheat": {
+        "trial_number": 31,
+        "objective_value": 0.121168,
+        "hyperparameters": {
+          "use_gdd": true,
+          "use_heat_stress_days": false,
+          "use_rue": true,
+          "use_farquhar": true,
+          "use_sota_features": true,
+          "include_spatial_features": false,
+          "use_residual_trend": true,
+          "use_cwb_feature": true,
+          "drop_tavg": true,
+          "lag_years": 2,
+          "use_exponential_weighting": true,
+          "exponential_tau": 50,
+          "multi_year_summaries": true,
+          "multi_year_window": 2,
+          "multi_year_features": "all",
+          "patchtst_d_model": 256,
+          "patchtst_num_attention_heads": 2,
+          "patchtst_ffn_dim": 256,
+          "patchtst_num_layers": 4,
+          "patchtst_dropout": 0.3837518786760936,
+          "batch_size": 128,
+          "lr": 0.00023758738706585489,
+          "weight_decay": 1.0383378731326025e-06,
+          "use_recursive_lags": true
+        }
+      }
+    },
+    "IN": {
+      "wheat": {
+        "trial_number": 76,
+        "objective_value": 0.174491,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": true,
+          "use_rue": false,
+          "use_farquhar": true,
+          "use_sota_features": false,
+          "include_spatial_features": false,
+          "use_residual_trend": false,
+          "use_cwb_feature": false,
+          "drop_tavg": true,
+          "lag_years": 1,
+          "use_exponential_weighting": true,
+          "exponential_tau": 75,
+          "multi_year_summaries": true,
+          "multi_year_window": 2,
+          "multi_year_features": "all",
+          "patchtst_d_model": 32,
+          "patchtst_num_attention_heads": 8,
+          "patchtst_ffn_dim": 256,
+          "patchtst_num_layers": 3,
+          "patchtst_dropout": 0.3073521266989821,
+          "batch_size": 32,
+          "lr": 0.0003212532685556595,
+          "weight_decay": 8.19533740354922e-06,
+          "use_recursive_lags": true
+        }
+      },
+      "maize": {
+        "trial_number": 75,
+        "objective_value": 0.358795,
+        "hyperparameters": {
+          "use_gdd": true,
+          "use_heat_stress_days": false,
+          "use_rue": false,
+          "use_farquhar": false,
+          "use_sota_features": true,
+          "include_spatial_features": true,
+          "use_residual_trend": false,
+          "use_cwb_feature": false,
+          "drop_tavg": false,
+          "lag_years": 2,
+          "use_exponential_weighting": false,
+          "exponential_tau": 0,
+          "multi_year_summaries": true,
+          "multi_year_window": 1,
+          "multi_year_features": "all",
+          "patchtst_d_model": 32,
+          "patchtst_num_attention_heads": 4,
+          "patchtst_ffn_dim": 256,
+          "patchtst_num_layers": 6,
+          "patchtst_dropout": 0.2742036202027043,
+          "batch_size": 64,
+          "lr": 5.988474598003593e-05,
+          "weight_decay": 1.188499624029814e-05,
+          "use_recursive_lags": true
+        }
+      }
+    },
+    "LV": {
+      "wheat": {
+        "trial_number": 98,
+        "objective_value": 0.128695,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": true,
+          "use_rue": false,
+          "use_farquhar": false,
+          "use_sota_features": false,
+          "include_spatial_features": false,
+          "use_residual_trend": false,
+          "use_cwb_feature": true,
+          "drop_tavg": false,
+          "lag_years": 0,
+          "use_exponential_weighting": true,
+          "exponential_tau": 50,
+          "multi_year_summaries": true,
+          "multi_year_window": 3,
+          "multi_year_features": "weather",
+          "patchtst_d_model": 256,
+          "patchtst_num_attention_heads": 8,
+          "patchtst_ffn_dim": 512,
+          "patchtst_num_layers": 2,
+          "patchtst_dropout": 0.2450864941443695,
+          "batch_size": 64,
+          "lr": 0.0002904807042126811,
+          "weight_decay": 1.9053348403081745e-06
+        }
+      }
+    },
+    "EL": {
+      "wheat": {
+        "trial_number": 95,
+        "objective_value": 0.171026,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": false,
+          "use_rue": false,
+          "use_farquhar": false,
+          "use_sota_features": true,
+          "include_spatial_features": false,
+          "use_residual_trend": false,
+          "use_cwb_feature": false,
+          "drop_tavg": true,
+          "lag_years": 1,
+          "use_exponential_weighting": false,
+          "exponential_tau": 0,
+          "multi_year_summaries": true,
+          "multi_year_window": 3,
+          "multi_year_features": "weather",
+          "patchtst_d_model": 64,
+          "patchtst_num_attention_heads": 4,
+          "patchtst_ffn_dim": 128,
+          "patchtst_num_layers": 8,
+          "patchtst_dropout": 0.44920833013637546,
+          "batch_size": 32,
+          "lr": 0.0002543062669327069,
+          "weight_decay": 1.0736238539501672e-05,
+          "use_recursive_lags": true
+        }
+      },
+      "maize": {
+        "trial_number": 63,
+        "objective_value": 0.250128,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": false,
+          "use_rue": true,
+          "use_farquhar": true,
+          "use_sota_features": true,
+          "include_spatial_features": true,
+          "use_residual_trend": false,
+          "use_cwb_feature": false,
+          "drop_tavg": true,
+          "lag_years": 1,
+          "use_exponential_weighting": true,
+          "exponential_tau": 50,
+          "multi_year_summaries": true,
+          "multi_year_window": 1,
+          "multi_year_features": "phenology",
+          "patchtst_d_model": 32,
+          "patchtst_num_attention_heads": 2,
+          "patchtst_ffn_dim": 512,
+          "patchtst_num_layers": 2,
+          "patchtst_dropout": 0.41727048916467724,
+          "batch_size": 64,
+          "lr": 5.4109342330504574e-05,
+          "weight_decay": 5.852240751538541e-06,
+          "use_recursive_lags": true
+        }
+      }
+    },
+    "PL": {
+      "wheat": {
+        "trial_number": 99,
+        "objective_value": 0.076332,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": true,
+          "use_rue": true,
+          "use_farquhar": true,
+          "use_sota_features": false,
+          "include_spatial_features": false,
+          "use_residual_trend": false,
+          "use_cwb_feature": false,
+          "drop_tavg": true,
+          "lag_years": 1,
+          "use_exponential_weighting": false,
+          "exponential_tau": 50,
+          "multi_year_summaries": false,
+          "multi_year_window": 3,
+          "multi_year_features": "remote_sensing",
+          "patchtst_d_model": 128,
+          "patchtst_num_attention_heads": 4,
+          "patchtst_ffn_dim": 128,
+          "patchtst_num_layers": 3,
+          "patchtst_dropout": 0.33386206290407633,
+          "batch_size": 32,
+          "lr": 0.0002249345603086859,
+          "weight_decay": 3.197291550622603e-05,
+          "use_recursive_lags": true
+        }
+      },
+      "maize": {
+        "trial_number": 99,
+        "objective_value": 0.140307,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": false,
+          "use_rue": false,
+          "use_farquhar": false,
+          "use_sota_features": true,
+          "include_spatial_features": true,
+          "use_residual_trend": false,
+          "use_cwb_feature": true,
+          "drop_tavg": false,
+          "lag_years": 0,
+          "use_exponential_weighting": true,
+          "exponential_tau": 75,
+          "multi_year_summaries": false,
+          "multi_year_window": 1,
+          "multi_year_features": "all",
+          "patchtst_d_model": 64,
+          "patchtst_num_attention_heads": 2,
+          "patchtst_ffn_dim": 256,
+          "patchtst_num_layers": 3,
+          "patchtst_dropout": 0.37606221824846975,
+          "batch_size": 32,
+          "lr": 8.35422759523776e-05,
+          "weight_decay": 2.4585765917923468e-06
+        }
+      }
+    },
+    "ET": {
+      "maize": {
+        "trial_number": 33,
+        "objective_value": 0.219563,
+        "hyperparameters": {
+          "use_gdd": true,
+          "use_heat_stress_days": true,
+          "use_rue": true,
+          "use_farquhar": true,
+          "use_sota_features": true,
+          "include_spatial_features": false,
+          "use_residual_trend": false,
+          "use_cwb_feature": true,
+          "drop_tavg": true,
+          "lag_years": 2,
+          "use_exponential_weighting": false,
+          "exponential_tau": 0,
+          "multi_year_summaries": true,
+          "multi_year_window": 3,
+          "multi_year_features": "phenology",
+          "patchtst_d_model": 64,
+          "patchtst_num_attention_heads": 4,
+          "patchtst_ffn_dim": 512,
+          "patchtst_num_layers": 6,
+          "patchtst_dropout": 0.3641420726321329,
+          "batch_size": 128,
+          "lr": 0.0002284028188274199,
+          "weight_decay": 2.8662940342837253e-06,
+          "use_recursive_lags": true
+        }
+      }
+    },
+    "CN": {
+      "wheat": {
+        "trial_number": 92,
+        "objective_value": 0.067715,
+        "hyperparameters": {
+          "use_gdd": true,
+          "use_heat_stress_days": false,
+          "use_rue": false,
+          "use_farquhar": true,
+          "use_sota_features": false,
+          "include_spatial_features": true,
+          "use_residual_trend": false,
+          "use_cwb_feature": true,
+          "drop_tavg": true,
+          "lag_years": 3,
+          "use_exponential_weighting": true,
+          "exponential_tau": 10,
+          "multi_year_summaries": false,
+          "multi_year_window": 3,
+          "multi_year_features": "remote_sensing",
+          "patchtst_d_model": 32,
+          "patchtst_num_attention_heads": 8,
+          "patchtst_ffn_dim": 512,
+          "patchtst_num_layers": 4,
+          "patchtst_dropout": 0.43139484782053217,
+          "batch_size": 32,
+          "lr": 0.0002109463191842812,
+          "weight_decay": 1.1184916946042175e-06,
+          "use_recursive_lags": true
+        }
+      },
+      "maize": {
+        "trial_number": 65,
+        "objective_value": 0.081016,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": false,
+          "use_rue": true,
+          "use_farquhar": true,
+          "use_sota_features": true,
+          "include_spatial_features": false,
+          "use_residual_trend": false,
+          "use_cwb_feature": false,
+          "drop_tavg": false,
+          "lag_years": 1,
+          "use_exponential_weighting": false,
+          "exponential_tau": 50,
+          "multi_year_summaries": true,
+          "multi_year_window": 1,
+          "multi_year_features": "weather",
+          "patchtst_d_model": 32,
+          "patchtst_num_attention_heads": 4,
+          "patchtst_ffn_dim": 256,
+          "patchtst_num_layers": 2,
+          "patchtst_dropout": 0.11224254161193795,
+          "batch_size": 64,
+          "lr": 9.64665702026534e-05,
+          "weight_decay": 4.8353838321306467e-05,
+          "use_recursive_lags": true
         }
       }
     },
     "TD": {
-      "patchtst": {
-        "maize": {
-          "patchtst_d_model": 32,
+      "maize": {
+        "trial_number": 44,
+        "objective_value": 0.473026,
+        "hyperparameters": {
+          "use_gdd": true,
+          "use_heat_stress_days": false,
+          "use_rue": false,
+          "use_farquhar": false,
+          "use_sota_features": true,
+          "include_spatial_features": true,
+          "use_residual_trend": true,
+          "use_cwb_feature": true,
+          "drop_tavg": true,
+          "lag_years": 2,
+          "use_exponential_weighting": true,
+          "exponential_tau": 50,
+          "multi_year_summaries": false,
+          "multi_year_window": 3,
+          "multi_year_features": "weather",
+          "patchtst_d_model": 64,
+          "patchtst_num_attention_heads": 4,
+          "patchtst_ffn_dim": 1024,
+          "patchtst_num_layers": 4,
+          "patchtst_dropout": 0.004574536048644429,
+          "batch_size": 16,
+          "lr": 0.00024634676562017846,
+          "weight_decay": 8.815015774899116e-05,
+          "use_recursive_lags": true
+        }
+      }
+    },
+    "IT": {
+      "wheat": {
+        "trial_number": 73,
+        "objective_value": 0.158593,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": false,
+          "use_rue": false,
+          "use_farquhar": false,
+          "use_sota_features": false,
+          "include_spatial_features": false,
+          "use_residual_trend": false,
+          "use_cwb_feature": false,
+          "drop_tavg": false,
+          "lag_years": 2,
+          "use_exponential_weighting": true,
+          "exponential_tau": 10,
+          "multi_year_summaries": true,
+          "multi_year_window": 1,
+          "multi_year_features": "remote_sensing",
+          "patchtst_d_model": 64,
           "patchtst_num_attention_heads": 4,
           "patchtst_ffn_dim": 1024,
           "patchtst_num_layers": 6,
-          "patchtst_dropout": 0.46506400052433833,
+          "patchtst_dropout": 0.23403244769927917,
           "batch_size": 16,
-          "lr": 0.00019134352980790305,
-          "weight_decay": 5.554054959688819e-05,
-          "seed": 1111
+          "lr": 0.00021336770795061743,
+          "weight_decay": 4.4271316403054874e-06,
+          "use_recursive_lags": true
         }
       },
-      "xlinear": {
-        "maize": {
-          "xlinear_hidden_size": 32,
-          "xlinear_temporal_ff": 128,
-          "xlinear_channel_ff": 16,
-          "xlinear_dropout": 0.26701206956607004,
+      "maize": {
+        "trial_number": 33,
+        "objective_value": 0.195467,
+        "hyperparameters": {
+          "use_gdd": true,
+          "use_heat_stress_days": false,
+          "use_rue": true,
+          "use_farquhar": true,
+          "use_sota_features": false,
+          "include_spatial_features": true,
+          "use_residual_trend": false,
+          "use_cwb_feature": true,
+          "drop_tavg": false,
+          "lag_years": 3,
+          "use_exponential_weighting": true,
+          "exponential_tau": 75,
+          "multi_year_summaries": true,
+          "multi_year_window": 1,
+          "multi_year_features": "weather",
+          "patchtst_d_model": 32,
+          "patchtst_num_attention_heads": 8,
+          "patchtst_ffn_dim": 128,
+          "patchtst_num_layers": 6,
+          "patchtst_dropout": 0.00021029488883173627,
+          "batch_size": 64,
+          "lr": 0.0001572434443325711,
+          "weight_decay": 1.9295864482035582e-05,
+          "use_recursive_lags": true
+        }
+      }
+    },
+    "SE": {
+      "maize": {
+        "trial_number": 69,
+        "objective_value": 0.113466,
+        "hyperparameters": {
+          "use_gdd": true,
+          "use_heat_stress_days": false,
+          "use_rue": false,
+          "use_farquhar": true,
+          "use_sota_features": false,
+          "include_spatial_features": true,
+          "use_residual_trend": true,
+          "use_cwb_feature": true,
+          "drop_tavg": false,
+          "lag_years": 2,
+          "use_exponential_weighting": false,
+          "exponential_tau": 50,
+          "multi_year_summaries": false,
+          "multi_year_window": 1,
+          "multi_year_features": "remote_sensing",
+          "patchtst_d_model": 128,
+          "patchtst_num_attention_heads": 4,
+          "patchtst_ffn_dim": 1024,
+          "patchtst_num_layers": 6,
+          "patchtst_dropout": 0.18252699682355916,
           "batch_size": 32,
-          "lr": 0.000226611041451167,
-          "weight_decay": 1.1744277976934917e-05,
-          "seed": 1111
+          "lr": 0.0003216147883808918,
+          "weight_decay": 6.577875596733325e-05,
+          "use_recursive_lags": true
+        }
+      },
+      "wheat": {
+        "trial_number": 62,
+        "objective_value": 0.09921,
+        "hyperparameters": {
+          "use_gdd": true,
+          "use_heat_stress_days": true,
+          "use_rue": false,
+          "use_farquhar": true,
+          "use_sota_features": false,
+          "include_spatial_features": false,
+          "use_residual_trend": false,
+          "use_cwb_feature": false,
+          "drop_tavg": false,
+          "lag_years": 1,
+          "use_exponential_weighting": true,
+          "exponential_tau": 75,
+          "multi_year_summaries": false,
+          "multi_year_window": 1,
+          "multi_year_features": "remote_sensing",
+          "patchtst_d_model": 64,
+          "patchtst_num_attention_heads": 8,
+          "patchtst_ffn_dim": 512,
+          "patchtst_num_layers": 2,
+          "patchtst_dropout": 0.40157174688712977,
+          "batch_size": 16,
+          "lr": 0.00011317266508508284,
+          "weight_decay": 4.946463429078553e-05,
+          "use_recursive_lags": true
+        }
+      }
+    },
+    "HR": {
+      "maize": {
+        "trial_number": 12,
+        "objective_value": 0.320056,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": false,
+          "use_rue": false,
+          "use_farquhar": false,
+          "use_sota_features": false,
+          "include_spatial_features": true,
+          "use_residual_trend": false,
+          "use_cwb_feature": true,
+          "drop_tavg": true,
+          "lag_years": 2,
+          "use_exponential_weighting": false,
+          "exponential_tau": 75,
+          "multi_year_summaries": true,
+          "multi_year_window": 3,
+          "multi_year_features": "remote_sensing",
+          "patchtst_d_model": 32,
+          "patchtst_num_attention_heads": 2,
+          "patchtst_ffn_dim": 512,
+          "patchtst_num_layers": 6,
+          "patchtst_dropout": 0.4338667315921713,
+          "batch_size": 32,
+          "lr": 0.00012347868763876358,
+          "weight_decay": 8.717555546452074e-06,
+          "use_recursive_lags": true
+        }
+      },
+      "wheat": {
+        "trial_number": 56,
+        "objective_value": 0.118506,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": true,
+          "use_rue": false,
+          "use_farquhar": true,
+          "use_sota_features": false,
+          "include_spatial_features": true,
+          "use_residual_trend": true,
+          "use_cwb_feature": true,
+          "drop_tavg": false,
+          "lag_years": 2,
+          "use_exponential_weighting": true,
+          "exponential_tau": 75,
+          "multi_year_summaries": true,
+          "multi_year_window": 3,
+          "multi_year_features": "phenology",
+          "patchtst_d_model": 64,
+          "patchtst_num_attention_heads": 16,
+          "patchtst_ffn_dim": 256,
+          "patchtst_num_layers": 4,
+          "patchtst_dropout": 0.1768269930539325,
+          "batch_size": 128,
+          "lr": 0.00018939272189267469,
+          "weight_decay": 6.935798766323687e-06,
+          "use_recursive_lags": true
+        }
+      }
+    },
+    "AT": {
+      "maize": {
+        "trial_number": 16,
+        "objective_value": 0.110604,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": false,
+          "use_rue": false,
+          "use_farquhar": false,
+          "use_sota_features": false,
+          "include_spatial_features": true,
+          "use_residual_trend": false,
+          "use_cwb_feature": false,
+          "drop_tavg": false,
+          "lag_years": 1,
+          "use_exponential_weighting": false,
+          "exponential_tau": 100,
+          "multi_year_summaries": true,
+          "multi_year_window": 1,
+          "multi_year_features": "weather",
+          "patchtst_d_model": 64,
+          "patchtst_num_attention_heads": 2,
+          "patchtst_ffn_dim": 512,
+          "patchtst_num_layers": 8,
+          "patchtst_dropout": 0.0741422484416639,
+          "batch_size": 16,
+          "lr": 0.00024422171626935343,
+          "weight_decay": 1.7923731286134864e-06,
+          "use_recursive_lags": true
+        }
+      },
+      "wheat": {
+        "trial_number": 67,
+        "objective_value": 0.115507,
+        "hyperparameters": {
+          "use_gdd": true,
+          "use_heat_stress_days": true,
+          "use_rue": true,
+          "use_farquhar": false,
+          "use_sota_features": false,
+          "include_spatial_features": true,
+          "use_residual_trend": false,
+          "use_cwb_feature": false,
+          "drop_tavg": false,
+          "lag_years": 2,
+          "use_exponential_weighting": false,
+          "exponential_tau": 100,
+          "multi_year_summaries": false,
+          "multi_year_window": 3,
+          "multi_year_features": "weather",
+          "patchtst_d_model": 128,
+          "patchtst_num_attention_heads": 16,
+          "patchtst_ffn_dim": 1024,
+          "patchtst_num_layers": 2,
+          "patchtst_dropout": 0.17043753387301772,
+          "batch_size": 64,
+          "lr": 0.00019827320884176723,
+          "weight_decay": 2.5203665631672383e-05,
+          "use_recursive_lags": true
+        }
+      }
+    },
+    "BR": {
+      "wheat": {
+        "trial_number": 18,
+        "objective_value": 0.311529,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": false,
+          "use_rue": true,
+          "use_farquhar": true,
+          "use_sota_features": true,
+          "include_spatial_features": true,
+          "use_residual_trend": false,
+          "use_cwb_feature": true,
+          "drop_tavg": true,
+          "lag_years": 0,
+          "use_exponential_weighting": true,
+          "exponential_tau": 100,
+          "multi_year_summaries": false,
+          "multi_year_window": 3,
+          "multi_year_features": "weather",
+          "patchtst_d_model": 64,
+          "patchtst_num_attention_heads": 4,
+          "patchtst_ffn_dim": 128,
+          "patchtst_num_layers": 4,
+          "patchtst_dropout": 0.00916549739219244,
+          "batch_size": 32,
+          "lr": 0.00015003578338935165,
+          "weight_decay": 1.924708020020971e-06
+        }
+      },
+      "maize": {
+        "trial_number": 14,
+        "objective_value": 0.283217,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": false,
+          "use_rue": true,
+          "use_farquhar": false,
+          "use_sota_features": true,
+          "include_spatial_features": true,
+          "use_residual_trend": false,
+          "use_cwb_feature": false,
+          "drop_tavg": true,
+          "lag_years": 3,
+          "use_exponential_weighting": true,
+          "exponential_tau": 100,
+          "multi_year_summaries": true,
+          "multi_year_window": 2,
+          "multi_year_features": "remote_sensing",
+          "patchtst_d_model": 32,
+          "patchtst_num_attention_heads": 2,
+          "patchtst_ffn_dim": 1024,
+          "patchtst_num_layers": 4,
+          "patchtst_dropout": 0.3346817689754921,
+          "batch_size": 128,
+          "lr": 0.00024618583634829547,
+          "weight_decay": 1.0380255756880563e-06,
+          "use_recursive_lags": true
+        }
+      }
+    },
+    "BE": {
+      "maize": {
+        "trial_number": 37,
+        "objective_value": 0.118763,
+        "hyperparameters": {
+          "use_gdd": true,
+          "use_heat_stress_days": false,
+          "use_rue": false,
+          "use_farquhar": true,
+          "use_sota_features": false,
+          "include_spatial_features": false,
+          "use_residual_trend": true,
+          "use_cwb_feature": false,
+          "drop_tavg": false,
+          "lag_years": 0,
+          "use_exponential_weighting": true,
+          "exponential_tau": 25,
+          "multi_year_summaries": true,
+          "multi_year_window": 3,
+          "multi_year_features": "weather",
+          "patchtst_d_model": 256,
+          "patchtst_num_attention_heads": 4,
+          "patchtst_ffn_dim": 512,
+          "patchtst_num_layers": 4,
+          "patchtst_dropout": 0.3610273791564847,
+          "batch_size": 128,
+          "lr": 0.00016223206227546414,
+          "weight_decay": 1.346970029027319e-06
+        }
+      },
+      "wheat": {
+        "trial_number": 72,
+        "objective_value": 0.070472,
+        "hyperparameters": {
+          "use_gdd": true,
+          "use_heat_stress_days": false,
+          "use_rue": true,
+          "use_farquhar": false,
+          "use_sota_features": false,
+          "include_spatial_features": true,
+          "use_residual_trend": false,
+          "use_cwb_feature": false,
+          "drop_tavg": true,
+          "lag_years": 2,
+          "use_exponential_weighting": false,
+          "exponential_tau": 75,
+          "multi_year_summaries": false,
+          "multi_year_window": 3,
+          "multi_year_features": "phenology",
+          "patchtst_d_model": 128,
+          "patchtst_num_attention_heads": 4,
+          "patchtst_ffn_dim": 256,
+          "patchtst_num_layers": 6,
+          "patchtst_dropout": 0.39076278881190085,
+          "batch_size": 64,
+          "lr": 6.403460308459962e-05,
+          "weight_decay": 1.7393148514707295e-05,
+          "use_recursive_lags": true
+        }
+      }
+    },
+    "FI": {
+      "wheat": {
+        "trial_number": 73,
+        "objective_value": 0.076822,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": false,
+          "use_rue": true,
+          "use_farquhar": true,
+          "use_sota_features": true,
+          "include_spatial_features": true,
+          "use_residual_trend": false,
+          "use_cwb_feature": false,
+          "drop_tavg": false,
+          "lag_years": 1,
+          "use_exponential_weighting": false,
+          "exponential_tau": 75,
+          "multi_year_summaries": true,
+          "multi_year_window": 1,
+          "multi_year_features": "remote_sensing",
+          "patchtst_d_model": 32,
+          "patchtst_num_attention_heads": 8,
+          "patchtst_ffn_dim": 256,
+          "patchtst_num_layers": 6,
+          "patchtst_dropout": 0.06367761004456748,
+          "batch_size": 16,
+          "lr": 0.00028422068924471714,
+          "weight_decay": 1.7218474475903697e-06,
+          "use_recursive_lags": true
         }
       }
     },
     "ZA": {
-      "patchtst": {
-        "maize": {
-          "patchtst_d_model": 128,
-          "patchtst_num_attention_heads": 8,
-          "patchtst_ffn_dim": 512,
-          "patchtst_num_layers": 3,
-          "patchtst_dropout": 0.4025333788123424,
+      "maize": {
+        "trial_number": 52,
+        "objective_value": 0.109968,
+        "hyperparameters": {
+          "use_gdd": true,
+          "use_heat_stress_days": false,
+          "use_rue": false,
+          "use_farquhar": true,
+          "use_sota_features": false,
+          "include_spatial_features": true,
+          "use_residual_trend": false,
+          "use_cwb_feature": true,
+          "drop_tavg": true,
+          "lag_years": 3,
+          "use_exponential_weighting": true,
+          "exponential_tau": 75,
+          "multi_year_summaries": true,
+          "multi_year_window": 3,
+          "multi_year_features": "all",
+          "patchtst_d_model": 32,
+          "patchtst_num_attention_heads": 2,
+          "patchtst_ffn_dim": 1024,
+          "patchtst_num_layers": 6,
+          "patchtst_dropout": 0.4777043115584693,
           "batch_size": 64,
-          "lr": 7.174603592647367e-05,
-          "weight_decay": 8.844022938025073e-05,
-          "seed": 42
+          "lr": 0.00020043228629730323,
+          "weight_decay": 5.4789570175081035e-06,
+          "use_recursive_lags": true
+        }
+      }
+    },
+    "LS": {
+      "maize": {
+        "trial_number": 85,
+        "objective_value": 0.478362,
+        "hyperparameters": {
+          "use_gdd": true,
+          "use_heat_stress_days": true,
+          "use_rue": true,
+          "use_farquhar": true,
+          "use_sota_features": true,
+          "include_spatial_features": true,
+          "use_residual_trend": false,
+          "use_cwb_feature": true,
+          "drop_tavg": true,
+          "lag_years": 0,
+          "use_exponential_weighting": true,
+          "exponential_tau": 100,
+          "multi_year_summaries": false,
+          "multi_year_window": 3,
+          "multi_year_features": "remote_sensing",
+          "patchtst_d_model": 64,
+          "patchtst_num_attention_heads": 8,
+          "patchtst_ffn_dim": 128,
+          "patchtst_num_layers": 4,
+          "patchtst_dropout": 0.23500310285850123,
+          "batch_size": 16,
+          "lr": 9.97358816637271e-05,
+          "weight_decay": 6.708283805368129e-06
+        }
+      }
+    },
+    "MZ": {
+      "maize": {
+        "trial_number": 85,
+        "objective_value": 0.19512,
+        "hyperparameters": {
+          "use_gdd": true,
+          "use_heat_stress_days": true,
+          "use_rue": false,
+          "use_farquhar": true,
+          "use_sota_features": true,
+          "include_spatial_features": false,
+          "use_residual_trend": false,
+          "use_cwb_feature": true,
+          "drop_tavg": true,
+          "lag_years": 2,
+          "use_exponential_weighting": false,
+          "exponential_tau": 50,
+          "multi_year_summaries": true,
+          "multi_year_window": 3,
+          "multi_year_features": "phenology",
+          "patchtst_d_model": 32,
+          "patchtst_num_attention_heads": 8,
+          "patchtst_ffn_dim": 1024,
+          "patchtst_num_layers": 2,
+          "patchtst_dropout": 0.31406585983876956,
+          "batch_size": 128,
+          "lr": 9.2429921128574e-05,
+          "weight_decay": 1.0413987084469795e-05,
+          "use_recursive_lags": true
+        }
+      }
+    },
+    "BF": {
+      "maize": {
+        "trial_number": 77,
+        "objective_value": 0.32762,
+        "hyperparameters": {
+          "use_gdd": true,
+          "use_heat_stress_days": false,
+          "use_rue": false,
+          "use_farquhar": true,
+          "use_sota_features": false,
+          "include_spatial_features": true,
+          "use_residual_trend": false,
+          "use_cwb_feature": false,
+          "drop_tavg": false,
+          "lag_years": 3,
+          "use_exponential_weighting": true,
+          "exponential_tau": 25,
+          "multi_year_summaries": false,
+          "multi_year_window": 3,
+          "multi_year_features": "phenology",
+          "patchtst_d_model": 32,
+          "patchtst_num_attention_heads": 2,
+          "patchtst_ffn_dim": 128,
+          "patchtst_num_layers": 2,
+          "patchtst_dropout": 0.1907847854211797,
+          "batch_size": 32,
+          "lr": 0.00042635747857188913,
+          "weight_decay": 2.96065844019154e-05,
+          "use_recursive_lags": true
+        }
+      }
+    },
+    "LT": {
+      "maize": {
+        "trial_number": 91,
+        "objective_value": 0.183781,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": false,
+          "use_rue": false,
+          "use_farquhar": true,
+          "use_sota_features": false,
+          "include_spatial_features": false,
+          "use_residual_trend": false,
+          "use_cwb_feature": true,
+          "drop_tavg": false,
+          "lag_years": 3,
+          "use_exponential_weighting": true,
+          "exponential_tau": 75,
+          "multi_year_summaries": true,
+          "multi_year_window": 2,
+          "multi_year_features": "phenology",
+          "patchtst_d_model": 32,
+          "patchtst_num_attention_heads": 16,
+          "patchtst_ffn_dim": 256,
+          "patchtst_num_layers": 3,
+          "patchtst_dropout": 0.2564194804474466,
+          "batch_size": 64,
+          "lr": 0.00016241739408957698,
+          "weight_decay": 1.150398927624709e-06,
+          "use_recursive_lags": true
         }
       },
-      "xlinear": {
-        "maize": {
-          "xlinear_hidden_size": 64,
-          "xlinear_temporal_ff": 128,
-          "xlinear_channel_ff": 64,
-          "xlinear_dropout": 0.1616452548003649,
+      "wheat": {
+        "trial_number": 83,
+        "objective_value": 0.160666,
+        "hyperparameters": {
+          "use_gdd": true,
+          "use_heat_stress_days": false,
+          "use_rue": false,
+          "use_farquhar": true,
+          "use_sota_features": false,
+          "include_spatial_features": false,
+          "use_residual_trend": false,
+          "use_cwb_feature": true,
+          "drop_tavg": false,
+          "lag_years": 1,
+          "use_exponential_weighting": false,
+          "exponential_tau": 50,
+          "multi_year_summaries": false,
+          "multi_year_window": 3,
+          "multi_year_features": "weather",
+          "patchtst_d_model": 64,
+          "patchtst_num_attention_heads": 4,
+          "patchtst_ffn_dim": 256,
+          "patchtst_num_layers": 3,
+          "patchtst_dropout": 0.2811579932918763,
+          "batch_size": 64,
+          "lr": 0.0002183262810631463,
+          "weight_decay": 4.366766719184273e-05,
+          "use_recursive_lags": true
+        }
+      }
+    },
+    "SN": {
+      "maize": {
+        "trial_number": 48,
+        "objective_value": 0.502225,
+        "hyperparameters": {
+          "use_gdd": true,
+          "use_heat_stress_days": true,
+          "use_rue": false,
+          "use_farquhar": false,
+          "use_sota_features": false,
+          "include_spatial_features": false,
+          "use_residual_trend": true,
+          "use_cwb_feature": false,
+          "drop_tavg": false,
+          "lag_years": 1,
+          "use_exponential_weighting": false,
+          "exponential_tau": 75,
+          "multi_year_summaries": false,
+          "multi_year_window": 1,
+          "multi_year_features": "weather",
+          "patchtst_d_model": 256,
+          "patchtst_num_attention_heads": 4,
+          "patchtst_ffn_dim": 256,
+          "patchtst_num_layers": 4,
+          "patchtst_dropout": 0.07683769601871215,
+          "batch_size": 64,
+          "lr": 8.253021910728728e-05,
+          "weight_decay": 2.328079023856853e-06,
+          "use_recursive_lags": true
+        }
+      }
+    },
+    "NE": {
+      "maize": {
+        "trial_number": 45,
+        "objective_value": 0.19259,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": true,
+          "use_rue": true,
+          "use_farquhar": false,
+          "use_sota_features": false,
+          "include_spatial_features": true,
+          "use_residual_trend": false,
+          "use_cwb_feature": false,
+          "drop_tavg": false,
+          "lag_years": 1,
+          "use_exponential_weighting": true,
+          "exponential_tau": 25,
+          "multi_year_summaries": false,
+          "multi_year_window": 2,
+          "multi_year_features": "phenology",
+          "patchtst_d_model": 64,
+          "patchtst_num_attention_heads": 8,
+          "patchtst_ffn_dim": 256,
+          "patchtst_num_layers": 8,
+          "patchtst_dropout": 0.3503873981392046,
           "batch_size": 16,
-          "lr": 0.00023208543506691258,
-          "weight_decay": 1.6040301432524238e-05,
-          "seed": 500
+          "lr": 5.654742781558677e-05,
+          "weight_decay": 4.020957979038564e-06,
+          "use_recursive_lags": true
+        }
+      }
+    },
+    "DK": {
+      "maize": {
+        "trial_number": 95,
+        "objective_value": 0.122597,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": false,
+          "use_rue": true,
+          "use_farquhar": true,
+          "use_sota_features": false,
+          "include_spatial_features": true,
+          "use_residual_trend": false,
+          "use_cwb_feature": false,
+          "drop_tavg": true,
+          "lag_years": 1,
+          "use_exponential_weighting": false,
+          "exponential_tau": 25,
+          "multi_year_summaries": false,
+          "multi_year_window": 3,
+          "multi_year_features": "remote_sensing",
+          "patchtst_d_model": 128,
+          "patchtst_num_attention_heads": 16,
+          "patchtst_ffn_dim": 128,
+          "patchtst_num_layers": 6,
+          "patchtst_dropout": 0.44353830291629426,
+          "batch_size": 16,
+          "lr": 0.0002124172339353492,
+          "weight_decay": 1.5223871319703576e-06,
+          "use_recursive_lags": true
+        }
+      },
+      "wheat": {
+        "trial_number": 66,
+        "objective_value": 0.036919,
+        "hyperparameters": {
+          "use_gdd": true,
+          "use_heat_stress_days": true,
+          "use_rue": false,
+          "use_farquhar": false,
+          "use_sota_features": true,
+          "include_spatial_features": false,
+          "use_residual_trend": false,
+          "use_cwb_feature": true,
+          "drop_tavg": true,
+          "lag_years": 0,
+          "use_exponential_weighting": false,
+          "exponential_tau": 0,
+          "multi_year_summaries": true,
+          "multi_year_window": 3,
+          "multi_year_features": "all",
+          "patchtst_d_model": 128,
+          "patchtst_num_attention_heads": 2,
+          "patchtst_ffn_dim": 512,
+          "patchtst_num_layers": 3,
+          "patchtst_dropout": 0.04662244380457081,
+          "batch_size": 32,
+          "lr": 0.00019142047501757986,
+          "weight_decay": 1.7424091846603935e-05
+        }
+      }
+    },
+    "AO": {
+      "maize": {
+        "trial_number": 57,
+        "objective_value": 0.552245,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": false,
+          "use_rue": false,
+          "use_farquhar": false,
+          "use_sota_features": true,
+          "include_spatial_features": false,
+          "use_residual_trend": false,
+          "use_cwb_feature": false,
+          "drop_tavg": true,
+          "lag_years": 1,
+          "use_exponential_weighting": true,
+          "exponential_tau": 100,
+          "multi_year_summaries": false,
+          "multi_year_window": 2,
+          "multi_year_features": "remote_sensing",
+          "patchtst_d_model": 128,
+          "patchtst_num_attention_heads": 4,
+          "patchtst_ffn_dim": 512,
+          "patchtst_num_layers": 3,
+          "patchtst_dropout": 0.10883950319939803,
+          "batch_size": 16,
+          "lr": 0.00013552494212203128,
+          "weight_decay": 2.0363570362447664e-06,
+          "use_recursive_lags": true
+        }
+      }
+    },
+    "ML": {
+      "maize": {
+        "trial_number": 75,
+        "objective_value": 0.103353,
+        "hyperparameters": {
+          "use_gdd": true,
+          "use_heat_stress_days": false,
+          "use_rue": false,
+          "use_farquhar": true,
+          "use_sota_features": false,
+          "include_spatial_features": true,
+          "use_residual_trend": false,
+          "use_cwb_feature": false,
+          "drop_tavg": true,
+          "lag_years": 3,
+          "use_exponential_weighting": false,
+          "exponential_tau": 75,
+          "multi_year_summaries": true,
+          "multi_year_window": 1,
+          "multi_year_features": "all",
+          "patchtst_d_model": 128,
+          "patchtst_num_attention_heads": 2,
+          "patchtst_ffn_dim": 512,
+          "patchtst_num_layers": 6,
+          "patchtst_dropout": 0.17509327966165905,
+          "batch_size": 128,
+          "lr": 7.186635556375729e-05,
+          "weight_decay": 3.7684733069393353e-06,
+          "use_recursive_lags": true
+        }
+      }
+    },
+    "DE": {
+      "maize": {
+        "trial_number": 16,
+        "objective_value": 0.141395,
+        "hyperparameters": {
+          "use_gdd": true,
+          "use_heat_stress_days": true,
+          "use_rue": false,
+          "use_farquhar": true,
+          "use_sota_features": true,
+          "include_spatial_features": false,
+          "use_residual_trend": false,
+          "use_cwb_feature": true,
+          "drop_tavg": false,
+          "lag_years": 3,
+          "use_exponential_weighting": false,
+          "exponential_tau": 100,
+          "multi_year_summaries": false,
+          "multi_year_window": 3,
+          "multi_year_features": "remote_sensing",
+          "patchtst_d_model": 256,
+          "patchtst_num_attention_heads": 2,
+          "patchtst_ffn_dim": 1024,
+          "patchtst_num_layers": 4,
+          "patchtst_dropout": 0.02063001639130077,
+          "batch_size": 16,
+          "lr": 5.008527687201628e-05,
+          "weight_decay": 3.417478779317187e-06,
+          "use_recursive_lags": true
+        }
+      },
+      "wheat": {
+        "trial_number": 51,
+        "objective_value": 0.093041,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": false,
+          "use_rue": false,
+          "use_farquhar": false,
+          "use_sota_features": false,
+          "include_spatial_features": false,
+          "use_residual_trend": false,
+          "use_cwb_feature": true,
+          "drop_tavg": false,
+          "lag_years": 1,
+          "use_exponential_weighting": false,
+          "exponential_tau": 10,
+          "multi_year_summaries": false,
+          "multi_year_window": 2,
+          "multi_year_features": "weather",
+          "patchtst_d_model": 128,
+          "patchtst_num_attention_heads": 16,
+          "patchtst_ffn_dim": 1024,
+          "patchtst_num_layers": 3,
+          "patchtst_dropout": 0.47789162770349447,
+          "batch_size": 32,
+          "lr": 0.00031949553878280986,
+          "weight_decay": 3.57709211291099e-06,
+          "use_recursive_lags": true
+        }
+      }
+    },
+    "SK": {
+      "maize": {
+        "trial_number": 85,
+        "objective_value": 0.162976,
+        "hyperparameters": {
+          "use_gdd": true,
+          "use_heat_stress_days": true,
+          "use_rue": true,
+          "use_farquhar": false,
+          "use_sota_features": false,
+          "include_spatial_features": true,
+          "use_residual_trend": false,
+          "use_cwb_feature": false,
+          "drop_tavg": false,
+          "lag_years": 3,
+          "use_exponential_weighting": false,
+          "exponential_tau": 100,
+          "multi_year_summaries": true,
+          "multi_year_window": 1,
+          "multi_year_features": "phenology",
+          "patchtst_d_model": 256,
+          "patchtst_num_attention_heads": 16,
+          "patchtst_ffn_dim": 512,
+          "patchtst_num_layers": 6,
+          "patchtst_dropout": 0.3848288353240494,
+          "batch_size": 64,
+          "lr": 0.00010866473803892746,
+          "weight_decay": 6.917395552065188e-06,
+          "use_recursive_lags": true
+        }
+      }
+    },
+    "HU": {
+      "wheat": {
+        "trial_number": 72,
+        "objective_value": 0.131976,
+        "hyperparameters": {
+          "use_gdd": true,
+          "use_heat_stress_days": true,
+          "use_rue": false,
+          "use_farquhar": false,
+          "use_sota_features": true,
+          "include_spatial_features": true,
+          "use_residual_trend": true,
+          "use_cwb_feature": true,
+          "drop_tavg": true,
+          "lag_years": 0,
+          "use_exponential_weighting": true,
+          "exponential_tau": 100,
+          "multi_year_summaries": true,
+          "multi_year_window": 1,
+          "multi_year_features": "remote_sensing",
+          "patchtst_d_model": 32,
+          "patchtst_num_attention_heads": 8,
+          "patchtst_ffn_dim": 1024,
+          "patchtst_num_layers": 8,
+          "patchtst_dropout": 0.44294492401489827,
+          "batch_size": 128,
+          "lr": 7.078093340411712e-05,
+          "weight_decay": 3.241198693805616e-05
+        }
+      },
+      "maize": {
+        "trial_number": 76,
+        "objective_value": 0.125053,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": true,
+          "use_rue": false,
+          "use_farquhar": true,
+          "use_sota_features": true,
+          "include_spatial_features": false,
+          "use_residual_trend": false,
+          "use_cwb_feature": true,
+          "drop_tavg": false,
+          "lag_years": 1,
+          "use_exponential_weighting": false,
+          "exponential_tau": 100,
+          "multi_year_summaries": true,
+          "multi_year_window": 2,
+          "multi_year_features": "weather",
+          "patchtst_d_model": 32,
+          "patchtst_num_attention_heads": 4,
+          "patchtst_ffn_dim": 1024,
+          "patchtst_num_layers": 2,
+          "patchtst_dropout": 0.4963712613658738,
+          "batch_size": 128,
+          "lr": 0.0004613693567689397,
+          "weight_decay": 3.0454412657429904e-06,
+          "use_recursive_lags": true
         }
       }
     },
     "ZM": {
-      "patchtst": {
-        "maize": {
+      "maize": {
+        "trial_number": 79,
+        "objective_value": 0.277018,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": true,
+          "use_rue": true,
+          "use_farquhar": false,
+          "use_sota_features": true,
+          "include_spatial_features": false,
+          "use_residual_trend": false,
+          "use_cwb_feature": false,
+          "drop_tavg": false,
+          "lag_years": 3,
+          "use_exponential_weighting": false,
+          "exponential_tau": 75,
+          "multi_year_summaries": true,
+          "multi_year_window": 2,
+          "multi_year_features": "remote_sensing",
           "patchtst_d_model": 128,
-          "patchtst_num_attention_heads": 4,
-          "patchtst_ffn_dim": 128,
-          "patchtst_num_layers": 2,
-          "patchtst_dropout": 0.3981554359476477,
-          "batch_size": 32,
-          "lr": 0.00037230515105671176,
-          "weight_decay": 4.094692623963945e-05,
-          "seed": 5555
-        }
-      },
-      "xlinear": {
-        "maize": {
-          "xlinear_hidden_size": 64,
-          "xlinear_temporal_ff": 512,
-          "xlinear_channel_ff": 8,
-          "xlinear_dropout": 0.10204904704013547,
-          "batch_size": 16,
-          "lr": 5.987976309525833e-05,
-          "weight_decay": 2.7638720766401873e-05,
-          "seed": 42
+          "patchtst_num_attention_heads": 2,
+          "patchtst_ffn_dim": 256,
+          "patchtst_num_layers": 8,
+          "patchtst_dropout": 0.32717260757597205,
+          "batch_size": 64,
+          "lr": 6.402152509050683e-05,
+          "weight_decay": 2.021445257707112e-05,
+          "use_recursive_lags": true
         }
       }
     }
   },
-"model_flags": {
-    "patchtst": {
-      "wheat": ["--use_gdd", "--use_rue", "--use_farquhar", "--use_sota_features", "--include_spatial_features"],
-      "maize": ["--use_sota_features", "--include_spatial_features"]
+  "xlinear": {
+    "HR": {
+      "wheat": {
+        "trial_number": 71,
+        "objective_value": 0.138659,
+        "hyperparameters": {
+          "use_gdd": true,
+          "use_heat_stress_days": true,
+          "use_rue": true,
+          "use_farquhar": false,
+          "use_sota_features": false,
+          "include_spatial_features": true,
+          "use_residual_trend": true,
+          "use_cwb_feature": true,
+          "drop_tavg": false,
+          "lag_years": 3,
+          "use_exponential_weighting": false,
+          "exponential_tau": 10,
+          "multi_year_summaries": true,
+          "multi_year_window": 2,
+          "multi_year_features": "all",
+          "use_revin": false,
+          "xlinear_hidden_size": 32,
+          "xlinear_temporal_ff": 64,
+          "xlinear_channel_ff": 16,
+          "xlinear_dropout": 0.3959107638601581,
+          "batch_size": 128,
+          "lr": 0.00013541286519258209,
+          "weight_decay": 1.1153830665444605e-05,
+          "use_recursive_lags": true
+        }
+      },
+      "maize": {
+        "trial_number": 53,
+        "objective_value": 0.351433,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": true,
+          "use_rue": true,
+          "use_farquhar": true,
+          "use_sota_features": false,
+          "include_spatial_features": true,
+          "use_residual_trend": true,
+          "use_cwb_feature": true,
+          "drop_tavg": true,
+          "lag_years": 0,
+          "use_exponential_weighting": false,
+          "exponential_tau": 0,
+          "multi_year_summaries": false,
+          "multi_year_window": 2,
+          "multi_year_features": "all",
+          "use_revin": true,
+          "xlinear_hidden_size": 256,
+          "xlinear_temporal_ff": 512,
+          "xlinear_channel_ff": 64,
+          "xlinear_dropout": 0.020178607494806947,
+          "batch_size": 64,
+          "lr": 0.00022106295021468125,
+          "weight_decay": 2.379676727013514e-05
+        }
+      }
     },
-    "xlinear": {
-      "default": ["--use_gdd", "--use_rue", "--use_farquhar", "--use_sota_features", "--include_spatial_features", "--use_heat_stress_days", "--lag_years", "2", "--use_revin", "--use_recursive_lags"]
+    "AT": {
+      "wheat": {
+        "trial_number": 97,
+        "objective_value": 0.114127,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": true,
+          "use_rue": false,
+          "use_farquhar": false,
+          "use_sota_features": false,
+          "include_spatial_features": false,
+          "use_residual_trend": false,
+          "use_cwb_feature": false,
+          "drop_tavg": false,
+          "lag_years": 0,
+          "use_exponential_weighting": true,
+          "exponential_tau": 75,
+          "multi_year_summaries": false,
+          "multi_year_window": 1,
+          "multi_year_features": "weather",
+          "use_revin": false,
+          "xlinear_hidden_size": 64,
+          "xlinear_temporal_ff": 64,
+          "xlinear_channel_ff": 64,
+          "xlinear_dropout": 0.1937863945785444,
+          "batch_size": 32,
+          "lr": 0.0002536781557034821,
+          "weight_decay": 9.147672687746054e-05
+        }
+      },
+      "maize": {
+        "trial_number": 74,
+        "objective_value": 0.101685,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": true,
+          "use_rue": false,
+          "use_farquhar": false,
+          "use_sota_features": true,
+          "include_spatial_features": false,
+          "use_residual_trend": false,
+          "use_cwb_feature": true,
+          "drop_tavg": true,
+          "lag_years": 1,
+          "use_exponential_weighting": true,
+          "exponential_tau": 50,
+          "multi_year_summaries": true,
+          "multi_year_window": 1,
+          "multi_year_features": "remote_sensing",
+          "use_revin": false,
+          "xlinear_hidden_size": 32,
+          "xlinear_temporal_ff": 512,
+          "xlinear_channel_ff": 32,
+          "xlinear_dropout": 0.19018943818042816,
+          "batch_size": 16,
+          "lr": 0.00022498954767662216,
+          "weight_decay": 7.180577574836909e-06,
+          "use_recursive_lags": true
+        }
+      }
+    },
+    "DK": {
+      "maize": {
+        "trial_number": 92,
+        "objective_value": 0.099557,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": false,
+          "use_rue": false,
+          "use_farquhar": true,
+          "use_sota_features": true,
+          "include_spatial_features": false,
+          "use_residual_trend": false,
+          "use_cwb_feature": true,
+          "drop_tavg": true,
+          "lag_years": 2,
+          "use_exponential_weighting": false,
+          "exponential_tau": 10,
+          "multi_year_summaries": true,
+          "multi_year_window": 2,
+          "multi_year_features": "weather",
+          "use_revin": true,
+          "xlinear_hidden_size": 64,
+          "xlinear_temporal_ff": 128,
+          "xlinear_channel_ff": 32,
+          "xlinear_dropout": 0.35927397281757806,
+          "batch_size": 128,
+          "lr": 6.752360746684595e-05,
+          "weight_decay": 1.3989307910628912e-06,
+          "use_recursive_lags": true
+        }
+      },
+      "wheat": {
+        "trial_number": 80,
+        "objective_value": 0.026805,
+        "hyperparameters": {
+          "use_gdd": true,
+          "use_heat_stress_days": true,
+          "use_rue": false,
+          "use_farquhar": true,
+          "use_sota_features": false,
+          "include_spatial_features": false,
+          "use_residual_trend": false,
+          "use_cwb_feature": true,
+          "drop_tavg": true,
+          "lag_years": 1,
+          "use_exponential_weighting": false,
+          "exponential_tau": 25,
+          "multi_year_summaries": true,
+          "multi_year_window": 2,
+          "multi_year_features": "weather",
+          "use_revin": false,
+          "xlinear_hidden_size": 128,
+          "xlinear_temporal_ff": 128,
+          "xlinear_channel_ff": 32,
+          "xlinear_dropout": 0.4075191099388324,
+          "batch_size": 32,
+          "lr": 0.00012332615415022857,
+          "weight_decay": 6.157296831383208e-05,
+          "use_recursive_lags": true
+        }
+      }
+    },
+    "FI": {
+      "wheat": {
+        "trial_number": 25,
+        "objective_value": 0.084617,
+        "hyperparameters": {
+          "use_gdd": true,
+          "use_heat_stress_days": true,
+          "use_rue": true,
+          "use_farquhar": false,
+          "use_sota_features": false,
+          "include_spatial_features": false,
+          "use_residual_trend": true,
+          "use_cwb_feature": true,
+          "drop_tavg": false,
+          "lag_years": 2,
+          "use_exponential_weighting": false,
+          "exponential_tau": 10,
+          "multi_year_summaries": true,
+          "multi_year_window": 3,
+          "multi_year_features": "phenology",
+          "use_revin": true,
+          "xlinear_hidden_size": 256,
+          "xlinear_temporal_ff": 512,
+          "xlinear_channel_ff": 32,
+          "xlinear_dropout": 0.2307312202578942,
+          "batch_size": 32,
+          "lr": 0.00016806685778675642,
+          "weight_decay": 1.382096210669103e-06,
+          "use_recursive_lags": true
+        }
+      }
+    },
+    "ES": {
+      "wheat": {
+        "trial_number": 31,
+        "objective_value": 0.281148,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": false,
+          "use_rue": false,
+          "use_farquhar": false,
+          "use_sota_features": true,
+          "include_spatial_features": true,
+          "use_residual_trend": false,
+          "use_cwb_feature": true,
+          "drop_tavg": true,
+          "lag_years": 2,
+          "use_exponential_weighting": true,
+          "exponential_tau": 75,
+          "multi_year_summaries": true,
+          "multi_year_window": 1,
+          "multi_year_features": "weather",
+          "use_revin": true,
+          "xlinear_hidden_size": 32,
+          "xlinear_temporal_ff": 128,
+          "xlinear_channel_ff": 8,
+          "xlinear_dropout": 0.38198082320570453,
+          "batch_size": 64,
+          "lr": 5.1960463157057077e-05,
+          "weight_decay": 1.0132612071436416e-05,
+          "use_recursive_lags": true
+        }
+      },
+      "maize": {
+        "trial_number": 86,
+        "objective_value": 0.106863,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": false,
+          "use_rue": true,
+          "use_farquhar": false,
+          "use_sota_features": false,
+          "include_spatial_features": true,
+          "use_residual_trend": false,
+          "use_cwb_feature": false,
+          "drop_tavg": true,
+          "lag_years": 3,
+          "use_exponential_weighting": false,
+          "exponential_tau": 0,
+          "multi_year_summaries": true,
+          "multi_year_window": 1,
+          "multi_year_features": "weather",
+          "use_revin": false,
+          "xlinear_hidden_size": 32,
+          "xlinear_temporal_ff": 512,
+          "xlinear_channel_ff": 16,
+          "xlinear_dropout": 0.12711211377184747,
+          "batch_size": 64,
+          "lr": 0.00013781606537724352,
+          "weight_decay": 1.8336594890841637e-05,
+          "use_recursive_lags": true
+        }
+      }
+    },
+    "EE": {
+      "wheat": {
+        "trial_number": 59,
+        "objective_value": 0.140066,
+        "hyperparameters": {
+          "use_gdd": true,
+          "use_heat_stress_days": true,
+          "use_rue": true,
+          "use_farquhar": false,
+          "use_sota_features": true,
+          "include_spatial_features": true,
+          "use_residual_trend": true,
+          "use_cwb_feature": false,
+          "drop_tavg": false,
+          "lag_years": 1,
+          "use_exponential_weighting": false,
+          "exponential_tau": 50,
+          "multi_year_summaries": true,
+          "multi_year_window": 2,
+          "multi_year_features": "remote_sensing",
+          "use_revin": false,
+          "xlinear_hidden_size": 128,
+          "xlinear_temporal_ff": 128,
+          "xlinear_channel_ff": 64,
+          "xlinear_dropout": 0.19601224034362413,
+          "batch_size": 32,
+          "lr": 0.00035081433034051766,
+          "weight_decay": 4.6236570232100114e-05,
+          "use_recursive_lags": true
+        }
+      }
+    },
+    "ZA": {
+      "maize": {
+        "trial_number": 28,
+        "objective_value": 0.197807,
+        "hyperparameters": {
+          "use_gdd": true,
+          "use_heat_stress_days": true,
+          "use_rue": true,
+          "use_farquhar": false,
+          "use_sota_features": true,
+          "include_spatial_features": false,
+          "use_residual_trend": true,
+          "use_cwb_feature": false,
+          "drop_tavg": false,
+          "lag_years": 2,
+          "use_exponential_weighting": false,
+          "exponential_tau": 100,
+          "multi_year_summaries": true,
+          "multi_year_window": 1,
+          "multi_year_features": "phenology",
+          "use_revin": true,
+          "xlinear_hidden_size": 64,
+          "xlinear_temporal_ff": 256,
+          "xlinear_channel_ff": 16,
+          "xlinear_dropout": 0.3877115774664476,
+          "batch_size": 128,
+          "lr": 0.0003675555989385944,
+          "weight_decay": 1.5384062602892156e-06,
+          "use_recursive_lags": true
+        }
+      }
+    },
+    "IN": {
+      "maize": {
+        "trial_number": 82,
+        "objective_value": 0.382187,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": true,
+          "use_rue": false,
+          "use_farquhar": false,
+          "use_sota_features": true,
+          "include_spatial_features": true,
+          "use_residual_trend": true,
+          "use_cwb_feature": true,
+          "drop_tavg": false,
+          "lag_years": 0,
+          "use_exponential_weighting": false,
+          "exponential_tau": 75,
+          "multi_year_summaries": false,
+          "multi_year_window": 1,
+          "multi_year_features": "all",
+          "use_revin": true,
+          "xlinear_hidden_size": 256,
+          "xlinear_temporal_ff": 64,
+          "xlinear_channel_ff": 32,
+          "xlinear_dropout": 0.21653406959117272,
+          "batch_size": 32,
+          "lr": 0.00011729371043509196,
+          "weight_decay": 2.2946572831797925e-06
+        }
+      },
+      "wheat": {
+        "trial_number": 96,
+        "objective_value": 0.176128,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": true,
+          "use_rue": true,
+          "use_farquhar": true,
+          "use_sota_features": false,
+          "include_spatial_features": true,
+          "use_residual_trend": false,
+          "use_cwb_feature": false,
+          "drop_tavg": false,
+          "lag_years": 3,
+          "use_exponential_weighting": true,
+          "exponential_tau": 25,
+          "multi_year_summaries": true,
+          "multi_year_window": 2,
+          "multi_year_features": "all",
+          "use_revin": false,
+          "xlinear_hidden_size": 32,
+          "xlinear_temporal_ff": 128,
+          "xlinear_channel_ff": 32,
+          "xlinear_dropout": 0.33287477605121485,
+          "batch_size": 32,
+          "lr": 0.00010139780459921442,
+          "weight_decay": 1.9296763269921608e-05,
+          "use_recursive_lags": true
+        }
+      }
+    },
+    "CN": {
+      "maize": {
+        "trial_number": 84,
+        "objective_value": 0.07289,
+        "hyperparameters": {
+          "use_gdd": true,
+          "use_heat_stress_days": false,
+          "use_rue": true,
+          "use_farquhar": true,
+          "use_sota_features": true,
+          "include_spatial_features": false,
+          "use_residual_trend": false,
+          "use_cwb_feature": true,
+          "drop_tavg": false,
+          "lag_years": 3,
+          "use_exponential_weighting": true,
+          "exponential_tau": 25,
+          "multi_year_summaries": false,
+          "multi_year_window": 3,
+          "multi_year_features": "weather",
+          "use_revin": false,
+          "xlinear_hidden_size": 256,
+          "xlinear_temporal_ff": 128,
+          "xlinear_channel_ff": 8,
+          "xlinear_dropout": 0.39848469217812854,
+          "batch_size": 128,
+          "lr": 0.00039434804142404956,
+          "weight_decay": 3.0237901400541274e-05,
+          "use_recursive_lags": true
+        }
+      },
+      "wheat": {
+        "trial_number": 64,
+        "objective_value": 0.075245,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": false,
+          "use_rue": false,
+          "use_farquhar": true,
+          "use_sota_features": false,
+          "include_spatial_features": false,
+          "use_residual_trend": false,
+          "use_cwb_feature": false,
+          "drop_tavg": false,
+          "lag_years": 1,
+          "use_exponential_weighting": true,
+          "exponential_tau": 25,
+          "multi_year_summaries": false,
+          "multi_year_window": 1,
+          "multi_year_features": "weather",
+          "use_revin": false,
+          "xlinear_hidden_size": 256,
+          "xlinear_temporal_ff": 64,
+          "xlinear_channel_ff": 16,
+          "xlinear_dropout": 0.06551056390705642,
+          "batch_size": 16,
+          "lr": 7.374862305359218e-05,
+          "weight_decay": 6.518071008584277e-05,
+          "use_recursive_lags": true
+        }
+      }
+    },
+    "ZM": {
+      "maize": {
+        "trial_number": 60,
+        "objective_value": 0.276121,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": true,
+          "use_rue": true,
+          "use_farquhar": false,
+          "use_sota_features": true,
+          "include_spatial_features": true,
+          "use_residual_trend": false,
+          "use_cwb_feature": false,
+          "drop_tavg": false,
+          "lag_years": 3,
+          "use_exponential_weighting": true,
+          "exponential_tau": 25,
+          "multi_year_summaries": true,
+          "multi_year_window": 3,
+          "multi_year_features": "weather",
+          "use_revin": true,
+          "xlinear_hidden_size": 64,
+          "xlinear_temporal_ff": 128,
+          "xlinear_channel_ff": 32,
+          "xlinear_dropout": 0.35102277992503284,
+          "batch_size": 128,
+          "lr": 0.00020678622104668338,
+          "weight_decay": 3.4165802725539943e-06,
+          "use_recursive_lags": true
+        }
+      }
+    },
+    "IT": {
+      "wheat": {
+        "trial_number": 83,
+        "objective_value": 0.157084,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": false,
+          "use_rue": true,
+          "use_farquhar": false,
+          "use_sota_features": true,
+          "include_spatial_features": true,
+          "use_residual_trend": false,
+          "use_cwb_feature": true,
+          "drop_tavg": false,
+          "lag_years": 2,
+          "use_exponential_weighting": false,
+          "exponential_tau": 50,
+          "multi_year_summaries": true,
+          "multi_year_window": 1,
+          "multi_year_features": "all",
+          "use_revin": true,
+          "xlinear_hidden_size": 32,
+          "xlinear_temporal_ff": 256,
+          "xlinear_channel_ff": 64,
+          "xlinear_dropout": 0.002688248727002851,
+          "batch_size": 64,
+          "lr": 0.00011947436612155654,
+          "weight_decay": 2.6149013944583054e-05,
+          "use_recursive_lags": true
+        }
+      },
+      "maize": {
+        "trial_number": 25,
+        "objective_value": 0.194936,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": true,
+          "use_rue": false,
+          "use_farquhar": false,
+          "use_sota_features": false,
+          "include_spatial_features": false,
+          "use_residual_trend": false,
+          "use_cwb_feature": true,
+          "drop_tavg": false,
+          "lag_years": 2,
+          "use_exponential_weighting": false,
+          "exponential_tau": 10,
+          "multi_year_summaries": true,
+          "multi_year_window": 1,
+          "multi_year_features": "remote_sensing",
+          "use_revin": false,
+          "xlinear_hidden_size": 32,
+          "xlinear_temporal_ff": 128,
+          "xlinear_channel_ff": 16,
+          "xlinear_dropout": 0.2194382395172876,
+          "batch_size": 16,
+          "lr": 0.00017430407627839323,
+          "weight_decay": 6.691071156216719e-06,
+          "use_recursive_lags": true
+        }
+      }
+    },
+    "FR": {
+      "maize": {
+        "trial_number": 11,
+        "objective_value": 0.155924,
+        "hyperparameters": {
+          "use_gdd": true,
+          "use_heat_stress_days": true,
+          "use_rue": true,
+          "use_farquhar": false,
+          "use_sota_features": false,
+          "include_spatial_features": false,
+          "use_residual_trend": true,
+          "use_cwb_feature": false,
+          "drop_tavg": true,
+          "lag_years": 3,
+          "use_exponential_weighting": false,
+          "exponential_tau": 25,
+          "multi_year_summaries": true,
+          "multi_year_window": 2,
+          "multi_year_features": "weather",
+          "use_revin": true,
+          "xlinear_hidden_size": 64,
+          "xlinear_temporal_ff": 512,
+          "xlinear_channel_ff": 32,
+          "xlinear_dropout": 0.4954262347189786,
+          "batch_size": 64,
+          "lr": 0.00011860665918882685,
+          "weight_decay": 2.97282696586842e-05,
+          "use_recursive_lags": true
+        }
+      },
+      "wheat": {
+        "trial_number": 79,
+        "objective_value": 0.081307,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": true,
+          "use_rue": false,
+          "use_farquhar": true,
+          "use_sota_features": false,
+          "include_spatial_features": true,
+          "use_residual_trend": false,
+          "use_cwb_feature": false,
+          "drop_tavg": true,
+          "lag_years": 3,
+          "use_exponential_weighting": false,
+          "exponential_tau": 0,
+          "multi_year_summaries": false,
+          "multi_year_window": 3,
+          "multi_year_features": "phenology",
+          "use_revin": true,
+          "xlinear_hidden_size": 64,
+          "xlinear_temporal_ff": 512,
+          "xlinear_channel_ff": 64,
+          "xlinear_dropout": 0.4707116408713213,
+          "batch_size": 64,
+          "lr": 6.115654613668227e-05,
+          "weight_decay": 8.921910874933507e-05,
+          "use_recursive_lags": true
+        }
+      }
+    },
+    "US": {
+      "maize": {
+        "trial_number": 21,
+        "objective_value": 0.12992,
+        "hyperparameters": {
+          "use_gdd": true,
+          "use_heat_stress_days": true,
+          "use_rue": false,
+          "use_farquhar": true,
+          "use_sota_features": true,
+          "include_spatial_features": true,
+          "use_residual_trend": false,
+          "use_cwb_feature": false,
+          "drop_tavg": true,
+          "lag_years": 3,
+          "use_exponential_weighting": false,
+          "exponential_tau": 100,
+          "multi_year_summaries": true,
+          "multi_year_window": 3,
+          "multi_year_features": "remote_sensing",
+          "use_revin": true,
+          "xlinear_hidden_size": 128,
+          "xlinear_temporal_ff": 256,
+          "xlinear_channel_ff": 32,
+          "xlinear_dropout": 0.15104970481829938,
+          "batch_size": 16,
+          "lr": 6.634402812692508e-05,
+          "weight_decay": 2.014726285532815e-05,
+          "use_recursive_lags": true
+        }
+      },
+      "wheat": {
+        "trial_number": 41,
+        "objective_value": 0.160039,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": false,
+          "use_rue": false,
+          "use_farquhar": false,
+          "use_sota_features": false,
+          "include_spatial_features": true,
+          "use_residual_trend": false,
+          "use_cwb_feature": false,
+          "drop_tavg": false,
+          "lag_years": 3,
+          "use_exponential_weighting": false,
+          "exponential_tau": 25,
+          "multi_year_summaries": false,
+          "multi_year_window": 1,
+          "multi_year_features": "remote_sensing",
+          "use_revin": true,
+          "xlinear_hidden_size": 64,
+          "xlinear_temporal_ff": 128,
+          "xlinear_channel_ff": 16,
+          "xlinear_dropout": 0.11257815934374348,
+          "batch_size": 64,
+          "lr": 7.065065023357645e-05,
+          "weight_decay": 1.617701383265113e-06,
+          "use_recursive_lags": true
+        }
+      }
+    },
+    "PT": {
+      "wheat": {
+        "trial_number": 47,
+        "objective_value": 0.101327,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": false,
+          "use_rue": false,
+          "use_farquhar": true,
+          "use_sota_features": false,
+          "include_spatial_features": false,
+          "use_residual_trend": false,
+          "use_cwb_feature": false,
+          "drop_tavg": false,
+          "lag_years": 3,
+          "use_exponential_weighting": true,
+          "exponential_tau": 75,
+          "multi_year_summaries": false,
+          "multi_year_window": 1,
+          "multi_year_features": "weather",
+          "use_revin": false,
+          "xlinear_hidden_size": 64,
+          "xlinear_temporal_ff": 512,
+          "xlinear_channel_ff": 16,
+          "xlinear_dropout": 0.06719926512092855,
+          "batch_size": 16,
+          "lr": 0.0001326047249304736,
+          "weight_decay": 1.4252699270882418e-05,
+          "use_recursive_lags": true
+        }
+      },
+      "maize": {
+        "trial_number": 74,
+        "objective_value": 0.049524,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": true,
+          "use_rue": false,
+          "use_farquhar": true,
+          "use_sota_features": true,
+          "include_spatial_features": false,
+          "use_residual_trend": false,
+          "use_cwb_feature": true,
+          "drop_tavg": false,
+          "lag_years": 1,
+          "use_exponential_weighting": false,
+          "exponential_tau": 50,
+          "multi_year_summaries": false,
+          "multi_year_window": 2,
+          "multi_year_features": "weather",
+          "use_revin": true,
+          "xlinear_hidden_size": 32,
+          "xlinear_temporal_ff": 128,
+          "xlinear_channel_ff": 64,
+          "xlinear_dropout": 0.3259198150816514,
+          "batch_size": 16,
+          "lr": 7.933405410980299e-05,
+          "weight_decay": 5.708388160488049e-05,
+          "use_recursive_lags": true
+        }
+      }
+    },
+    "DE": {
+      "wheat": {
+        "trial_number": 91,
+        "objective_value": 0.094589,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": false,
+          "use_rue": false,
+          "use_farquhar": false,
+          "use_sota_features": false,
+          "include_spatial_features": false,
+          "use_residual_trend": false,
+          "use_cwb_feature": false,
+          "drop_tavg": false,
+          "lag_years": 1,
+          "use_exponential_weighting": true,
+          "exponential_tau": 25,
+          "multi_year_summaries": false,
+          "multi_year_window": 1,
+          "multi_year_features": "weather",
+          "use_revin": false,
+          "xlinear_hidden_size": 32,
+          "xlinear_temporal_ff": 64,
+          "xlinear_channel_ff": 16,
+          "xlinear_dropout": 0.1381128343620192,
+          "batch_size": 64,
+          "lr": 0.00034772388446929227,
+          "weight_decay": 1.5879063444841626e-06,
+          "use_recursive_lags": true
+        }
+      },
+      "maize": {
+        "trial_number": 83,
+        "objective_value": 0.142813,
+        "hyperparameters": {
+          "use_gdd": true,
+          "use_heat_stress_days": false,
+          "use_rue": false,
+          "use_farquhar": false,
+          "use_sota_features": true,
+          "include_spatial_features": false,
+          "use_residual_trend": false,
+          "use_cwb_feature": true,
+          "drop_tavg": false,
+          "lag_years": 0,
+          "use_exponential_weighting": false,
+          "exponential_tau": 0,
+          "multi_year_summaries": false,
+          "multi_year_window": 3,
+          "multi_year_features": "all",
+          "use_revin": true,
+          "xlinear_hidden_size": 64,
+          "xlinear_temporal_ff": 256,
+          "xlinear_channel_ff": 64,
+          "xlinear_dropout": 0.2888351979819196,
+          "batch_size": 16,
+          "lr": 0.00013824368167840477,
+          "weight_decay": 8.434770382522668e-05
+        }
+      }
+    },
+    "CZ": {
+      "maize": {
+        "trial_number": 75,
+        "objective_value": 0.18662,
+        "hyperparameters": {
+          "use_gdd": true,
+          "use_heat_stress_days": true,
+          "use_rue": false,
+          "use_farquhar": true,
+          "use_sota_features": false,
+          "include_spatial_features": false,
+          "use_residual_trend": true,
+          "use_cwb_feature": true,
+          "drop_tavg": false,
+          "lag_years": 1,
+          "use_exponential_weighting": true,
+          "exponential_tau": 25,
+          "multi_year_summaries": false,
+          "multi_year_window": 1,
+          "multi_year_features": "all",
+          "use_revin": false,
+          "xlinear_hidden_size": 128,
+          "xlinear_temporal_ff": 256,
+          "xlinear_channel_ff": 16,
+          "xlinear_dropout": 0.1890572366302395,
+          "batch_size": 64,
+          "lr": 0.0001407270339154132,
+          "weight_decay": 1.7007581945314323e-05,
+          "use_recursive_lags": true
+        }
+      },
+      "wheat": {
+        "trial_number": 62,
+        "objective_value": 0.116882,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": false,
+          "use_rue": true,
+          "use_farquhar": false,
+          "use_sota_features": false,
+          "include_spatial_features": false,
+          "use_residual_trend": true,
+          "use_cwb_feature": true,
+          "drop_tavg": false,
+          "lag_years": 1,
+          "use_exponential_weighting": false,
+          "exponential_tau": 75,
+          "multi_year_summaries": true,
+          "multi_year_window": 1,
+          "multi_year_features": "weather",
+          "use_revin": false,
+          "xlinear_hidden_size": 256,
+          "xlinear_temporal_ff": 128,
+          "xlinear_channel_ff": 16,
+          "xlinear_dropout": 0.4757935049776741,
+          "batch_size": 128,
+          "lr": 5.4080928214006414e-05,
+          "weight_decay": 4.4636394229251675e-06,
+          "use_recursive_lags": true
+        }
+      }
+    },
+    "LT": {
+      "wheat": {
+        "trial_number": 42,
+        "objective_value": 0.125756,
+        "hyperparameters": {
+          "use_gdd": true,
+          "use_heat_stress_days": false,
+          "use_rue": true,
+          "use_farquhar": true,
+          "use_sota_features": false,
+          "include_spatial_features": true,
+          "use_residual_trend": false,
+          "use_cwb_feature": true,
+          "drop_tavg": true,
+          "lag_years": 1,
+          "use_exponential_weighting": true,
+          "exponential_tau": 50,
+          "multi_year_summaries": true,
+          "multi_year_window": 2,
+          "multi_year_features": "phenology",
+          "use_revin": true,
+          "xlinear_hidden_size": 128,
+          "xlinear_temporal_ff": 128,
+          "xlinear_channel_ff": 8,
+          "xlinear_dropout": 0.47915490036616826,
+          "batch_size": 32,
+          "lr": 5.821001566742673e-05,
+          "weight_decay": 1.112356054046328e-06,
+          "use_recursive_lags": true
+        }
+      },
+      "maize": {
+        "trial_number": 71,
+        "objective_value": 0.167963,
+        "hyperparameters": {
+          "use_gdd": true,
+          "use_heat_stress_days": true,
+          "use_rue": false,
+          "use_farquhar": true,
+          "use_sota_features": true,
+          "include_spatial_features": true,
+          "use_residual_trend": false,
+          "use_cwb_feature": true,
+          "drop_tavg": true,
+          "lag_years": 0,
+          "use_exponential_weighting": true,
+          "exponential_tau": 10,
+          "multi_year_summaries": true,
+          "multi_year_window": 3,
+          "multi_year_features": "phenology",
+          "use_revin": false,
+          "xlinear_hidden_size": 64,
+          "xlinear_temporal_ff": 512,
+          "xlinear_channel_ff": 32,
+          "xlinear_dropout": 0.39130178109405256,
+          "batch_size": 32,
+          "lr": 8.034127653303198e-05,
+          "weight_decay": 5.461800341097071e-06
+        }
+      }
+    },
+    "EL": {
+      "wheat": {
+        "trial_number": 57,
+        "objective_value": 0.164051,
+        "hyperparameters": {
+          "use_gdd": true,
+          "use_heat_stress_days": true,
+          "use_rue": false,
+          "use_farquhar": true,
+          "use_sota_features": true,
+          "include_spatial_features": true,
+          "use_residual_trend": false,
+          "use_cwb_feature": true,
+          "drop_tavg": false,
+          "lag_years": 2,
+          "use_exponential_weighting": true,
+          "exponential_tau": 75,
+          "multi_year_summaries": false,
+          "multi_year_window": 2,
+          "multi_year_features": "remote_sensing",
+          "use_revin": false,
+          "xlinear_hidden_size": 256,
+          "xlinear_temporal_ff": 64,
+          "xlinear_channel_ff": 32,
+          "xlinear_dropout": 0.3423368703511356,
+          "batch_size": 16,
+          "lr": 0.0003100769249495965,
+          "weight_decay": 1.6775023547853142e-05,
+          "use_recursive_lags": true
+        }
+      },
+      "maize": {
+        "trial_number": 51,
+        "objective_value": 0.2791,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": false,
+          "use_rue": false,
+          "use_farquhar": true,
+          "use_sota_features": true,
+          "include_spatial_features": true,
+          "use_residual_trend": true,
+          "use_cwb_feature": false,
+          "drop_tavg": true,
+          "lag_years": 2,
+          "use_exponential_weighting": true,
+          "exponential_tau": 75,
+          "multi_year_summaries": true,
+          "multi_year_window": 2,
+          "multi_year_features": "weather",
+          "use_revin": false,
+          "xlinear_hidden_size": 32,
+          "xlinear_temporal_ff": 256,
+          "xlinear_channel_ff": 8,
+          "xlinear_dropout": 0.4014297819238544,
+          "batch_size": 16,
+          "lr": 0.00026708341544236393,
+          "weight_decay": 2.3369766623705164e-06,
+          "use_recursive_lags": true
+        }
+      }
+    },
+    "BG": {
+      "wheat": {
+        "trial_number": 79,
+        "objective_value": 0.058589,
+        "hyperparameters": {
+          "use_gdd": true,
+          "use_heat_stress_days": true,
+          "use_rue": true,
+          "use_farquhar": false,
+          "use_sota_features": true,
+          "include_spatial_features": true,
+          "use_residual_trend": false,
+          "use_cwb_feature": true,
+          "drop_tavg": true,
+          "lag_years": 3,
+          "use_exponential_weighting": true,
+          "exponential_tau": 10,
+          "multi_year_summaries": true,
+          "multi_year_window": 2,
+          "multi_year_features": "phenology",
+          "use_revin": true,
+          "xlinear_hidden_size": 128,
+          "xlinear_temporal_ff": 64,
+          "xlinear_channel_ff": 64,
+          "xlinear_dropout": 0.07623805501894618,
+          "batch_size": 128,
+          "lr": 0.00046097246998916724,
+          "weight_decay": 1.8979944144708122e-06,
+          "use_recursive_lags": true
+        }
+      },
+      "maize": {
+        "trial_number": 25,
+        "objective_value": 0.160704,
+        "hyperparameters": {
+          "use_gdd": true,
+          "use_heat_stress_days": true,
+          "use_rue": false,
+          "use_farquhar": false,
+          "use_sota_features": false,
+          "include_spatial_features": false,
+          "use_residual_trend": false,
+          "use_cwb_feature": false,
+          "drop_tavg": false,
+          "lag_years": 2,
+          "use_exponential_weighting": false,
+          "exponential_tau": 50,
+          "multi_year_summaries": true,
+          "multi_year_window": 3,
+          "multi_year_features": "weather",
+          "use_revin": false,
+          "xlinear_hidden_size": 128,
+          "xlinear_temporal_ff": 64,
+          "xlinear_channel_ff": 64,
+          "xlinear_dropout": 0.40402103526008576,
+          "batch_size": 16,
+          "lr": 0.00014345929805779434,
+          "weight_decay": 3.871055766254985e-05,
+          "use_recursive_lags": true
+        }
+      }
+    },
+    "NL": {
+      "wheat": {
+        "trial_number": 87,
+        "objective_value": 0.054156,
+        "hyperparameters": {
+          "use_gdd": true,
+          "use_heat_stress_days": true,
+          "use_rue": true,
+          "use_farquhar": true,
+          "use_sota_features": false,
+          "include_spatial_features": false,
+          "use_residual_trend": true,
+          "use_cwb_feature": true,
+          "drop_tavg": false,
+          "lag_years": 2,
+          "use_exponential_weighting": false,
+          "exponential_tau": 25,
+          "multi_year_summaries": false,
+          "multi_year_window": 2,
+          "multi_year_features": "remote_sensing",
+          "use_revin": true,
+          "xlinear_hidden_size": 64,
+          "xlinear_temporal_ff": 512,
+          "xlinear_channel_ff": 64,
+          "xlinear_dropout": 0.36370934026934776,
+          "batch_size": 64,
+          "lr": 0.00011395185140043741,
+          "weight_decay": 3.1405911982745353e-06,
+          "use_recursive_lags": true
+        }
+      },
+      "maize": {
+        "trial_number": 77,
+        "objective_value": 0.134847,
+        "hyperparameters": {
+          "use_gdd": true,
+          "use_heat_stress_days": false,
+          "use_rue": true,
+          "use_farquhar": true,
+          "use_sota_features": false,
+          "include_spatial_features": false,
+          "use_residual_trend": false,
+          "use_cwb_feature": true,
+          "drop_tavg": false,
+          "lag_years": 1,
+          "use_exponential_weighting": false,
+          "exponential_tau": 10,
+          "multi_year_summaries": true,
+          "multi_year_window": 2,
+          "multi_year_features": "all",
+          "use_revin": true,
+          "xlinear_hidden_size": 64,
+          "xlinear_temporal_ff": 128,
+          "xlinear_channel_ff": 8,
+          "xlinear_dropout": 0.19121189082652112,
+          "batch_size": 128,
+          "lr": 9.48934048372623e-05,
+          "weight_decay": 8.063033441690937e-06,
+          "use_recursive_lags": true
+        }
+      }
+    },
+    "HU": {
+      "wheat": {
+        "trial_number": 93,
+        "objective_value": 0.11466,
+        "hyperparameters": {
+          "use_gdd": true,
+          "use_heat_stress_days": false,
+          "use_rue": true,
+          "use_farquhar": true,
+          "use_sota_features": false,
+          "include_spatial_features": false,
+          "use_residual_trend": true,
+          "use_cwb_feature": true,
+          "drop_tavg": false,
+          "lag_years": 0,
+          "use_exponential_weighting": false,
+          "exponential_tau": 10,
+          "multi_year_summaries": false,
+          "multi_year_window": 2,
+          "multi_year_features": "weather",
+          "use_revin": true,
+          "xlinear_hidden_size": 256,
+          "xlinear_temporal_ff": 512,
+          "xlinear_channel_ff": 8,
+          "xlinear_dropout": 0.20182024954730884,
+          "batch_size": 128,
+          "lr": 0.0002619370963216658,
+          "weight_decay": 9.850430172795353e-05
+        }
+      },
+      "maize": {
+        "trial_number": 98,
+        "objective_value": 0.147594,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": true,
+          "use_rue": false,
+          "use_farquhar": false,
+          "use_sota_features": false,
+          "include_spatial_features": true,
+          "use_residual_trend": false,
+          "use_cwb_feature": true,
+          "drop_tavg": true,
+          "lag_years": 0,
+          "use_exponential_weighting": true,
+          "exponential_tau": 50,
+          "multi_year_summaries": true,
+          "multi_year_window": 2,
+          "multi_year_features": "weather",
+          "use_revin": true,
+          "xlinear_hidden_size": 128,
+          "xlinear_temporal_ff": 256,
+          "xlinear_channel_ff": 64,
+          "xlinear_dropout": 0.1579874191982453,
+          "batch_size": 16,
+          "lr": 0.00024531180925462746,
+          "weight_decay": 1.9298223562061762e-06
+        }
+      }
+    },
+    "ET": {
+      "maize": {
+        "trial_number": 94,
+        "objective_value": 0.229513,
+        "hyperparameters": {
+          "use_gdd": true,
+          "use_heat_stress_days": true,
+          "use_rue": true,
+          "use_farquhar": false,
+          "use_sota_features": true,
+          "include_spatial_features": false,
+          "use_residual_trend": true,
+          "use_cwb_feature": true,
+          "drop_tavg": false,
+          "lag_years": 0,
+          "use_exponential_weighting": true,
+          "exponential_tau": 50,
+          "multi_year_summaries": true,
+          "multi_year_window": 2,
+          "multi_year_features": "phenology",
+          "use_revin": true,
+          "xlinear_hidden_size": 256,
+          "xlinear_temporal_ff": 64,
+          "xlinear_channel_ff": 8,
+          "xlinear_dropout": 0.12361544127490734,
+          "batch_size": 128,
+          "lr": 0.00010160246758136225,
+          "weight_decay": 1.2207694233413132e-06
+        }
+      }
+    },
+    "AR": {
+      "maize": {
+        "trial_number": 18,
+        "objective_value": 0.160414,
+        "hyperparameters": {
+          "use_gdd": true,
+          "use_heat_stress_days": true,
+          "use_rue": true,
+          "use_farquhar": false,
+          "use_sota_features": false,
+          "include_spatial_features": true,
+          "use_residual_trend": false,
+          "use_cwb_feature": false,
+          "drop_tavg": true,
+          "lag_years": 2,
+          "use_exponential_weighting": true,
+          "exponential_tau": 10,
+          "multi_year_summaries": false,
+          "multi_year_window": 1,
+          "multi_year_features": "weather",
+          "use_revin": true,
+          "xlinear_hidden_size": 256,
+          "xlinear_temporal_ff": 512,
+          "xlinear_channel_ff": 16,
+          "xlinear_dropout": 0.10267288098820648,
+          "batch_size": 64,
+          "lr": 0.00012335894049744404,
+          "weight_decay": 6.319295397089792e-06,
+          "use_recursive_lags": true
+        }
+      },
+      "wheat": {
+        "trial_number": 64,
+        "objective_value": 0.189332,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": false,
+          "use_rue": false,
+          "use_farquhar": false,
+          "use_sota_features": true,
+          "include_spatial_features": true,
+          "use_residual_trend": false,
+          "use_cwb_feature": true,
+          "drop_tavg": true,
+          "lag_years": 1,
+          "use_exponential_weighting": true,
+          "exponential_tau": 25,
+          "multi_year_summaries": true,
+          "multi_year_window": 2,
+          "multi_year_features": "all",
+          "use_revin": true,
+          "xlinear_hidden_size": 32,
+          "xlinear_temporal_ff": 128,
+          "xlinear_channel_ff": 8,
+          "xlinear_dropout": 0.300163796293213,
+          "batch_size": 32,
+          "lr": 0.00041241874383155295,
+          "weight_decay": 4.0542808748842975e-06,
+          "use_recursive_lags": true
+        }
+      }
+    },
+    "BF": {
+      "maize": {
+        "trial_number": 92,
+        "objective_value": 0.312142,
+        "hyperparameters": {
+          "use_gdd": true,
+          "use_heat_stress_days": false,
+          "use_rue": true,
+          "use_farquhar": false,
+          "use_sota_features": false,
+          "include_spatial_features": false,
+          "use_residual_trend": false,
+          "use_cwb_feature": false,
+          "drop_tavg": false,
+          "lag_years": 3,
+          "use_exponential_weighting": true,
+          "exponential_tau": 10,
+          "multi_year_summaries": true,
+          "multi_year_window": 3,
+          "multi_year_features": "all",
+          "use_revin": false,
+          "xlinear_hidden_size": 128,
+          "xlinear_temporal_ff": 512,
+          "xlinear_channel_ff": 32,
+          "xlinear_dropout": 0.1365165047355727,
+          "batch_size": 64,
+          "lr": 0.00021762381526931718,
+          "weight_decay": 6.799944029189653e-05,
+          "use_recursive_lags": true
+        }
+      }
+    },
+    "BE": {
+      "wheat": {
+        "trial_number": 86,
+        "objective_value": 0.037418,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": true,
+          "use_rue": false,
+          "use_farquhar": false,
+          "use_sota_features": false,
+          "include_spatial_features": false,
+          "use_residual_trend": false,
+          "use_cwb_feature": true,
+          "drop_tavg": false,
+          "lag_years": 1,
+          "use_exponential_weighting": true,
+          "exponential_tau": 50,
+          "multi_year_summaries": false,
+          "multi_year_window": 3,
+          "multi_year_features": "weather",
+          "use_revin": true,
+          "xlinear_hidden_size": 32,
+          "xlinear_temporal_ff": 512,
+          "xlinear_channel_ff": 8,
+          "xlinear_dropout": 0.07245301220011863,
+          "batch_size": 128,
+          "lr": 7.665356456691027e-05,
+          "weight_decay": 1.6244483011275e-06,
+          "use_recursive_lags": true
+        }
+      },
+      "maize": {
+        "trial_number": 52,
+        "objective_value": 0.12813,
+        "hyperparameters": {
+          "use_gdd": true,
+          "use_heat_stress_days": false,
+          "use_rue": true,
+          "use_farquhar": true,
+          "use_sota_features": false,
+          "include_spatial_features": true,
+          "use_residual_trend": false,
+          "use_cwb_feature": true,
+          "drop_tavg": true,
+          "lag_years": 2,
+          "use_exponential_weighting": false,
+          "exponential_tau": 50,
+          "multi_year_summaries": true,
+          "multi_year_window": 1,
+          "multi_year_features": "all",
+          "use_revin": false,
+          "xlinear_hidden_size": 32,
+          "xlinear_temporal_ff": 64,
+          "xlinear_channel_ff": 16,
+          "xlinear_dropout": 0.4152654562129605,
+          "batch_size": 32,
+          "lr": 7.219149478539432e-05,
+          "weight_decay": 4.3920365142849255e-06,
+          "use_recursive_lags": true
+        }
+      }
+    },
+    "BR": {
+      "wheat": {
+        "trial_number": 28,
+        "objective_value": 0.283841,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": false,
+          "use_rue": false,
+          "use_farquhar": false,
+          "use_sota_features": false,
+          "include_spatial_features": false,
+          "use_residual_trend": false,
+          "use_cwb_feature": false,
+          "drop_tavg": false,
+          "lag_years": 3,
+          "use_exponential_weighting": false,
+          "exponential_tau": 0,
+          "multi_year_summaries": false,
+          "multi_year_window": 1,
+          "multi_year_features": "remote_sensing",
+          "use_revin": false,
+          "xlinear_hidden_size": 256,
+          "xlinear_temporal_ff": 64,
+          "xlinear_channel_ff": 8,
+          "xlinear_dropout": 0.18524615033078748,
+          "batch_size": 64,
+          "lr": 0.0001231080641912582,
+          "weight_decay": 3.7167507618157323e-06,
+          "use_recursive_lags": true
+        }
+      },
+      "maize": {
+        "trial_number": 26,
+        "objective_value": 0.296567,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": true,
+          "use_rue": true,
+          "use_farquhar": false,
+          "use_sota_features": false,
+          "include_spatial_features": false,
+          "use_residual_trend": false,
+          "use_cwb_feature": true,
+          "drop_tavg": true,
+          "lag_years": 2,
+          "use_exponential_weighting": true,
+          "exponential_tau": 100,
+          "multi_year_summaries": true,
+          "multi_year_window": 2,
+          "multi_year_features": "all",
+          "use_revin": true,
+          "xlinear_hidden_size": 32,
+          "xlinear_temporal_ff": 64,
+          "xlinear_channel_ff": 64,
+          "xlinear_dropout": 0.3287257954747228,
+          "batch_size": 32,
+          "lr": 0.00027278625737723526,
+          "weight_decay": 2.06610197945348e-06,
+          "use_recursive_lags": true
+        }
+      }
+    },
+    "TD": {
+      "maize": {
+        "trial_number": 86,
+        "objective_value": 0.436174,
+        "hyperparameters": {
+          "use_gdd": true,
+          "use_heat_stress_days": true,
+          "use_rue": false,
+          "use_farquhar": true,
+          "use_sota_features": true,
+          "include_spatial_features": true,
+          "use_residual_trend": false,
+          "use_cwb_feature": true,
+          "drop_tavg": false,
+          "lag_years": 3,
+          "use_exponential_weighting": false,
+          "exponential_tau": 100,
+          "multi_year_summaries": true,
+          "multi_year_window": 1,
+          "multi_year_features": "weather",
+          "use_revin": true,
+          "xlinear_hidden_size": 128,
+          "xlinear_temporal_ff": 64,
+          "xlinear_channel_ff": 64,
+          "xlinear_dropout": 0.4352592254195196,
+          "batch_size": 128,
+          "lr": 0.0003206970977273725,
+          "weight_decay": 2.266844355532448e-06,
+          "use_recursive_lags": true
+        }
+      }
+    },
+    "LV": {
+      "wheat": {
+        "trial_number": 90,
+        "objective_value": 0.146233,
+        "hyperparameters": {
+          "use_gdd": true,
+          "use_heat_stress_days": true,
+          "use_rue": false,
+          "use_farquhar": true,
+          "use_sota_features": false,
+          "include_spatial_features": false,
+          "use_residual_trend": true,
+          "use_cwb_feature": false,
+          "drop_tavg": true,
+          "lag_years": 0,
+          "use_exponential_weighting": false,
+          "exponential_tau": 50,
+          "multi_year_summaries": false,
+          "multi_year_window": 1,
+          "multi_year_features": "all",
+          "use_revin": true,
+          "xlinear_hidden_size": 256,
+          "xlinear_temporal_ff": 128,
+          "xlinear_channel_ff": 8,
+          "xlinear_dropout": 0.047781432711772084,
+          "batch_size": 32,
+          "lr": 9.823758697319801e-05,
+          "weight_decay": 4.204962747768303e-05
+        }
+      }
+    },
+    "RO": {
+      "maize": {
+        "trial_number": 69,
+        "objective_value": 0.160872,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": false,
+          "use_rue": false,
+          "use_farquhar": false,
+          "use_sota_features": false,
+          "include_spatial_features": false,
+          "use_residual_trend": false,
+          "use_cwb_feature": true,
+          "drop_tavg": true,
+          "lag_years": 2,
+          "use_exponential_weighting": true,
+          "exponential_tau": 100,
+          "multi_year_summaries": true,
+          "multi_year_window": 3,
+          "multi_year_features": "all",
+          "use_revin": false,
+          "xlinear_hidden_size": 128,
+          "xlinear_temporal_ff": 128,
+          "xlinear_channel_ff": 16,
+          "xlinear_dropout": 0.12388822965365735,
+          "batch_size": 128,
+          "lr": 6.953685154882092e-05,
+          "weight_decay": 3.7394142737329754e-06,
+          "use_recursive_lags": true
+        }
+      },
+      "wheat": {
+        "trial_number": 65,
+        "objective_value": 0.112923,
+        "hyperparameters": {
+          "use_gdd": true,
+          "use_heat_stress_days": true,
+          "use_rue": false,
+          "use_farquhar": true,
+          "use_sota_features": false,
+          "include_spatial_features": false,
+          "use_residual_trend": false,
+          "use_cwb_feature": false,
+          "drop_tavg": false,
+          "lag_years": 3,
+          "use_exponential_weighting": true,
+          "exponential_tau": 75,
+          "multi_year_summaries": true,
+          "multi_year_window": 1,
+          "multi_year_features": "phenology",
+          "use_revin": false,
+          "xlinear_hidden_size": 64,
+          "xlinear_temporal_ff": 64,
+          "xlinear_channel_ff": 32,
+          "xlinear_dropout": 0.26940636990159617,
+          "batch_size": 32,
+          "lr": 0.0004930245077370485,
+          "weight_decay": 8.656738374516258e-06,
+          "use_recursive_lags": true
+        }
+      }
+    },
+    "ML": {
+      "maize": {
+        "trial_number": 92,
+        "objective_value": 0.098036,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": false,
+          "use_rue": true,
+          "use_farquhar": false,
+          "use_sota_features": false,
+          "include_spatial_features": true,
+          "use_residual_trend": false,
+          "use_cwb_feature": false,
+          "drop_tavg": true,
+          "lag_years": 3,
+          "use_exponential_weighting": false,
+          "exponential_tau": 25,
+          "multi_year_summaries": true,
+          "multi_year_window": 1,
+          "multi_year_features": "all",
+          "use_revin": true,
+          "xlinear_hidden_size": 32,
+          "xlinear_temporal_ff": 64,
+          "xlinear_channel_ff": 8,
+          "xlinear_dropout": 0.07324829976593317,
+          "batch_size": 64,
+          "lr": 0.0003759041239533069,
+          "weight_decay": 3.5289829513057235e-06,
+          "use_recursive_lags": true
+        }
+      }
+    },
+    "PL": {
+      "maize": {
+        "trial_number": 92,
+        "objective_value": 0.133766,
+        "hyperparameters": {
+          "use_gdd": true,
+          "use_heat_stress_days": true,
+          "use_rue": true,
+          "use_farquhar": true,
+          "use_sota_features": true,
+          "include_spatial_features": false,
+          "use_residual_trend": false,
+          "use_cwb_feature": false,
+          "drop_tavg": true,
+          "lag_years": 0,
+          "use_exponential_weighting": false,
+          "exponential_tau": 75,
+          "multi_year_summaries": false,
+          "multi_year_window": 2,
+          "multi_year_features": "all",
+          "use_revin": false,
+          "xlinear_hidden_size": 32,
+          "xlinear_temporal_ff": 64,
+          "xlinear_channel_ff": 16,
+          "xlinear_dropout": 0.36156901864433433,
+          "batch_size": 32,
+          "lr": 7.816067500578216e-05,
+          "weight_decay": 5.74007555021296e-06
+        }
+      },
+      "wheat": {
+        "trial_number": 73,
+        "objective_value": 0.068604,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": true,
+          "use_rue": true,
+          "use_farquhar": false,
+          "use_sota_features": false,
+          "include_spatial_features": false,
+          "use_residual_trend": false,
+          "use_cwb_feature": false,
+          "drop_tavg": false,
+          "lag_years": 3,
+          "use_exponential_weighting": false,
+          "exponential_tau": 100,
+          "multi_year_summaries": true,
+          "multi_year_window": 3,
+          "multi_year_features": "remote_sensing",
+          "use_revin": false,
+          "xlinear_hidden_size": 64,
+          "xlinear_temporal_ff": 128,
+          "xlinear_channel_ff": 32,
+          "xlinear_dropout": 0.12060061134611999,
+          "batch_size": 32,
+          "lr": 0.00017596260743957696,
+          "weight_decay": 4.6194295804142715e-06,
+          "use_recursive_lags": true
+        }
+      }
+    },
+    "SN": {
+      "maize": {
+        "trial_number": 32,
+        "objective_value": 0.399776,
+        "hyperparameters": {
+          "use_gdd": true,
+          "use_heat_stress_days": false,
+          "use_rue": true,
+          "use_farquhar": true,
+          "use_sota_features": true,
+          "include_spatial_features": true,
+          "use_residual_trend": false,
+          "use_cwb_feature": false,
+          "drop_tavg": true,
+          "lag_years": 1,
+          "use_exponential_weighting": false,
+          "exponential_tau": 50,
+          "multi_year_summaries": true,
+          "multi_year_window": 2,
+          "multi_year_features": "all",
+          "use_revin": true,
+          "xlinear_hidden_size": 256,
+          "xlinear_temporal_ff": 256,
+          "xlinear_channel_ff": 8,
+          "xlinear_dropout": 0.3296796770923335,
+          "batch_size": 16,
+          "lr": 0.00011120881969766505,
+          "weight_decay": 5.776237564561438e-06,
+          "use_recursive_lags": true
+        }
+      }
+    },
+    "NE": {
+      "maize": {
+        "trial_number": 87,
+        "objective_value": 0.187972,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": true,
+          "use_rue": false,
+          "use_farquhar": false,
+          "use_sota_features": false,
+          "include_spatial_features": false,
+          "use_residual_trend": false,
+          "use_cwb_feature": false,
+          "drop_tavg": false,
+          "lag_years": 0,
+          "use_exponential_weighting": true,
+          "exponential_tau": 10,
+          "multi_year_summaries": false,
+          "multi_year_window": 2,
+          "multi_year_features": "remote_sensing",
+          "use_revin": false,
+          "xlinear_hidden_size": 32,
+          "xlinear_temporal_ff": 512,
+          "xlinear_channel_ff": 8,
+          "xlinear_dropout": 0.1851670465748327,
+          "batch_size": 16,
+          "lr": 0.0004342131858204165,
+          "weight_decay": 1.4791071313807636e-06
+        }
+      }
+    },
+    "LS": {
+      "maize": {
+        "trial_number": 73,
+        "objective_value": 0.64452,
+        "hyperparameters": {
+          "use_gdd": false,
+          "use_heat_stress_days": true,
+          "use_rue": true,
+          "use_farquhar": true,
+          "use_sota_features": true,
+          "include_spatial_features": false,
+          "use_residual_trend": true,
+          "use_cwb_feature": true,
+          "drop_tavg": false,
+          "lag_years": 0,
+          "use_exponential_weighting": true,
+          "exponential_tau": 25,
+          "multi_year_summaries": false,
+          "multi_year_window": 3,
+          "multi_year_features": "weather",
+          "use_revin": false,
+          "xlinear_hidden_size": 256,
+          "xlinear_temporal_ff": 256,
+          "xlinear_channel_ff": 32,
+          "xlinear_dropout": 0.23323936406067236,
+          "batch_size": 64,
+          "lr": 6.454173459192348e-05,
+          "weight_decay": 6.575552851948704e-06
+        }
+      }
+    },
+    "AU": {
+      "wheat": {
+        "trial_number": 94,
+        "objective_value": 0.236545,
+        "hyperparameters": {
+          "use_gdd": true,
+          "use_heat_stress_days": false,
+          "use_rue": false,
+          "use_farquhar": true,
+          "use_sota_features": false,
+          "include_spatial_features": true,
+          "use_residual_trend": false,
+          "use_cwb_feature": true,
+          "drop_tavg": true,
+          "lag_years": 2,
+          "use_exponential_weighting": true,
+          "exponential_tau": 10,
+          "multi_year_summaries": true,
+          "multi_year_window": 1,
+          "multi_year_features": "all",
+          "use_revin": false,
+          "xlinear_hidden_size": 32,
+          "xlinear_temporal_ff": 256,
+          "xlinear_channel_ff": 64,
+          "xlinear_dropout": 0.2192399782836305,
+          "batch_size": 16,
+          "lr": 0.0003041382605117923,
+          "weight_decay": 1.6683163655995964e-05,
+          "use_recursive_lags": true
+        }
+      }
+    },
+    "SE": {
+      "maize": {
+        "trial_number": 94,
+        "objective_value": 0.093575,
+        "hyperparameters": {
+          "use_gdd": true,
+          "use_heat_stress_days": true,
+          "use_rue": false,
+          "use_farquhar": true,
+          "use_sota_features": false,
+          "include_spatial_features": false,
+          "use_residual_trend": true,
+          "use_cwb_feature": true,
+          "drop_tavg": true,
+          "lag_years": 0,
+          "use_exponential_weighting": false,
+          "exponential_tau": 0,
+          "multi_year_summaries": true,
+          "multi_year_window": 3,
+          "multi_year_features": "phenology",
+          "use_revin": false,
+          "xlinear_hidden_size": 256,
+          "xlinear_temporal_ff": 64,
+          "xlinear_channel_ff": 8,
+          "xlinear_dropout": 0.4785905469440077,
+          "batch_size": 16,
+          "lr": 0.00018142613803990077,
+          "weight_decay": 2.538456917553418e-05
+        }
+      },
+      "wheat": {
+        "trial_number": 74,
+        "objective_value": 0.083299,
+        "hyperparameters": {
+          "use_gdd": true,
+          "use_heat_stress_days": true,
+          "use_rue": false,
+          "use_farquhar": false,
+          "use_sota_features": false,
+          "include_spatial_features": false,
+          "use_residual_trend": false,
+          "use_cwb_feature": false,
+          "drop_tavg": false,
+          "lag_years": 2,
+          "use_exponential_weighting": false,
+          "exponential_tau": 50,
+          "multi_year_summaries": true,
+          "multi_year_window": 2,
+          "multi_year_features": "remote_sensing",
+          "use_revin": false,
+          "xlinear_hidden_size": 128,
+          "xlinear_temporal_ff": 512,
+          "xlinear_channel_ff": 16,
+          "xlinear_dropout": 0.21280017680874228,
+          "batch_size": 16,
+          "lr": 9.286230762156287e-05,
+          "weight_decay": 1.6896893089482958e-05,
+          "use_recursive_lags": true
+        }
+      }
+    },
+    "SK": {
+      "maize": {
+        "trial_number": 71,
+        "objective_value": 0.159701,
+        "hyperparameters": {
+          "use_gdd": true,
+          "use_heat_stress_days": true,
+          "use_rue": true,
+          "use_farquhar": false,
+          "use_sota_features": false,
+          "include_spatial_features": true,
+          "use_residual_trend": false,
+          "use_cwb_feature": true,
+          "drop_tavg": false,
+          "lag_years": 1,
+          "use_exponential_weighting": true,
+          "exponential_tau": 50,
+          "multi_year_summaries": false,
+          "multi_year_window": 1,
+          "multi_year_features": "all",
+          "use_revin": false,
+          "xlinear_hidden_size": 256,
+          "xlinear_temporal_ff": 256,
+          "xlinear_channel_ff": 8,
+          "xlinear_dropout": 0.1488073410262331,
+          "batch_size": 32,
+          "lr": 0.000192369638633316,
+          "weight_decay": 2.3240046913091745e-06,
+          "use_recursive_lags": true
+        }
+      }
+    },
+    "MZ": {
+      "maize": {
+        "trial_number": 95,
+        "objective_value": 0.226033,
+        "hyperparameters": {
+          "use_gdd": true,
+          "use_heat_stress_days": false,
+          "use_rue": false,
+          "use_farquhar": false,
+          "use_sota_features": false,
+          "include_spatial_features": false,
+          "use_residual_trend": false,
+          "use_cwb_feature": false,
+          "drop_tavg": true,
+          "lag_years": 0,
+          "use_exponential_weighting": false,
+          "exponential_tau": 10,
+          "multi_year_summaries": false,
+          "multi_year_window": 2,
+          "multi_year_features": "all",
+          "use_revin": true,
+          "xlinear_hidden_size": 32,
+          "xlinear_temporal_ff": 512,
+          "xlinear_channel_ff": 32,
+          "xlinear_dropout": 0.42060316045084317,
+          "batch_size": 128,
+          "lr": 5.893678928938812e-05,
+          "weight_decay": 2.6543432676202043e-05
+        }
+      }
+    },
+    "AO": {
+      "maize": {
+        "trial_number": 62,
+        "objective_value": 0.506586,
+        "hyperparameters": {
+          "use_gdd": true,
+          "use_heat_stress_days": false,
+          "use_rue": false,
+          "use_farquhar": false,
+          "use_sota_features": true,
+          "include_spatial_features": true,
+          "use_residual_trend": false,
+          "use_cwb_feature": false,
+          "drop_tavg": true,
+          "lag_years": 0,
+          "use_exponential_weighting": false,
+          "exponential_tau": 75,
+          "multi_year_summaries": false,
+          "multi_year_window": 1,
+          "multi_year_features": "phenology",
+          "use_revin": false,
+          "xlinear_hidden_size": 128,
+          "xlinear_temporal_ff": 256,
+          "xlinear_channel_ff": 8,
+          "xlinear_dropout": 0.3921118067322407,
+          "batch_size": 128,
+          "lr": 6.629693714500478e-05,
+          "weight_decay": 2.2168832580973483e-05
+        }
+      }
     }
   }
 }
