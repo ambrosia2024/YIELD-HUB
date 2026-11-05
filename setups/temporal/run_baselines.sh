@@ -6,8 +6,8 @@
 #SBATCH --gpus=1
 #SBATCH --mail-type=END,FAIL
 #SBATCH --mail-user=v.saxena@maastrichtuniversity.nl
-#SBATCH --output=log-without/%x_%j.out
-#SBATCH --error=log-without/%x_%j.err
+#SBATCH --output=slurm-logs/temporal_%j.out
+#SBATCH --error=slurm-logs/temporal_%j.err
 
 #–––––––––––––––––––––––––––––––––– Parse Arguments –––––––––––––––––––––––––––––––––#
 #––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––#
@@ -101,12 +101,12 @@ echo "  Wheat countries: $(echo ${!WHEAT_COUNTRIES[@]} | tr ' ' '\n' | sort | tr
 if [ "$CONFIG_TYPE" = "eos" ]; then
     HPS_FILE="../configurations/eosHyperparameters.json"
     LOG_DIR="log-${CONFIG_TYPE}"
-    WANDB_PROJECT="AAAI2027-redefiningCYP-HPO-eos-final"
+    WANDB_PROJECT="CYBENCH-B0-Bechmarking-eos"
     FORECAST_TYPE="end-of-season"
 else
     HPS_FILE="../configurations/mosHyperparameters.json"
     LOG_DIR="log-${CONFIG_TYPE}"
-    WANDB_PROJECT="AAAI2027-redefiningCYP-HPO-mos-final"
+    WANDB_PROJECT="CYBENCH-B0-Bechmarking-mos"
     FORECAST_TYPE="middle-of-season"
 fi
 
@@ -119,14 +119,14 @@ mkdir -p "$CHECKPOINT_DIR" "$LOG_DIR"
 get_patchtst_flags() {
     local crop=$1
     if [ "$crop" = "wheat" ]; then
-        echo "--use_gdd --use_rue --use_farquhar --use_sota_features"
+        echo "--use_gdd --use_rue --use_rtai --use_sota_features"
     elif [ "$crop" = "maize" ]; then
         echo "--use_sota_features"
     fi
 }
 
 get_xlinear_flags() {
-    echo "--use_gdd --use_rue --use_farquhar --use_sota_features --include_spatial_features --use_heat_stress_days --lag_years 2 --use_revin"
+    echo "--use_gdd --use_rue --use_rtai --use_sota_features --include_spatial_features --use_heat_stress_days --lag_years 2 --use_revin"
 }
 
 # Load hyperparameter overrides from config file
@@ -181,7 +181,7 @@ get_countries_for_crop() {
 sort_countries() { echo "$1" | tr ' ' '\n' | sort | tr '\n' ' '; }
 
 # Train 2 scripts in parallel
-MAX_PARALLEL=5
+MAX_PARALLEL=4
 PIPE=$(mktemp -u)
 mkfifo "$PIPE"
 exec 3<>"$PIPE"
@@ -218,11 +218,11 @@ for crop in "${crops[@]}"; do
             RANDOM_SUFFIX=$(generate_random_suffix)
             RUN_ID="${model}-${crop}-${country}-${RANDOM_SUFFIX}"
 
-            # Check if checkpoint with this run_id already exists
+            # Check if any checkpoint already exists for this model-country-crop combination
             checkpoint_save_dir="${CHECKPOINT_DIR}/yield-${model}/${country}/${crop}/"
-            existing_checkpoint=$(find "$checkpoint_save_dir" -name "*runid:${RUN_ID}.ckpt" 2>/dev/null | head -n 1)
+            existing_checkpoint=$(find "$checkpoint_save_dir" -name "*.ckpt" 2>/dev/null | head -n 1)
             if [ -n "$existing_checkpoint" ]; then
-                echo "Skipping ${model} ${country} ${crop} (run_id ${RUN_ID} already done)"
+                echo "Skipping ${model} ${country} ${crop} (checkpoint already exists at ${checkpoint_save_dir})"
                 continue
             fi
 

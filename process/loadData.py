@@ -10,6 +10,7 @@ Python version: 3.12.0
 import sys
 import logging
 from typing import Union
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -51,6 +52,12 @@ except ImportError:
 
 sys.path.append('../architectures/')
 from modelconfig import TSTModelConfig, LinearModelConfig
+
+# Paths to pre-computed climate-zone label files
+# loadData.py lives in YIELD-HUB/process/ → repo root is 3 levels up
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent   # …/AgML-CY-Bench
+_AEZ_DIR    = _REPO_ROOT / 'cybench' / 'data' / 'acz_labels'
+_KOPPEN_CSV = _REPO_ROOT / 'cybench' / 'data' / 'koppen_labels' / 'koppen_labels.csv'
 
 # %% Global constants
 # Weather feature lists - used as defaults by TSTModelConfig or LinearModelConfig.weather_features property
@@ -252,6 +259,33 @@ class DailyCYBenchSeqDataModule(pl.LightningDataModule):
 
         ds = CYDataset(cfg.crop, df_y, dfs_x)
 
+        # Build AEZ and Köppen lookup dicts once (loaded from pre-computed CSVs)
+        aez_lookup: Optional[Dict[str, float]] = None
+        koppen_lookup: Optional[Dict[str, str]] = None
+        if getattr(cfg, 'use_aez', False):
+            aez_csv = _AEZ_DIR / f'acz_labels_{cfg.crop}.csv'
+            if aez_csv.exists():
+                _aez_df = pd.read_csv(aez_csv, usecols=['adm_id', 'raw_class_code'])
+                # raw_class_code is 1-8 ordinal; missing/nodata stays NaN
+                aez_lookup = {
+                    str(r['adm_id']): float(r['raw_class_code'])
+                    for _, r in _aez_df.iterrows()
+                    if pd.notna(r['raw_class_code'])
+                }
+                print(f"  [AEZ] Loaded {len(aez_lookup)} suitability codes for {cfg.crop}")
+            else:
+                print(f"  [AEZ] WARNING: {aez_csv} not found — AEZ feature will be NaN for all samples")
+        if getattr(cfg, 'use_koppen', False):
+            if _KOPPEN_CSV.exists():
+                _kp_df = pd.read_csv(_KOPPEN_CSV, usecols=['adm_id', 'crop', 'koppen_label'])
+                _kp_df = _kp_df[_kp_df['crop'] == cfg.crop]
+                # Keep only rows with a valid label (not NoData)
+                _kp_df = _kp_df[_kp_df['koppen_label'].notna() & (_kp_df['koppen_label'] != 'NoData')]
+                koppen_lookup = {str(r['adm_id']): str(r['koppen_label']) for _, r in _kp_df.iterrows()}
+                print(f"  [Köppen] Loaded {len(koppen_lookup)} labels for {cfg.crop}")
+            else:
+                print(f"  [Köppen] WARNING: {_KOPPEN_CSV} not found — Köppen features will be NaN for all samples")
+
         # Check cache first if enabled
         cache_hit = False
         if self.use_cache and self.all_X_ts is None:
@@ -267,7 +301,7 @@ class DailyCYBenchSeqDataModule(pl.LightningDataModule):
                 use_gdd=cfg.use_gdd,
                 use_heat_stress_days=cfg.use_heat_stress_days,
                 use_rue=cfg.use_rue,
-                use_farquhar=cfg.use_farquhar,
+                use_rtai=cfg.use_rtai,
                 use_cwb_feature=cfg.use_cwb_feature,
                 drop_tavg=cfg.drop_tavg,
                 use_exponential_weighting=cfg.use_exponential_weighting,
@@ -276,6 +310,8 @@ class DailyCYBenchSeqDataModule(pl.LightningDataModule):
                 multi_year_window=cfg.multi_year_window,
                 multi_year_features=cfg.multi_year_features,
                 weather_features=cfg.weather_features,
+                use_aez=getattr(cfg, 'use_aez', False),
+                use_koppen=getattr(cfg, 'use_koppen', False),
             )
 
             # Try to get from cache
@@ -310,9 +346,13 @@ class DailyCYBenchSeqDataModule(pl.LightningDataModule):
                     use_gdd=cfg.use_gdd,
                     use_heat_stress_days=cfg.use_heat_stress_days,
                     use_rue=cfg.use_rue,
-                    use_farquhar=cfg.use_farquhar,
+                    use_rtai=cfg.use_rtai,
                     crop=cfg.crop,
                     multi_year_config=cfg.multi_year_config if hasattr(cfg, 'multi_year_config') and cfg.multi_year_config is not None else None,
+                    use_aez=getattr(cfg, 'use_aez', False),
+                    use_koppen=getattr(cfg, 'use_koppen', False),
+                    aez_lookup=aez_lookup,
+                    koppen_lookup=koppen_lookup,
                 )
                 return X_ts, X_static, y, sample[KEY_YEAR], sample[KEY_LOC], meta["lat"], meta["lon"], mask
 
@@ -524,8 +564,8 @@ class DailyCYBenchSeqDataModule(pl.LightningDataModule):
             names.append('domain_cum_gdd')
         if self.config.use_rue:
             names.append('domain_rue_index')
-        if self.config.use_farquhar:
-            names.append('domain_farquhar_proxy')
+        if self.config.use_rtai:
+            names.append('domain_rtai_proxy')
         names += [f'rs_{n}' for n in REMOTE_SENSING_FEATURES]
         if self.config.use_sota_features:
             names += [f'sota_{n}' for n in SOTA_TEMPORAL_VARS_LIST]
@@ -538,6 +578,8 @@ class DailyCYBenchSeqDataModule(pl.LightningDataModule):
             self.config.lag_years,
             self.config.use_heat_stress_days,
             multi_year_config=self.config.multi_year_config if hasattr(self.config, 'multi_year_config') else None,
+            use_aez=getattr(self.config, 'use_aez', False),
+            use_koppen=getattr(self.config, 'use_koppen', False),
         )
 
     def train_dataloader(self):
@@ -550,15 +592,30 @@ class DailyCYBenchSeqDataModule(pl.LightningDataModule):
 
     def test_dataloader(self):
         """
-        Returns the test dataloader.
+        Returns the test dataloader, ordered by YEAR (ascending) for correct
+        recursive-lag evaluation.
 
-        shuffle=False processes samples in dataset construction order.
-        For --use_recursive_lags to work correctly, samples within each location must
-        appear in chronological order. This holds as long as ds[i] iterates chronologically
-        within each location, which is assumed but not enforced by CYDataset.
+        Recursive lags require every test year Y to be predicted (and its prediction
+        cached) only AFTER all strictly-earlier test years, because Y's within-window
+        lag features are drawn from those earlier years' predictions. A lag year is
+        always strictly earlier than Y, so processing samples in ascending-year order
+        guarantees the dependency is satisfied regardless of batch size: once every
+        sample of year T is cached, any later year can read it.
+
+        The dataset's construction order is region-major (a region's consecutive test
+        years sit next to each other), which broke this -- those years landed in the
+        same batch, and the cache is only written AFTER a batch's forward pass, so the
+        earlier year was not yet available and the lag silently fell back to the mean
+        (0 in z-space). A year-major sampler fixes it without touching the cache logic.
+        Within a year, order is irrelevant (no sample lags on the same year).
         """
+        assert self.test_ds is not None, "test_dataloader() called before setup() built test_ds"
+        order = sorted(
+            range(len(self.test_ds)),
+            key=lambda i: (int(self.test_ds.years[i]), str(self.test_ds.adm_ids[i])),
+        )
         return DataLoader(self.test_ds, batch_size=self.config.batch_size,
-                          shuffle=False, num_workers=self.config.num_workers)
+                          sampler=order, num_workers=self.config.num_workers)
 
     def copy_normalization_from(self, other_dm):
         """Copy normalization statistics from another datamodule.

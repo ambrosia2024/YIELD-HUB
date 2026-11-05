@@ -1,0 +1,2 @@
+# F-Par feature expection
+CY-Bench ships FPAR as percent (0–100); _clean_rs_series assumed [0,1], so the sentinel mask (>1.05) nuked every fpar value to NaN. Fixed with a guarded percent→fraction /100 at the single shared chokepoint.

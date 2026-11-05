@@ -226,4 +226,4 @@ modelCheckpoints-eos-final/
 
 # Project related files to ignore
 *.txt
-__init__.py
+__init__.pypre-compute/.gaez_v5_raster_cache/

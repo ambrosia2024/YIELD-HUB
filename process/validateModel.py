@@ -13,7 +13,8 @@ import logging
 import numpy as np
 import pandas as pd
 
-from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_percentage_error
+from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_percentage_error, mean_pinball_loss
+import scoringrules as sr
 
 from cybench.datasets.configured import load_dfs_crop
 from cybench.datasets.dataset import Dataset as CYDataset
@@ -335,7 +336,32 @@ def print_metrics_table(title: str, metrics: Dict, step: str = "test"):
 
         # Anomaly correlation
         if metrics.get('anomaly/r_an_overall') is not None:
-            print(f"Anomaly Correlation (r_an):  {metrics['anomaly/r_an_overall']:.4f}")
+            print(f"Anomaly Correlation (r_an, window ref):  {metrics['anomaly/r_an_overall']:.4f}")
+        if metrics.get('anomaly/r_an_trend') is not None:
+            print(f"Anomaly Correlation (r_an, trend ref):   {metrics['anomaly/r_an_trend']:.4f}")
+
+    # Print evaluation-protocol headline metrics if available
+    proto_keys = [k for k in metrics.keys() if k.startswith('protocol/')]
+    if proto_keys:
+        print(f"\n{'=' * 70}")
+        print("EVALUATION PROTOCOL (overall; see protocol/ CSVs for per-year)")
+        print(f"{'=' * 70}")
+        for label, key in [
+            ('Skill RMSE vs trend (MK)', 'protocol/skill_rmse_vs_trend'),
+            ('Skill RMSE vs OLS', 'protocol/skill_rmse_vs_ols'),
+            ('Skill RMSE vs climatology', 'protocol/skill_rmse_vs_climatology'),
+            ('Skill RMSE vs rolling-3', 'protocol/skill_rmse_vs_rolling3'),
+            ('Within ±10%', 'protocol/within_10pct'),
+            ('Within ±0.5 t/ha', 'protocol/within_0.5abs'),
+            ('r_an (OLS-detrended)', 'protocol/r_an_detrended'),
+            ('Bad-year AUC (1σ)', 'protocol/badyear_1sig_auc'),
+            ('PICP', 'protocol/picp'),
+            ('PICP (conformal)', 'protocol/picp_conformal'),
+            ('CRPS skill vs OLS', 'protocol/skill_crps_vs_ols'),
+        ]:
+            v = metrics.get(key)
+            if v is not None and v == v:  # not NaN
+                print(f"{label:<28}{v:.4f}")
 
     print(f"{'-' * 70}")
 
@@ -711,7 +737,7 @@ def _update_config_for_fold(config, train_years, max_epochs):
         use_gdd=getattr(config, 'use_gdd', False),
         use_heat_stress_days=getattr(config, 'use_heat_stress_days', False),
         use_rue=getattr(config, 'use_rue', False),
-        use_farquhar=getattr(config, 'use_farquhar', False),
+        use_rtai=getattr(config, 'use_rtai', False),
         use_cwb_feature=getattr(config, 'use_cwb_feature', False),
         drop_tavg=getattr(config, 'drop_tavg', False),
         use_revin=getattr(config, 'use_revin', False),
@@ -950,18 +976,16 @@ class UncertaintyMetrics(nn.Module):
         """Compute all uncertainty metrics."""
         results = {}
 
-        # 1. Pinball loss for each quantile
-        for i, q in enumerate(quantiles):
-            q_loss = self._pinball_loss(y_true, y_pred[:, i], q)
-            results[f'pinball_q{int(q*100)}'] = float(np.mean(q_loss))
+        # 1. Pinball loss per quantile (sklearn) + average
+        pinball_per_q = [float(mean_pinball_loss(y_true, y_pred[:, i], alpha=q))
+                         for i, q in enumerate(quantiles)]
+        for q, v in zip(quantiles, pinball_per_q):
+            results[f'pinball_q{int(q*100)}'] = v
+        results['pinball_avg'] = float(np.mean(pinball_per_q))
 
-        # Average pinball loss
-        pinball_losses = [self._pinball_loss(y_true, y_pred[:, i], q)
-                          for i, q in enumerate(quantiles)]
-        results['pinball_avg'] = float(np.mean(pinball_losses))
-
-        # 2. CRPS
-        results['crps'] = self._compute_crps(y_true, y_pred, quantiles)
+        # 2. CRPS (scoringrules quantile-decomposition CRPS)
+        results['crps'] = float(np.mean(
+            sr.crps_quantile(y_true, y_pred, np.asarray(quantiles, dtype=float))))
 
         # 3. PICP (using extreme quantiles for interval)
         q_lower_idx = 0
@@ -975,11 +999,10 @@ class UncertaintyMetrics(nn.Module):
             y_pred[:, q_lower_idx], y_pred[:, q_upper_idx], y_true
         )
 
-        # 5. Winkler Score
+        # 5. Winkler score == interval score (scoringrules); alpha = interval miscoverage
         coverage_level = 1 - (quantiles[q_upper_idx] - quantiles[q_lower_idx])
-        results['winkler_score'] = self._compute_winkler_score(
-            y_true, y_pred[:, q_lower_idx], y_pred[:, q_upper_idx], coverage_level
-        )
+        results['winkler_score'] = float(np.mean(sr.interval_score(
+            y_true, y_pred[:, q_lower_idx], y_pred[:, q_upper_idx], coverage_level)))
 
         # 6. Mean interval width
         results['mean_interval_width'] = float(
@@ -989,56 +1012,10 @@ class UncertaintyMetrics(nn.Module):
         return results
 
     @staticmethod
-    def _pinball_loss(y_true: np.ndarray, y_pred: np.ndarray, quantile: float) -> np.ndarray:
-        """Compute pinball loss for a single quantile."""
-        error = y_true - y_pred
-        return np.maximum(quantile * error, (quantile - 1) * error)
-
-    @staticmethod
-    def _compute_crps(
-        y_true: np.ndarray, y_pred: np.ndarray, quantiles: List[float]
-    ) -> float:
-        """
-        Compute Continuous Ranked Probability Score (CRPS).
-
-        Uses trapezoidal integration over quantiles.
-        """
-        n_samples = len(y_true)
-        crps_values = np.zeros(n_samples)
-
-        # Ensure quantiles are sorted
-        sorted_indices = np.argsort(quantiles)
-        sorted_quantiles = np.array(quantiles)[sorted_indices]
-        sorted_preds = y_pred[:, sorted_indices]
-
-        for i in range(n_samples):
-            y_i = y_true[i]
-            preds_i = sorted_preds[i]
-
-            # Compute CRPS using trapezoidal integration
-            integral = 0.0
-            for j in range(len(sorted_quantiles) - 1):
-                # CDF at quantile j: indicator if y_true >= predicted value
-                cdf_j = 1.0 if y_i >= preds_i[j] else 0.0
-                cdf_j1 = 1.0 if y_i >= preds_i[j + 1] else 0.0
-
-                # CDF difference
-                dq = sorted_quantiles[j + 1] - sorted_quantiles[j]
-
-                # Trapezoid area: average height * width
-                avg_height = ((cdf_j - sorted_quantiles[j])**2 +
-                             (cdf_j1 - sorted_quantiles[j + 1])**2) / 2
-                integral += avg_height * dq
-
-            crps_values[i] = integral
-
-        return float(np.mean(crps_values))
-
-    @staticmethod
     def _compute_picp(
         y_true: np.ndarray, y_pred_lower: np.ndarray, y_pred_upper: np.ndarray
     ) -> float:
-        """Compute Prediction Interval Coverage Probability."""
+        """Compute Prediction Interval Coverage Probability (no library equivalent)."""
         in_interval = (y_true >= y_pred_lower) & (y_true <= y_pred_upper)
         return float(np.mean(in_interval))
 
@@ -1047,7 +1024,7 @@ class UncertaintyMetrics(nn.Module):
         y_pred_lower: np.ndarray, y_pred_upper: np.ndarray,
         y_true: Optional[np.ndarray] = None
     ) -> float:
-        """Compute Prediction Interval Normalized Average Width."""
+        """Compute Prediction Interval Normalized Average Width (no library equivalent)."""
         interval_width = y_pred_upper - y_pred_lower
         mean_width = np.mean(interval_width)
 
@@ -1061,28 +1038,6 @@ class UncertaintyMetrics(nn.Module):
             return 0.0
 
         return float(mean_width / range_width)
-
-    @staticmethod
-    def _compute_winkler_score(
-        y_true: np.ndarray, y_pred_lower: np.ndarray, y_pred_upper: np.ndarray,
-        alpha: float = 0.1
-    ) -> float:
-        """Compute Winkler score for prediction intervals."""
-        interval_width = y_pred_upper - y_pred_lower
-        penalty = 2.0 / alpha
-
-        # Compute score for each sample
-        scores = np.where(
-            y_true < y_pred_lower,
-            interval_width + penalty * (y_pred_lower - y_true),
-            np.where(
-                y_true > y_pred_upper,
-                interval_width + penalty * (y_true - y_pred_upper),
-                interval_width
-            )
-        )
-
-        return float(np.mean(scores))
 
 
 def compute_uncertainty_metrics(

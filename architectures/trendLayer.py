@@ -39,6 +39,11 @@ class TrendModel:
 
     def __init__(self):
         self._train_df = None
+        # Cache of computed trends keyed by (loc, year). _predict_trend is called
+        # once per training sample per batch per epoch; the trend is deterministic
+        # given the fitted train_df, so memoising avoids repeating the Mann-Kendall
+        # window search every call. Reset on every fit().
+        self._trend_cache = {}
 
     def fit(self, dataset, **fit_params) -> Tuple['TrendModel', Dict]:
         """
@@ -55,6 +60,7 @@ class TrendModel:
         rows = [{KEY_LOC: item[KEY_LOC], KEY_YEAR: item[KEY_YEAR], KEY_TARGET: item[KEY_TARGET]}
                 for item in data_items]
         self._train_df = pd.DataFrame(rows)
+        self._trend_cache = {}
         return self, {}
 
     def _estimate_trend(self, trend_x: list, trend_y: list, test_x: int) -> float:
@@ -114,20 +120,44 @@ class TrendModel:
         trend_predictions = np.zeros((len(test_data), 1))
         for i, item in enumerate(test_data):
             loc, test_year = item[KEY_LOC], item[KEY_YEAR]
+            cache_key = (loc, int(test_year))
+            if cache_key in self._trend_cache:
+                trend_predictions[i, 0] = self._trend_cache[cache_key]
+                continue
+
             sel = self._train_df[self._train_df[KEY_LOC] == loc]
             if sel.empty:
                 trend = self._train_df[KEY_TARGET].mean()
             else:
                 train_labels = sel[[KEY_YEAR, KEY_TARGET]].values
                 train_years = sorted(sel[KEY_YEAR].unique())
+
+                # LEAVE-THAT-YEAR-OUT (Option A). When test_year is itself one of the
+                # training years -- which is the case for EVERY sample while building
+                # residual targets during training -- we must exclude that year's own
+                # observation before fitting the trend. Otherwise the trend equals the
+                # label, the residual target y - trend collapses to 0, and the network
+                # learns to predict 0 (ignoring all inputs). Dropping test_year makes
+                # the trend a genuine smooth fit that does NOT contain the label, and
+                # mirrors inference exactly (where the queried year is never a train
+                # year). For true inference (test_year not in train_years) the two
+                # lines below are a no-op, so the evaluation-reference behaviour is
+                # unchanged.
                 if test_year in train_years:
-                    trend = sel[sel[KEY_YEAR] == test_year][KEY_TARGET].mean()
+                    keep = train_labels[:, 0] != test_year
+                    train_labels = train_labels[keep]
+                    train_years = [y for y in train_years if y != test_year]
+
+                if len(train_years) == 0:
+                    trend = sel[KEY_TARGET].mean()
                 else:
                     lt = [y for y in train_years if y < test_year]
                     gt = [y for y in train_years if y > test_year]
                     if (len(lt) < self.MIN_TREND_WINDOW_SIZE and
                             len(gt) < self.MIN_TREND_WINDOW_SIZE):
-                        trend = sel[KEY_TARGET].mean()
+                        # Fallback mean uses the year-excluded labels to stay
+                        # leave-one-out consistent.
+                        trend = float(np.mean(train_labels[:, 1]))
                     else:
                         # Interpolate between backward and forward trends instead of cascading
                         # provides better estimates when test year falls between training data blocks
@@ -157,7 +187,9 @@ class TrendModel:
                         elif gt_trend is not None:
                             trend = gt_trend
                         else:
-                            trend = sel[KEY_TARGET].mean()
+                            trend = float(np.mean(train_labels[:, 1]))
+
+            self._trend_cache[cache_key] = trend
             trend_predictions[i, 0] = trend
         return trend_predictions
 

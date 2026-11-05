@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>YIELD-HUB — Benchmarking Findings</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --c-tr:#3768C8;--c-li:#3C9A5F;--c-cn:#D0613A;--c-mz:#D39B12;--c-wh:#7B61C9;
+  --paper:#F3F4EF;--surface:#FFFFFF;--ink:#1D2A22;--muted:#5E6B62;
+  --rule:#D9DDD3;--accent:#2F6B3A;--accent-soft:#E2ECDF;
+  --warn:#B45309;--warn-soft:#FEF3C7;--info:#1D4ED8;--info-soft:#EFF6FF;
+  color-scheme:light
+}
+*,*::before,*::after{box-sizing:border-box}
+html{scroll-padding-top:60px;scroll-behavior:smooth}
+body{margin:0;background:var(--paper);color:var(--ink);
+  font-family:'Libre Franklin','Franklin Gothic Book','Helvetica Neue',Arial,sans-serif;
+  font-size:16px;line-height:1.55;font-variant-numeric:tabular-nums;
+  -webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration-thickness:1px;text-underline-offset:2px}
+header.hero{padding:18px 0 10px}
+.wrap{max-width:1100px;margin:0 auto;padding:0 22px}
+h1{font-size:clamp(18px,2.6vw,28px);line-height:1.08;letter-spacing:-.02em;font-weight:800;margin:0 0 8px}
+.dek{font-size:13.5px;color:var(--muted);max-width:68ch;margin:0 0 12px}
+.crop-toggle{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 0}
+.crop-toggle button{border:1px solid var(--rule);background:var(--surface);color:var(--muted);
+  border-radius:16px;padding:4px 14px;font-size:13px;font-family:inherit;cursor:pointer;
+  transition:background .15s,color .15s;font-weight:600}
+.crop-toggle button.active{background:var(--ink);color:#fff;border-color:var(--ink)}
+.crop-toggle button.active.mz{background:var(--c-mz);border-color:var(--c-mz)}
+.crop-toggle button.active.wh{background:var(--c-wh);border-color:var(--c-wh)}
+.crop-panel{display:none}
+h2{font-size:17px;letter-spacing:-.01em;font-weight:800;margin:36px 0 3px;padding-top:4px}
+section.q{display:grid;grid-template-columns:100px minmax(0,1fr);gap:0 7px;margin:16px 0 28px}
+.qid{font-size:30px;font-weight:800;line-height:.95;color:var(--rule);letter-spacing:-.03em;padding-top:2px}
+.qinline{display:none}
+h3{font-size:15.5px;line-height:1.3;font-weight:700;margin:0 0 5px;max-width:60ch}
+.answer{font-size:13.5px;line-height:1.5;font-weight:600;margin:0 0 11px;max-width:70ch;
+  padding-left:10px;border-left:3px solid var(--accent)}
+.callout{border-radius:6px;padding:9px 13px;margin:8px 0 11px;font-size:12.5px;max-width:72ch}
+.callout.warn{background:var(--warn-soft);border-left:3px solid var(--warn);color:#78350F}
+.callout.info{background:var(--info-soft);border-left:3px solid var(--info);color:#1E3A8A}
+.callout.ok{background:var(--accent-soft);border-left:3px solid var(--accent);color:#14532D}
+.callout strong{font-weight:700}.callout ul{margin:6px 0 0;padding-left:16px}.callout li{margin:3px 0}
+figure.plot{min-width:0;margin:0 0 9px;background:var(--surface);border:1px solid var(--rule);
+  border-radius:8px;padding:12px 14px 10px}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+svg.fig{display:block;width:100%;height:auto;min-width:380px}
+figcaption{font-size:11px;color:var(--muted);margin-top:5px;font-style:italic}
+.note{margin:5px 0;max-width:72ch;font-size:12.5px}
+.mtbl{width:100%;max-width:860px;border-collapse:collapse;font-size:12px;margin:9px 0}
+.mtbl th{text-align:left;padding:5px 7px;border-bottom:2px solid var(--ink);font-size:10.5px;
+  color:var(--muted);text-transform:uppercase;letter-spacing:.4px;white-space:nowrap}
+.mtbl td{padding:4px 7px;border-bottom:1px solid var(--rule)}
+.mtbl tr:last-child td{border-bottom:none}
+.mtbl .best{font-weight:700;color:var(--accent)}
+.mtbl .ok{color:#334155}.mtbl .bad{color:#9CA3AF}
+.mtbl tr.highlight{background:#F0FDF4}
+.pill{display:inline-block;padding:1px 6px;border-radius:9px;font-size:10px;font-weight:600;white-space:nowrap}
+.pill.pos{background:#D1FAE5;color:#065F46}.pill.neg{background:#FEE2E2;color:#991B1B}
+.pill.neu{background:#F1F5F9;color:#475569}
+footer{border-top:2px solid var(--ink);margin:40px 0 0;padding:16px 0 40px;font-size:12px;color:var(--muted)}
+footer h2{font-size:14px;color:var(--ink);margin:0 0 7px}
+footer ul{margin:0;padding-left:15px;max-width:88ch}
+footer li{margin:4px 0}
+@media(max-width:720px){.wrap{padding:0 14px}section.q{grid-template-columns:minmax(0,1fr)}.qid{display:none}.qinline{display:inline;color:var(--accent);font-weight:800}}
+</style>
+</head>
+<body>
+<header class="hero"><div class="wrap">
+  <h1>YIELD-HUB Benchmark Findings</h1>
+  <p class="dek">Select a crop tab to see crop-specific findings — different architecture rankings, resolution effects, regional breakdowns and best-model recommendations. The Both Crops tab shows findings that hold for both combined.</p>
+  <div class="crop-toggle" role="group" style="margin-bottom:12px">
+    <button class="active" onclick="setCrop('both')" id="btn-both">Both crops</button>
+    <button class="mz" onclick="setCrop('maize')" id="btn-maize">🌽 Maize (35 tasks)</button>
+    <button class="wh" onclick="setCrop('wheat')" id="btn-wheat">🌾 Wheat (27 tasks)</button>
+  </div>
+</div></header>
+<main>
+  <div class="crop-panel" id="panel-both">
+  <div class="wrap" style="max-width:1100px;margin:0 auto;padding:0 22px">
+  <div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;padding:12px 18px;margin:14px 0 8px">
+    <div style="font-size:14px;font-weight:700;color:#1D2A22;margin-bottom:4px">Combined findings — both crops</div>
+    <div style="font-size:12px;color:#5E6B62">The findings below apply to both crops combined or do not differ meaningfully between crops. For crop-specific architecture rankings, resolution effects, regional breakdowns, and best-combo recommendations, switch to the <strong>🌽 Maize</strong> or <strong>🌾 Wheat</strong> tab.</div>
+  </div>
+  <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">
+    <a href="#f7" style="color:var(--muted);text-decoration:none;font-size:12px;font-weight:600;padding:3px 8px;border-radius:4px;background:#f8fafc">F7 Variance decomposition</a>
+    <a href="#f10" style="color:var(--muted);text-decoration:none;font-size:12px;font-weight:600;padding:3px 8px;border-radius:4px;background:#f8fafc">F10 Architecture verdict</a>
+    <a href="#f11" style="color:var(--muted);text-decoration:none;font-size:12px;font-weight:600;padding:3px 8px;border-radius:4px;background:#f8fafc">F11 Koppen clustering</a>
+    <a href="#f12" style="color:var(--muted);text-decoration:none;font-size:12px;font-weight:600;padding:3px 8px;border-radius:4px;background:#f8fafc">F12 LPJmL</a>
+  </div>
+  <div style="background:#fff;border:1px solid var(--rule);border-radius:8px;padding:16px 20px;margin-bottom:20px">
+    <div style="font-size:14px;font-weight:800;color:#1D2A22;margin-bottom:14px">Key conclusions from both crops — text only</div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid var(--rule);border-radius:6px;overflow:hidden;font-size:12.5px">
+      <!-- header -->
+      <div style="background:#fef3c7;padding:7px 12px;font-weight:700;color:#78350F;border-bottom:1px solid var(--rule)">🌽 Maize (35 tasks)</div>
+      <div style="background:#ede9fe;padding:7px 12px;font-weight:700;color:#4c1d95;border-bottom:1px solid var(--rule);border-left:1px solid var(--rule)">🌾 Wheat (27 tasks)</div>
+
+      <!-- F1 Architecture -->
+      <div style="padding:9px 12px;border-bottom:1px solid var(--rule);border-top:1px solid #f1f5f9">
+        <div style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Architecture ranking</div>
+        Statistical three-way tie: <b>xlinear #1</b> (r̄=5.31), tsmixer #2 (5.37), patchtst #3 (5.54). No clear winner — country difficulty matters more than model choice for maize.
+      </div>
+      <div style="padding:9px 12px;border-bottom:1px solid var(--rule);border-left:1px solid var(--rule);border-top:1px solid #f1f5f9">
+        <div style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Architecture ranking</div>
+        Clear winner: <b>patchtst #1</b> (r̄=2.74), xlinear #2 (3.63) by a full rank margin. Unlike maize, the wheat hierarchy is unambiguous. Use patchtst for wheat research.
+      </div>
+
+      <!-- F2 Rolling-3 baseline -->
+      <div style="padding:9px 12px;border-bottom:1px solid var(--rule)">
+        <div style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Can models beat the rolling-3?</div>
+        <b>No — not even close.</b> patchtst·daily skill = −16.3% vs rolling-3. Rolling-3 wins in 71% of maize tasks. Rapid yield trends (LT +99%, ET +71%) mean the 3-year lookback always adapts faster than trained models.
+      </div>
+      <div style="padding:9px 12px;border-bottom:1px solid var(--rule);border-left:1px solid var(--rule)">
+        <div style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Can models beat the rolling-3?</div>
+        <b>Almost.</b> patchtst·daily skill = −3.2% vs rolling-3. In Europe specifically, patchtst·daily = −1.0% — essentially tied. US wheat patchtst·daily = +0.5% (beats rolling-3). Wheat forecasting is inherently much easier than maize.
+      </div>
+
+      <!-- F3 Resolution -->
+      <div style="padding:9px 12px;border-bottom:1px solid var(--rule)">
+        <div style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Best resolution</div>
+        <b>Dekad for patchtst</b> (−12.6% vs −16.3% at daily). <b>Monthly for xlinear</b> (−9.7%). Coarser aggregation filters weather noise, which is especially valuable for maize where daily noise is high.
+      </div>
+      <div style="padding:9px 12px;border-bottom:1px solid var(--rule);border-left:1px solid var(--rule)">
+        <div style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Best resolution</div>
+        <b>Daily is already optimal for patchtst</b> (−3.2%). Dekad is slightly worse (−4.9%) but 10× faster — preferred for sweeps. Avoid weekly: patchtst·weekly = −12.1%, losing intra-season signal critical for wheat phenology.
+      </div>
+
+      <!-- F4/F5 Best combo -->
+      <div style="padding:9px 12px;border-bottom:1px solid var(--rule)">
+        <div style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Best model–resolution combo</div>
+        <b>tabpfn·dekad</b> — only maize combo to beat climatology (+1.4%). tabicl·weekly has the best Friedman rank (#1, r̄=7.17) with better median skill (−8.9%). Both are inference-only, no training needed.
+      </div>
+      <div style="padding:9px 12px;border-bottom:1px solid var(--rule);border-left:1px solid var(--rule)">
+        <div style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Best model–resolution combo</div>
+        <b>tabpfn·weekly</b> (Friedman #2, skill −4.3%, beats climatology +2.8%) for most consistent results. Note: <b>patchtst·daily has the best median skill</b> (−3.2%) — it is competitive with tabular models for wheat, unlike for maize.
+      </div>
+
+      <!-- F8 Regional -->
+      <div style="padding:9px 12px;border-bottom:1px solid var(--rule)">
+        <div style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Regional breakdown</div>
+        <b>Europe:</b> tabpfn·dekad +4.1% (beats rolling-3). <b>Africa:</b> NRMSE 0.41, skill −27.5% — hardest. <b>Asia:</b> moderate error but −18.4% skill. <b>North America:</b> low NRMSE but rolling-3 near-unbeatable (−16.7%).
+      </div>
+      <div style="padding:9px 12px;border-bottom:1px solid var(--rule);border-left:1px solid var(--rule)">
+        <div style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Regional breakdown</div>
+        <b>Europe:</b> patchtst·daily −1.0% (nearly matching rolling-3). <b>North America:</b> patchtst beats rolling-3 (+0.5%). <b>Asia (CN):</b> worst task in benchmark — patchtst·daily −35.2%. <b>Oceania (AU):</b> high error but decent skill.
+      </div>
+
+      <!-- F9 Data quartiles -->
+      <div style="padding:9px 12px;border-bottom:1px solid var(--rule)">
+        <div style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">More data = better?</div>
+        Non-monotone. <b>Q2 is best</b> (43–80 samples, skill −1.3%) — mid-sized stable EU countries. <b>Q4 is worst</b> (US/BR/AR, −16.5%) despite most data, because persistence baseline is unbeatable there.
+      </div>
+      <div style="padding:9px 12px;border-bottom:1px solid var(--rule);border-left:1px solid var(--rule)">
+        <div style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">More data = better?</div>
+        Yes — once past ~80 samples. <b>Q3/Q4 both good</b> (−1.2%, −1.8%). <b>Q1/Q2 poor</b> (−31%, −21%) because Baltic/CEE wheat has the highest yield distribution shift — data doesn't help when the target drifts.
+      </div>
+
+      <!-- F13 Who wins -->
+      <div style="padding:9px 12px">
+        <div style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Which model wins where</div>
+        <b>LPJmL rainfed leads maize</b> (11 of 35 tasks) — Africa and Central EU. tabpfn·dekad, xlinear·daily, patchtst·dekad each win 7. Geography predicts the winner better than any model property.
+      </div>
+      <div style="padding:9px 12px;border-left:1px solid var(--rule)">
+        <div style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Which model wins where</div>
+        <b>tabpfn·dekad leads wheat</b> (10 of 27 tasks) — European wheat and Asia. xlinear 8 tasks; LPJmL rainfed 4 (CEE wheat). patchtst·daily wins US wheat.
+      </div>
+    </div>
+  </div>
+
+  <h2 id="both-summary" style="font-size:17px;letter-spacing:-.01em;font-weight:800;margin:0 0 12px">At a glance: combined benchmark</h2>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-bottom:20px">
+    <div style="background:#fff;border:1px solid var(--rule);border-radius:8px;padding:12px 14px"><div style="font-size:1.6rem;font-weight:800;color:#1D2A22">82%</div><div style="font-size:12px;color:#5E6B62">Variance explained by which <b>country</b> (all architectures)</div></div>
+    <div style="background:#fff;border:1px solid var(--rule);border-radius:8px;padding:12px 14px"><div style="font-size:1.6rem;font-weight:800;color:#1D2A22">3.3%</div><div style="font-size:12px;color:#5E6B62">Variance explained by <b>model choice</b> — 25× less than country</div></div>
+    <div style="background:#fff;border:1px solid var(--rule);border-radius:8px;padding:12px 14px"><div style="font-size:1.6rem;font-weight:800;color:#1D2A22">tabpfn</div><div style="font-size:12px;color:#5E6B62">Top combined Friedman rank (inference, no training needed)</div></div>
+    <div style="background:#fff;border:1px solid var(--rule);border-radius:8px;padding:12px 14px"><div style="font-size:1.6rem;font-weight:800;color:#1D2A22">LPJmL</div><div style="font-size:12px;color:#5E6B62">Process model wins in 15/62 tasks — most in Africa and Central EU</div></div>
+  </div>
+
+<section class="q" id="f7">
+  <div class="qid" aria-hidden="true">F7</div>
+  <div class="qbody">
+    <h3><span class="qinline">F7 </span>What drives error most — country, crop, or model choice?</h3>
+    <p class="answer ci-both">The <strong>country</strong> matters most. <em>Which country</em> alone explains ~82% of variation in log NRMSE; <em>which crop</em> adds ~8%; model choice adds only ~3%. Together, "which country and which crop" accounts for 90.3%. This holds even when tabular models are included — the task dominance is a property of the data, not the model family.</p>
+    <p class="answer ci-maize" style="display:none"><span class="pill warn" style="vertical-align:middle;margin-right:4px">Maize</span>Country dominates maize variance even more sharply. African maize (AO, BF, ET, ML, TD) drives the high-NRMSE tail — median NRMSE 0.44, skill vs rolling-3 −23.5%. European maize clusters tightly at ~0.20 NRMSE. Country alone predicts whether the task will be easy or hard with ~85% reliability for maize.</p>
+    <p class="answer ci-wheat" style="display:none"><span class="pill info" style="vertical-align:middle;margin-right:4px">Wheat</span>Country explains less variance for wheat because European wheat tasks are more homogeneous (most NRMSE 0.09–0.25). High-error outliers: AU wheat (0.52) and some Asian markets (CN 0.28). Country is a weaker but still dominant predictor for wheat compared to maize.</p>
+
+    <figure class="plot">
+      <figcaption>ANOVA variance decomposition of log NRMSE across all 868 architecture runs.</figcaption>
+      <div class="scroll">
+      <svg class="fig" viewBox="0 0 560 55" xmlns="http://www.w3.org/2000/svg" style="min-width:300px">
+        <defs><style>.vd{font-size:12px;font-family:'Libre Franklin',Arial,sans-serif;fill:#fff;font-weight:700}</style></defs>
+        <!-- country ~82%: 82/100 × 540 ≈ 443px -->
+        <rect x="10"  y="5" width="443" height="40" fill="#D0613A" rx="4"/>
+        <rect x="453" y="5" width="45"  height="40" fill="#D39B12" rx="2"/>
+        <rect x="498" y="5" width="18"  height="40" fill="#3768C8" rx="2"/>
+        <rect x="516" y="5" width="34"  height="40" fill="#9CA3AF" rx="2"/>
+        <text class="vd" x="228" y="30" text-anchor="middle">~82% Country</text>
+      </svg>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:6px;font-size:11.5px">
+        <span><span style="display:inline-block;width:14px;height:12px;background:#D0613A;border-radius:2px;vertical-align:middle;margin-right:4px"></span><b>Country</b> ~82%</span>
+        <span><span style="display:inline-block;width:14px;height:12px;background:#D39B12;border-radius:2px;vertical-align:middle;margin-right:4px"></span><b>Crop</b> ~8%</span>
+        <span><span style="display:inline-block;width:14px;height:12px;background:#3768C8;border-radius:2px;vertical-align:middle;margin-right:4px"></span><b>Model choice</b> 3.3%</span>
+        <span><span style="display:inline-block;width:14px;height:12px;background:#9CA3AF;border-radius:2px;vertical-align:middle;margin-right:4px"></span><b>Residual</b> 6.4%</span>
+      </div>
+      </div>
+    </figure>
+
+    <!-- Crop spotlight -->
+    <div class="ci-box mz ci-maize">
+      <strong>🌽 Maize insight</strong>
+      Country still dominates for maize (~82%). Africa's raw NRMSE is ~0.44 (maize), 2× Europe's 0.21. US maize NRMSE is 0.19 but rolling-3 skill is −8 to −12% due to very strong yield persistence.
+    </div>
+    <div class="ci-box wh ci-wheat">
+      <strong>🌾 Wheat insight</strong>
+      Country still dominates for wheat. European wheat has lowest NRMSE (~0.20). Australia wheat shows high NRMSE (~0.47) driven by rainfall variability and n=1 country in Oceania.
+    </div>
+
+    <p class="note">The practical implication: improving from the worst architecture (dlinear) to the best combo (tabpfn·dekad) moves the needle by approximately 4–5 percentage points of explained variance. Improving dataset coverage — more countries, longer time series, better features — could unlock the other 90%. This benchmark is as much about understanding data difficulty as it is about comparing models.</p>
+  </div>
+</section>
+
+<!-- F8 -->
+
+<section class="q" id="f10">
+  <div class="qid" aria-hidden="true">F10</div>
+  <div class="qbody">
+    <h3><span class="qinline">F10 </span>Which architecture and resolution should you use for your research experiments?</h3>
+    <p class="answer">Use <b>patchtst at dekad (10-day) resolution</b> as your primary trained model. Pair it with <b>tabpfn at dekad resolution</b> as your zero-training baseline — it is the strongest single combo in the benchmark and sets a meaningful bar that your research enhancements need to beat.</p>
+
+    <div class="rec">
+      <h4>Primary: patchtst · dekad</h4>
+      <p>For your research architecture — adding features (RTAI, soil, lag years), exploring pooling, running ablations:</p>
+      <ul>
+        <li><b>#1 Friedman rank</b> among all trained sequence models at non-daily resolution (8.59 of 17 combos)</li>
+        <li><b>Skill −7.2% vs rolling-3</b> — nearly 5 points better than patchtst·daily (−12.3%)</li>
+        <li><b>Free efficiency win</b>: 36 timesteps vs 365 (1/10th the sequence length), so sweeps run 10× faster</li>
+        <li><b>#1 in wheat</b>, tied-#1 in maize — most crop-balanced of the trained models</li>
+        <li><b>Scales best with data</b> — transformers benefit most from additional samples and features</li>
+      </ul>
+    </div>
+
+    <div class="rec" style="border-color:#C2417B;margin-top:16px">
+      <h4 style="color:#C2417B">Zero-training baseline: tabpfn · dekad</h4>
+      <p>Always run this alongside your trained model as a sanity check:</p>
+      <ul>
+        <li><b>Best combo in the entire benchmark</b> (Friedman r̄ 6.56 of 17 combos)</li>
+        <li><b>Skill −4.5% vs rolling-3</b> — better than patchtst·dekad (−7.2%), with no training</li>
+        <li><b>Beats climatology</b> (+2.0% skill) — the first combo to clear this bar</li>
+        <li><b>Beats patchtst·daily in 58% of tasks</b> head-to-head</li>
+        <li><b>In Europe</b>: skill vs rolling-3 = −0.4% — essentially matching the rolling mean</li>
+        <li>Use it to frame the question: does your domain knowledge (RTAI, soil, lag years) add more than what tabpfn gets from seasonal summaries alone?</li>
+      </ul>
+    </div>
+
+    <div class="callout info" style="margin-top:20px">
+      <strong>What to watch for in your experiments:</strong>
+      <ul>
+        <li>Report <b>skill vs rolling-3</b> as your primary metric. NRMSE alone can mislead (tabicl·monthly has NRMSE 0.227 but skill_roll3 −10.1%). A model that lowers NRMSE but worsens skill_roll3 is capturing less than the baseline.</li>
+        <li>Test whether your <b>domain features</b> (RTAI, RUE, soil) help patchtst more than tabpfn. tabpfn operates on season-level summaries — if your features add sub-seasonal signal, only patchtst can exploit it.</li>
+        <li>If you later run multi-task or pooled experiments, re-check the per-resolution ranking — pooling changes the effective sample size and may alter whether daily vs dekad is optimal.</li>
+        <li>tabicl has the <b>lowest absolute NRMSE</b> (0.227 at monthly) — worth checking if your research prioritizes absolute accuracy over baseline-relative skill.</li>
+        <li>mitra was excluded from all comparisons (NRMSE &gt; 1.5); tabdpt underperforms consistently (see F6).</li>
+      </ul>
+    </div>
+
+    <!-- Final summary table -->
+    <table class="mtbl" style="margin-top:20px">
+      <thead><tr><th>Combo</th><th>Training</th><th>Friedman r̄</th><th>NRMSE</th><th>R²</th><th>Skill vs MK↑</th><th>Skill vs OLS↑</th><th>Skill vs clim.</th><th>Skill vs roll-3</th></tr></thead>
+      <tbody>
+        <tr class="highlight"><td class="best">tabpfn · dekad</td><td><span class="pill pos">None</span></td><td class="best">6.56 #2</td><td>0.239</td><td class="best">0.130</td><td class="best"><span class="pill pos">+8.8%</span></td><td><span class="pill neu">−0.8%</span></td><td class="best"><span class="pill pos">+2.0%</span></td><td class="best"><span class="pill neg">−4.5%</span></td></tr>
+        <tr><td>tabpfn · weekly</td><td><span class="pill pos">None</span></td><td>6.64 #3</td><td>0.246</td><td>0.119</td><td><span class="pill pos">+6.5%</span></td><td><span class="pill neu">+0.0%</span></td><td><span class="pill pos">+1.6%</span></td><td><span class="pill neg">−7.6%</span></td></tr>
+        <tr><td>tabicl · weekly</td><td><span class="pill pos">None</span></td><td>7.59 #4</td><td>0.232</td><td>0.122</td><td><span class="pill pos">+6.1%</span></td><td><span class="pill neg">−2.3%</span></td><td><span class="pill neg">−1.9%</span></td><td><span class="pill neg">−10.6%</span></td></tr>
+        <tr><td>tabicl · dekad</td><td><span class="pill pos">None</span></td><td>7.87 #5</td><td>0.233</td><td>0.123</td><td><span class="pill pos">+5.3%</span></td><td><span class="pill neg">−1.9%</span></td><td><span class="pill neg">−0.8%</span></td><td><span class="pill neg">−10.1%</span></td></tr>
+        <tr class="highlight"><td class="best">patchtst · dekad</td><td><span class="pill neu">Trained</span></td><td>8.59 #7</td><td>0.251</td><td>0.075</td><td><span class="pill pos">+4.2%</span></td><td><span class="pill neg">−2.5%</span></td><td><span class="pill neg">−2.2%</span></td><td><span class="pill neg">−7.2%</span></td></tr>
+        <tr><td>xlinear · daily</td><td><span class="pill neu">Trained</span></td><td>8.26 #6</td><td>0.246</td><td>0.010</td><td><span class="pill pos">+4.3%</span></td><td><span class="pill neg">−2.8%</span></td><td><span class="pill neg">−2.3%</span></td><td><span class="pill neg">−9.9%</span></td></tr>
+        <tr><td>patchtst · daily</td><td><span class="pill neu">Trained</span></td><td>8.62 #8</td><td>0.246</td><td>−0.003</td><td><span class="pill pos">+4.4%</span></td><td><span class="pill neg">−4.1%</span></td><td><span class="pill neg">−0.6%</span></td><td><span class="pill neg">−12.3%</span></td></tr>
+        <tr><td colspan="9" style="font-size:11px;color:#9CA3AF;padding-top:4px">tabdpt excluded: ranks last at every resolution; mitra excluded (NRMSE &gt; 1.5).</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+
+<!-- ═══════════════════ PART 7: Clustering ═══════════════════ -->
+<h2 id="cluster">Country clusters &amp; LPJmL</h2>
+
+<!-- F11 -->
+
+<section class="q" id="f11">
+  <div class="qid" aria-hidden="true">F11</div>
+  <div class="qbody">
+    <h3><span class="qinline">F11 </span>Do country clusters explain model performance patterns?</h3>
+    <p class="answer">Yes. Grouping by Koppen climate zone reveals distinct model preference patterns. Temperate (C) is the best zone for all models: tabpfn·dekad reaches −0.1% skill vs rolling-3 (essentially matching rolling-3), and patchtst reaches −4.5%. Tropical (A): LPJmL rainfed achieves +6.2% skill (the only positive value), while tabpfn and trained models all struggle (−16 to −28%). Continental/Boreal (D): LPJmL and tabpfn are both around −16% — persistent CEE yield trends and cold-season physiology limit all data-driven models. Arid/Semi-arid (B): tabpfn struggles most (−31.5%) with only 4 tasks (ZA, KZ, TR, AU).</p>
+
+    <table class="mtbl" style="margin-top:16px">
+      <thead><tr><th>Koppen zone</th><th>Tasks</th><th>patchtst·daily</th><th>xlinear·daily</th><th>tabpfn·dekad</th><th>lpjml_rainfed</th></tr></thead>
+      <tbody>
+        <tr><td>Tropical (A)</td><td>6</td><td><span class="pill neg">&#8722;27.6%</span></td><td><span class="pill neg">&#8722;16.7%</span></td><td><span class="pill neg">&#8722;23.0%</span></td><td><span class="pill pos">+6.2%</span></td></tr>
+        <tr><td>Arid/Semi-arid (B)</td><td>4</td><td><span class="pill neg">&#8722;10.2%</span></td><td><span class="pill neg">&#8722;7.2%</span></td><td><span class="pill neg">&#8722;31.5%</span></td><td class="bad"><span class="pill neg">&#8722;58.7%</span></td></tr>
+        <tr class="highlight"><td>Temperate (C)</td><td>39</td><td class="best"><span class="pill neg">&#8722;4.5%</span></td><td><span class="pill neg">&#8722;3.4%</span></td><td class="best"><span class="pill neg">&#8722;0.1%</span></td><td><span class="pill neg">&#8722;7.7%</span></td></tr>
+        <tr class="highlight"><td>Continental/Boreal (D)</td><td>9</td><td><span class="pill neg">&#8722;19.5%</span></td><td><span class="pill neg">&#8722;14.9%</span></td><td><span class="pill neg">&#8722;15.8%</span></td><td class="best"><span class="pill neg">&#8722;40.9%</span></td></tr>
+      </tbody>
+    </table>
+
+    <p style="margin-top:14px">LPJmL rainfed has a unique process-knowledge advantage in Tropical zones (+6.2% skill) where it leverages plant physiology that data-driven models cannot infer from 10–20 years of data. In Arid/Semi-arid zones LPJmL severely underperforms (−58.7%) due to irrigation assumptions mismatch. tabpfn·dekad nearly matches the rolling-3 baseline in Temperate zones (−0.1%) — this is the zone where the benchmark is "solved." For Continental/Boreal, all models fail similarly, suggesting the fundamental challenge is yield level trend (not feature quality).</p>
+
+    <div class="callout info" style="margin-top:16px">
+      <strong>Connection to F7 (task dominance):</strong> The finding that 90% of variance is explained by which country/crop (F7) is actually driven by within-zone differences — high-shifting CEE countries (LT, CZ, BG) drag down the Continental median, while stable Western European countries pull up the Temperate median. Zone membership and intra-zone heterogeneity compound to produce the extreme task-level spread observed in F7.
+    </div>
+  </div>
+</section>
+
+<!-- F12 -->
+
+<section class="q" id="f12">
+  <div class="qid" aria-hidden="true">F12</div>
+  <div class="qbody">
+    <h3><span class="qinline">F12 </span>Where does LPJmL add value over ML models?</h3>
+    <p class="answer">LPJmL rainfed beats patchtst in 23 of 51 country×crop pairs where both are available. It is especially competitive in Continental/Boreal wheat (BE +27pp, DE +14pp, FI +8pp over patchtst) and Central European maize (HU +27pp, CZ +16pp, DE +14pp). It underperforms in Tropical countries and in countries with high yield distribution shift (DK maize KS=0.80, LT maize KS=0.62), where the bias correction cannot fully compensate for rapid yield level changes.</p>
+
+    <table class="mtbl" style="margin-top:16px">
+      <thead><tr><th>Task</th><th>LPJmL rainfed skill</th><th>patchtst skill</th><th>&#916; (LPJmL advantage)</th></tr></thead>
+      <tbody>
+        <tr class="highlight"><td>HU maize</td><td class="best"><span class="pill pos">+32.1%</span></td><td><span class="pill pos">+5.5%</span></td><td class="best"><span class="pill pos">+26.6pp</span></td></tr>
+        <tr><td>CZ maize</td><td><span class="pill pos">+25.2%</span></td><td><span class="pill pos">+9.6%</span></td><td><span class="pill pos">+15.6pp</span></td></tr>
+        <tr><td>DE wheat</td><td><span class="pill pos">+14.4%</span></td><td><span class="pill neg">&#8722;1.4%</span></td><td><span class="pill pos">+15.8pp</span></td></tr>
+        <tr><td>DE maize</td><td><span class="pill pos">+18.0%</span></td><td><span class="pill pos">+3.8%</span></td><td><span class="pill pos">+14.2pp</span></td></tr>
+        <tr><td>BE wheat</td><td><span class="pill pos">+27.1%</span></td><td><span class="pill pos">+17.2%</span></td><td><span class="pill pos">+9.9pp</span></td></tr>
+        <tr><td>FI wheat</td><td><span class="pill pos">+8.0%</span></td><td><span class="pill neg">&#8722;1.0%</span></td><td><span class="pill pos">+9.0pp</span></td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout warn" style="margin-top:16px">
+      <strong>LPJmL irrigated consistently underperforms LPJmL rainfed in most regions.</strong> The irrigated variant removes weather-driven variance (irrigation decouples yield from rainfall), making the bias correction's OLS fit less stable. For most benchmark countries, the rainfed variant is the more informative option. Use lpjml_rainfed as your process-model reference; treat lpjml_irrigated as a sensitivity check only.
+    </div>
+  </div>
+</section>
+
+
+<!-- ═══════════════ PART 8: Model preference map ═══════════════ -->
+<h2 id="where-wins">Which model wins where?</h2>
+<section class="q" id="f13">
+  <div class="qid" aria-hidden="true">F13</div>
+  <div class="qbody">
+    <h3><span class="qinline">F13 </span>Across all 62 country×crop tasks, which model wins most often?</h3>
+    <p class="answer ci-both">No single model dominates everywhere. tabpfn·dekad leads in 17 tasks; LPJmL rainfed in 15; xlinear in 15; patchtst·dekad in 11. Geography predicts model preference better than any other factor — the best model for European wheat is not the best for Central European maize or Tropical countries.</p>
+    <p class="answer ci-maize" style="display:none"><span class="pill warn" style="vertical-align:middle;margin-right:4px">Maize</span>For maize: LPJmL rainfed wins in 11 tasks (African + Central EU: AO, BF, ET, MZ, CZ, DE, HU, NL, PL, SE maize). tabpfn·dekad wins in 6 maize tasks (BG, CN, FR, HR, SK, US, TD). xlinear wins most Tropical/data-scarce maize tasks where low variance beats complex fits.</p>
+    <p class="answer ci-wheat" style="display:none"><span class="pill info" style="vertical-align:middle;margin-right:4px">Wheat</span>For wheat: tabpfn·dekad wins in 11 tasks (BE, BR, CN, DE, DK, ES, FI, FR, LT, SE, plus IN wheat). LPJmL rainfed wins in 4 (CZ, EE, NL, PL wheat). patchtst·dekad wins in several (AR, AT, AU, GB, HU wheat among others).</p>
+    <table class="mtbl" style="margin-top:14px">
+      <thead><tr><th>Model</th><th>Tasks won</th><th>Strongest zones</th><th>Weakest zones</th></tr></thead>
+      <tbody>
+        <tr class="highlight"><td class="best">tabpfn · dekad</td><td class="best">17</td><td>European wheat, Asia (CN, IN)</td><td>African maize (data-scarce; LPJmL wins there)</td></tr>
+        <tr><td>LPJmL rainfed</td><td>15</td><td>African maize, Central/NW European maize (CZ, DE, HU, PL, NL)</td><td>Arid zones (catastrophic irrigation mismatch)</td></tr>
+        <tr><td>xlinear · daily</td><td>15</td><td>Tropical/Arid countries, South America</td><td>High-data-density countries where transformers pull ahead</td></tr>
+        <tr><td>patchtst · dekad</td><td>11</td><td>South America (AR, BR maize), mixed European</td><td>European wheat (tabpfn wins), Central EU maize (LPJmL wins)</td></tr>
+      </tbody>
+    </table>
+    <div class="callout ok" style="margin-top:16px">
+      <strong>Practical guidance by region:</strong>
+      <ul>
+        <li><b>European wheat → tabpfn·dekad</b>: near/above rolling-3 baseline; +2.5% skill vs rolling-3 in Europe</li>
+        <li><b>Central/Eastern European maize (CZ, DE, HU, NL, PL) → LPJmL rainfed</b>: crop physiology outweighs data-driven approaches</li>
+        <li><b>African maize → LPJmL rainfed</b>: process knowledge beats sparse-data ML in most African maize tasks</li>
+        <li><b>Tropical/Arid zones → xlinear</b>: low-variance linear beats complex architectures when training data is scarce</li>
+        <li><b>Asia (IN, CN) → tabpfn·dekad</b>: much better than patchtst·dekad (−44.1% skill for CN wheat with patchtst)</li>
+      </ul>
+    </div>
+  </div>
+</section>
+  </div>
+  </div><!-- end panel-both -->
+
+  <div class="crop-panel" id="panel-maize" style="display:none">
+  <div class="wrap" style="max-width:1100px;margin:0 auto;padding:0 22px">
+  <div style="background:#fff;border:1px solid var(--rule);border-radius:8px;padding:12px 18px;margin:14px 0 8px;display:flex;gap:14px;flex-wrap:wrap;align-items:center">
+    <span style="font-size:1.3rem">🌽</span>
+    <div>
+      <div style="font-size:14px;font-weight:800;color:#1D2A22">Maize findings — 35 tasks crop–country tasks, 35 countries countries</div>
+      <div style="font-size:12px;color:#5E6B62">All charts, tables and numbers below are computed on maize data only. For findings that apply to both crops, use the <strong>Both crops</strong> tab.</div>
+    </div>
+  </div>  <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px"><a href="#mz-f1" style="color:var(--muted);text-decoration:none;font-size:12px;font-weight:600;padding:3px 8px;border-radius:4px;background:#f8fafc">F1 Architecture</a> <a href="#mz-f2" style="color:var(--muted);text-decoration:none;font-size:12px;font-weight:600;padding:3px 8px;border-radius:4px;background:#f8fafc">F2 Daily baseline</a> <a href="#mz-f3" style="color:var(--muted);text-decoration:none;font-size:12px;font-weight:600;padding:3px 8px;border-radius:4px;background:#f8fafc">F3 Resolution</a> <a href="#mz-f4f5" style="color:var(--muted);text-decoration:none;font-size:12px;font-weight:600;padding:3px 8px;border-radius:4px;background:#f8fafc">F4–F5 Tabular</a> <a href="#mz-f8" style="color:var(--muted);text-decoration:none;font-size:12px;font-weight:600;padding:3px 8px;border-radius:4px;background:#f8fafc">F8 Regional</a> <a href="#mz-f9" style="color:var(--muted);text-decoration:none;font-size:12px;font-weight:600;padding:3px 8px;border-radius:4px;background:#f8fafc">F9 Data quartiles</a> <a href="#mz-f13" style="color:var(--muted);text-decoration:none;font-size:12px;font-weight:600;padding:3px 8px;border-radius:4px;background:#f8fafc">F13 Who wins</a> </div>  <section class="q" id="mz-f1" style="margin:16px 0 28px">
+    <div class="qid" aria-hidden="true">F1</div>
+    <div class="qbody">
+      <h3>Which architecture ranks highest for maize?</h3>
+      <p class="answer">xlinear ranks #1 for maize (Friedman r&#772;&nbsp;=&nbsp;5.31), edging out tsmixer (5.37) and patchtst (5.54) — a statistical three-way tie. The ranking is tight at the top; no single model dominates. Even the best model loses to the rolling-3 baseline by −10.9%, making maize one of the hardest crops to forecast.</p>      <figure class="plot"><figcaption>Friedman mean rank on skill_rmse_vs_rolling3 for 14 architectures — maize tasks only (35 countries). Lower = better.</figcaption><div class="scroll">      <svg class="fig" viewBox="0 0 680 230" xmlns="http://www.w3.org/2000/svg">
+        <defs><style>.fc{font-size:10px;fill:#1D2A22;font-family:'Libre Franklin',Arial,sans-serif}</style></defs>
+        <line x1="170" y1="200" x2="650" y2="200" stroke="#D9DDD3"/>
+        <text style="font-size:9px;fill:#5E6B62;font-family:'Libre Franklin',Arial,sans-serif" x="410" y="212" text-anchor="middle">Friedman mean rank (lower = better)</text>
+        <rect x="170" y="10" width="147" height="13" fill="#3C9A5F" rx="2"/>
+        <text class="fc" x="166" y="20" text-anchor="end">xlinear</text>
+        <text class="fc" x="321" y="20">5.31</text>
+        <text style="font-size:9px;fill:#94a3b8;font-family:'Libre Franklin',Arial,sans-serif" x="359" y="20">sk=-0.109</text>
+        <rect x="170" y="28" width="149" height="13" fill="#3768C8" rx="2"/>
+        <text class="fc" x="166" y="38" text-anchor="end">tsmixer</text>
+        <text class="fc" x="323" y="38">5.37</text>
+        <text style="font-size:9px;fill:#94a3b8;font-family:'Libre Franklin',Arial,sans-serif" x="361" y="38">sk=-0.126</text>
+        <rect x="170" y="46" width="154" height="13" fill="#3768C8" rx="2"/>
+        <text class="fc" x="166" y="56" text-anchor="end">patchtst</text>
+        <text class="fc" x="328" y="56">5.54</text>
+        <text style="font-size:9px;fill:#94a3b8;font-family:'Libre Franklin',Arial,sans-serif" x="366" y="56">sk=-0.163</text>
+        <rect x="170" y="64" width="163" height="13" fill="#3768C8" rx="2"/>
+        <text class="fc" x="166" y="74" text-anchor="end">timesnet</text>
+        <text class="fc" x="337" y="74">5.80</text>
+        <text style="font-size:9px;fill:#94a3b8;font-family:'Libre Franklin',Arial,sans-serif" x="375" y="74">sk=-0.146</text>
+        <rect x="170" y="82" width="166" height="13" fill="#3768C8" rx="2"/>
+        <text class="fc" x="166" y="92" text-anchor="end">informer</text>
+        <text class="fc" x="340" y="92">5.89</text>
+        <text style="font-size:9px;fill:#94a3b8;font-family:'Libre Franklin',Arial,sans-serif" x="378" y="92">sk=-0.110</text>
+        <rect x="170" y="100" width="186" height="13" fill="#3768C8" rx="2"/>
+        <text class="fc" x="166" y="110" text-anchor="end">itransformer</text>
+        <text class="fc" x="360" y="110">6.46</text>
+        <text style="font-size:9px;fill:#94a3b8;font-family:'Libre Franklin',Arial,sans-serif" x="398" y="110">sk=-0.209</text>
+        <rect x="170" y="118" width="187" height="13" fill="#2AA1B3" rx="2"/>
+        <text class="fc" x="166" y="128" text-anchor="end">CNN-LSTM</text>
+        <text class="fc" x="361" y="128">6.51</text>
+        <text style="font-size:9px;fill:#94a3b8;font-family:'Libre Franklin',Arial,sans-serif" x="399" y="128">sk=-0.132</text>
+        <rect x="170" y="136" width="191" height="13" fill="#3768C8" rx="2"/>
+        <text class="fc" x="166" y="146" text-anchor="end">tst</text>
+        <text class="fc" x="365" y="146">6.63</text>
+        <text style="font-size:9px;fill:#94a3b8;font-family:'Libre Franklin',Arial,sans-serif" x="403" y="146">sk=-0.144</text>
+        <rect x="170" y="154" width="248" height="13" fill="#3768C8" rx="2"/>
+        <text class="fc" x="166" y="164" text-anchor="end">autoformer</text>
+        <text class="fc" x="422" y="164">8.29</text>
+        <text style="font-size:9px;fill:#94a3b8;font-family:'Libre Franklin',Arial,sans-serif" x="460" y="164">sk=-0.214</text>
+        <rect x="170" y="172" width="360" height="13" fill="#9CB89A" rx="2"/>
+        <text class="fc" x="166" y="182" text-anchor="end">dlinear</text>
+        <text class="fc" x="534" y="182">11.60</text>
+        <text style="font-size:9px;fill:#94a3b8;font-family:'Libre Franklin',Arial,sans-serif" x="572" y="182">sk=-0.305</text>
+        <rect x="20" y="211" width="11" height="9" fill="#3768C8" rx="1"/><text style="font-size:9px;fill:#5E6B62;font-family:'Libre Franklin',Arial,sans-serif" x="34" y="220">Transformer</text>
+        <rect x="120" y="211" width="11" height="9" fill="#2AA1B3" rx="1"/><text style="font-size:9px;fill:#5E6B62;font-family:'Libre Franklin',Arial,sans-serif" x="134" y="220">CNN-LSTM</text>
+        <rect x="210" y="211" width="11" height="9" fill="#3C9A5F" rx="1"/><text style="font-size:9px;fill:#5E6B62;font-family:'Libre Franklin',Arial,sans-serif" x="224" y="220">Linear</text>
+      </svg></div></figure>      <table class="mtbl"><thead><tr><th>Architecture</th><th>Maize r&#772;</th><th>Skill vs roll-3</th><th>Tasks won (vs roll-3)</th></tr></thead><tbody><tr class="highlight"><td class="best">xlinear</td><td class="best">5.31</td><td><span class="pill neg">-10.9%</span></td><td>—</td></tr><tr ><td >tsmixer</td><td >5.37</td><td><span class="pill neg">-12.6%</span></td><td>—</td></tr><tr ><td >patchtst</td><td >5.54</td><td><span class="pill neg">-16.3%</span></td><td>—</td></tr><tr ><td >timesnet</td><td >5.80</td><td><span class="pill neg">-14.6%</span></td><td>—</td></tr><tr ><td >informer</td><td >5.89</td><td><span class="pill neg">-11.0%</span></td><td>—</td></tr></tbody></table>      <div class="callout warn"><strong>Maize is a three-way tie at the top.</strong> xlinear, tsmixer and patchtst all score within 0.23 Friedman rank points — statistically indistinguishable. For maize, model choice matters far less than country difficulty: 11 of the 35 maize tasks are dominated by LPJmL rainfed (see F13).</div>    </div>
+  </section>  <section class="q" id="mz-f2" style="margin:16px 0 28px">
+    <div class="qid" aria-hidden="true">F2</div>
+    <div class="qbody">
+      <h3>At daily resolution, can any model beat the 3-year rolling average for maize?</h3>
+      <p class="answer">No — not even close. Maize patchtst·daily skill vs rolling-3 = <strong>−16.3%</strong>. Models beat the Mann-Kendall trend baseline (+1.8%) but lose to OLS trend (−5.2%) and are essentially tied with the historical climatology mean (−0.7%). The rolling-3 wins in 71% of maize tasks.</p>      <figure class="plot" style="max-width:640px"><figcaption>patchtst·daily median skill vs each reference — maize tasks only. Positive = beats the reference.</figcaption>      <table style="width:100%;border-collapse:collapse;font-size:12.5px;margin:10px 0 4px"><tbody>          <tr style="border-bottom:1px solid #f1f5f9">
+            <td style="text-align:right;padding:7px 12px 7px 0;width:46%;color:#1D2A22;font-weight:500">vs Mann-Kendall trend</td>
+            <td style="padding:7px 8px"><div style="display:flex;align-items:center;gap:8px">
+              <div style="width:13px;height:20px;background:#2F6B3A;border-radius:3px;flex-shrink:0"></div>
+              <span style="color:#2F6B3A;font-weight:700;min-width:48px">+1.8%</span>
+              <span style="color:#64748b;font-size:11.5px">✓ beats this — Theil-Sen slope is noisy, easy bar</span>
+            </div></td>
+          </tr>          <tr style="border-bottom:1px solid #f1f5f9">
+            <td style="text-align:right;padding:7px 12px 7px 0;width:46%;color:#1D2A22;font-weight:500">vs OLS linear trend</td>
+            <td style="padding:7px 8px"><div style="display:flex;align-items:center;gap:8px">
+              <div style="width:36px;height:20px;background:#D0613A;border-radius:3px;flex-shrink:0"></div>
+              <span style="color:#D0613A;font-weight:700;min-width:48px">-5.2%</span>
+              <span style="color:#64748b;font-size:11.5px">narrowly loses — OLS captures long-run yield trend</span>
+            </div></td>
+          </tr>          <tr style="border-bottom:1px solid #f1f5f9">
+            <td style="text-align:right;padding:7px 12px 7px 0;width:46%;color:#1D2A22;font-weight:500">vs climatology (mean)</td>
+            <td style="padding:7px 8px"><div style="display:flex;align-items:center;gap:8px">
+              <div style="width:5px;height:20px;background:#9CA3AF;border-radius:3px;flex-shrink:0"></div>
+              <span style="color:#9CA3AF;font-weight:700;min-width:48px">-0.7%</span>
+              <span style="color:#64748b;font-size:11.5px">essentially tied with the historical mean</span>
+            </div></td>
+          </tr>          <tr style="border-bottom:1px solid #f1f5f9">
+            <td style="text-align:right;padding:7px 12px 7px 0;width:46%;color:#1D2A22;font-weight:500">vs 3-yr rolling mean</td>
+            <td style="padding:7px 8px"><div style="display:flex;align-items:center;gap:8px">
+              <div style="width:114px;height:20px;background:#991B1B;border-radius:3px;flex-shrink:0"></div>
+              <span style="color:#991B1B;font-weight:700;min-width:48px">-16.3%</span>
+              <span style="color:#64748b;font-size:11.5px">✗ loses by 16% — the undefeated bar for maize</span>
+            </div></td>
+          </tr>      </tbody></table>      <div style="font-size:11px;color:var(--muted);margin-top:2px">Bar widths proportional to magnitude. Scale: each pixel ≈ 0.5%. patchtst beats rolling-3 in only 29% of maize tasks.</div></figure>      <div class="callout warn"><strong>Why maize is so much harder than wheat:</strong> Rapid yield trends driven by variety adoption (LT +99%, ET +71%, BG +57%, DK +40%) mean the target variable jumps sharply upward in the test period. The rolling-3 uses the 3 most recent training years — already partially adapted to this trend — while trained models fit the full historical distribution and lag behind. Models lose to rolling-3 in <strong>71%</strong> of maize tasks vs 67% of wheat tasks.</div>    </div>
+  </section>  <section class="q" id="mz-f3" style="margin:16px 0 28px">
+    <div class="qid" aria-hidden="true">F3</div>
+    <div class="qbody">
+      <h3>Does changing input resolution help for maize?</h3>
+      <p class="answer">Yes — dekad aggregation is the best resolution for patchtst (−12.6% vs −16.3% at daily), a meaningful 3.7pp improvement. xlinear benefits most from monthly aggregation (−9.7%). The noise-filtering benefit of coarser time steps is especially valuable for maize where daily weather noise is high relative to the growing-season signal.</p>      <figure class="plot"><figcaption>Skill vs rolling-3 (median, 35 maize tasks) for patchtst and xlinear at all 4 resolutions. Green = best; darker red = worse.</figcaption><div class="scroll">      <svg class="fig" viewBox="0 0 620 195" xmlns="http://www.w3.org/2000/svg">
+        <text style="font-size:11px;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:middle;fill:#5E6B62" x="230" y="20">Daily</text>
+        <text style="font-size:11px;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:middle;fill:#5E6B62" x="330" y="20">Weekly</text>
+        <text style="font-size:11px;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:middle;fill:#5E6B62" x="430" y="20">Dekad</text>
+        <text style="font-size:11px;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:middle;fill:#5E6B62" x="530" y="20">Monthly</text>
+        <text style="font-size:12px;font-family:'Libre Franklin',Arial,sans-serif;fill:#1D2A22;font-weight:600" x="10" y="75">patchtst</text>
+        <rect x="180" y="30" width="100" height="50" fill="#86EFAC" rx="4"/>
+        <text style="font-size:13px;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:middle;font-weight:700;fill:#14532D" x="230" y="62">-16.3% ★</text>
+        <rect x="280" y="30" width="100" height="50" fill="rgb(156,20,20)" rx="4"/>
+        <text style="font-size:13px;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:middle;font-weight:700;fill:#7F1D1D" x="330" y="62">-13.1%</text>
+        <rect x="380" y="30" width="100" height="50" fill="rgb(156,20,20)" rx="4"/>
+        <text style="font-size:13px;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:middle;font-weight:700;fill:#7F1D1D" x="430" y="62">-12.6%</text>
+        <rect x="480" y="30" width="100" height="50" fill="rgb(156,20,20)" rx="4"/>
+        <text style="font-size:13px;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:middle;font-weight:700;fill:#7F1D1D" x="530" y="62">-14.2%</text>
+        <text style="font-size:12px;font-family:'Libre Franklin',Arial,sans-serif;fill:#1D2A22;font-weight:600" x="10" y="150">xlinear</text>
+        <rect x="180" y="105" width="100" height="50" fill="rgb(156,20,20)" rx="4"/>
+        <text style="font-size:13px;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:middle;font-weight:700;fill:#7F1D1D" x="230" y="137">-10.9%</text>
+        <rect x="280" y="105" width="100" height="50" fill="#86EFAC" rx="4"/>
+        <text style="font-size:13px;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:middle;font-weight:700;fill:#14532D" x="330" y="137">-13.1% ★</text>
+        <rect x="380" y="105" width="100" height="50" fill="rgb(156,20,20)" rx="4"/>
+        <text style="font-size:13px;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:middle;font-weight:700;fill:#7F1D1D" x="430" y="137">-11.6%</text>
+        <rect x="480" y="105" width="100" height="50" fill="rgb(156,20,20)" rx="4"/>
+        <text style="font-size:13px;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:middle;font-weight:700;fill:#7F1D1D" x="530" y="137">-9.7%</text>
+        <rect x="180" y="170" width="16" height="12" fill="#86EFAC" rx="2"/><text style="font-size:11px;font-family:'Libre Franklin',Arial,sans-serif;fill:#5E6B62" x="200" y="181" text-anchor="start">Best for model ★</text>
+        <rect x="340" y="170" width="16" height="12" fill="#FCA5A5" rx="2"/><text style="font-size:11px;font-family:'Libre Franklin',Arial,sans-serif;fill:#5E6B62" x="360" y="181" text-anchor="start">Worst for model</text>
+      </svg></div></figure>      <div class="callout ok"><strong>patchtst·dekad is the best trained-model–resolution combo for maize</strong> (−12.6% skill). It runs at 1/10th the wall time of daily (36 vs 365 timesteps) and achieves better skill. For maize sweeps, always prefer dekad over daily for patchtst.</div>      <div class="callout info"><strong>xlinear monthly (−9.7%) is the best linear model for maize.</strong> Monthly aggregation extracts more signal from seasonal summaries than sub-monthly dynamics, and xlinear's low-variance fitting handles the reduced sequence well. For quick baselines on maize, xlinear·monthly is an efficient choice.</div>    </div>
+  </section>  <section class="q" id="mz-f4f5" style="margin:16px 0 28px">
+    <div class="qid" aria-hidden="true">F4–F5</div>
+    <div class="qbody">
+      <h3>How do tabular foundation models compare for maize, and what is the single best combo?</h3>
+      <p class="answer">tabicl·weekly ranks #1 for maize in Friedman rank (7.17) with skill −8.9% vs rolling-3. tabpfn·dekad is #2 (7.31) with skill −13.7%, but it is the <em>only</em> maize combo to beat climatology (+1.4%). For maize, tabicl has better median skill but tabpfn is the more robust choice if you want to clear the climatology bar.</p>      <div style="display:flex;gap:12px;flex-wrap:wrap;margin:10px 0">      <div style="flex:1;min-width:200px"><div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Weekly resolution</div>      <table class="mtbl" style="max-width:420px"><thead><tr><th>Model</th><th>Friedman r&#772;</th><th>Skill vs rolling-3</th></tr></thead><tbody><tr class="highlight"><td><span style="color:#7C3AED;font-weight:700">tabicl</span></td><td style="font-weight:700">#1 (2.51)</td><td><span class="pill neg">-890.0%</span></td></tr><tr ><td><span style="color:#C2417B;font-weight:700">tabpfn</span></td><td style="font-weight:700">#2 (2.54)</td><td><span class="pill neg">-1370.0%</span></td></tr><tr ><td><span style="color:#3768C8;font-weight:700">patchtst</span></td><td style="font-weight:700">#3 (3.03)</td><td><span class="pill neg">-1310.0%</span></td></tr><tr ><td><span style="color:#3C9A5F;font-weight:700">xlinear</span></td><td style="font-weight:700">#4 (3.14)</td><td><span class="pill neg">-1310.0%</span></td></tr><tr ><td><span style="color:#8C8C8C;font-weight:700">tabdpt</span></td><td style="font-weight:700">#5 (3.77)</td><td><span class="pill neg">-1880.0%</span></td></tr></tbody></table>      </div>      <div style="flex:1;min-width:200px"><div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Dekad resolution</div>      <table class="mtbl" style="max-width:420px"><thead><tr><th>Model</th><th>Friedman r&#772;</th><th>Skill vs rolling-3</th></tr></thead><tbody><tr class="highlight"><td><span style="color:#C2417B;font-weight:700">tabpfn</span></td><td style="font-weight:700">#1 (2.71)</td><td><span class="pill neg">-1370.0%</span></td></tr><tr ><td><span style="color:#7C3AED;font-weight:700">tabicl</span></td><td style="font-weight:700">#2 (2.77)</td><td><span class="pill neg">-970.0%</span></td></tr><tr ><td><span style="color:#3768C8;font-weight:700">patchtst</span></td><td style="font-weight:700">#3 (2.80)</td><td><span class="pill neg">-1260.0%</span></td></tr><tr ><td><span style="color:#3C9A5F;font-weight:700">xlinear</span></td><td style="font-weight:700">#4 (3.03)</td><td><span class="pill neg">-1160.0%</span></td></tr><tr ><td><span style="color:#8C8C8C;font-weight:700">tabdpt</span></td><td style="font-weight:700">#5 (3.69)</td><td><span class="pill neg">-2190.0%</span></td></tr></tbody></table>      </div>      <div style="flex:1;min-width:200px"><div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Monthly resolution</div>      <table class="mtbl" style="max-width:420px"><thead><tr><th>Model</th><th>Friedman r&#772;</th><th>Skill vs rolling-3</th></tr></thead><tbody><tr class="highlight"><td><span style="color:#C2417B;font-weight:700">tabpfn</span></td><td style="font-weight:700">#1 (2.49)</td><td><span class="pill neg">-1320.0%</span></td></tr><tr ><td><span style="color:#7C3AED;font-weight:700">tabicl</span></td><td style="font-weight:700">#2 (2.60)</td><td><span class="pill neg">-1100.0%</span></td></tr><tr ><td><span style="color:#3C9A5F;font-weight:700">xlinear</span></td><td style="font-weight:700">#3 (2.97)</td><td><span class="pill neg">-970.0%</span></td></tr><tr ><td><span style="color:#3768C8;font-weight:700">patchtst</span></td><td style="font-weight:700">#4 (3.20)</td><td><span class="pill neg">-1420.0%</span></td></tr><tr ><td><span style="color:#8C8C8C;font-weight:700">tabdpt</span></td><td style="font-weight:700">#5 (3.74)</td><td><span class="pill neg">-2040.0%</span></td></tr></tbody></table>      </div>      </div>      <p style="font-size:12px;color:var(--muted);margin:4px 0 10px">Friedman mean rank within each resolution (5 models, 35 maize tasks). Lower = better.</p>      <div style="font-size:13px;font-weight:700;color:#1D2A22;margin:14px 0 6px">Best combos across all 17 model–resolution pairs (maize)</div>      <table class="mtbl"><thead><tr><th>Combo</th><th>Friedman r&#772; (maize)</th><th>Skill vs roll-3</th><th>Skill vs clim.</th></tr></thead><tbody><tr ><td><span style="color:#7C3AED;font-weight:700">tabicl·weekly</span></td><td >7.17</td><td><span class="pill neg">-8.9%</span></td><td><span class="pill neg">-1.8%</span></td></tr><tr class="highlight"><td><span style="color:#C2417B;font-weight:700">tabpfn·dekad</span> <span style="color:#C2417B;font-size:10px;font-weight:700">✓ recommended</span></td><td class="best">7.31</td><td><span class="pill neg">-13.7%</span></td><td><span class="pill pos">+1.4%</span></td></tr><tr ><td><span style="color:#7C3AED;font-weight:700">tabicl·dekad</span></td><td >7.51</td><td><span class="pill neg">-9.7%</span></td><td><span class="pill neg">-0.8%</span></td></tr><tr ><td><span style="color:#3C9A5F;font-weight:700">xlinear·daily</span></td><td >7.77</td><td><span class="pill neg">-10.9%</span></td><td><span class="pill neg">-0.8%</span></td></tr><tr ><td><span style="color:#C2417B;font-weight:700">tabpfn·monthly</span></td><td >7.80</td><td><span class="pill neg">-13.2%</span></td><td><span class="pill pos">+0.6%</span></td></tr><tr ><td><span style="color:#3768C8;font-weight:700">patchtst·dekad</span></td><td >7.91</td><td><span class="pill neg">-12.6%</span></td><td><span class="pill pos">+2.2%</span></td></tr><tr ><td><span style="color:#3768C8;font-weight:700">patchtst·daily </span> <span style="color:#94a3b8;font-size:10px">baseline</span></td><td >9.31</td><td><span class="pill neg">-16.3%</span></td><td><span class="pill neg">-0.7%</span></td></tr></tbody></table>      <div class="callout ok"><strong>Recommendation for maize:</strong> Run <strong>tabpfn·dekad</strong> as your primary tabular baseline — it beats climatology for maize (+1.4%), ranks #2 overall, and requires no training. tabicl·weekly has a better Friedman rank but its per-task skill is more variable. For a trained-model baseline use <strong>patchtst·dekad</strong> (−12.6%) over patchtst·daily (−16.3%).</div>    </div>
+  </section>  <section class="q" id="mz-f8" style="margin:16px 0 28px">
+    <div class="qid" aria-hidden="true">F8</div>
+    <div class="qbody">
+      <h3>Which continents are hardest for maize, and does tabpfn help?</h3>
+      <p class="answer">Africa has the highest raw error (NRMSE 0.41), but <strong>Europe is the standout</strong>: tabpfn·dekad achieves +4.1% skill vs rolling-3 in European maize — it actually beats the rolling-3 baseline! North America (US maize) has low NRMSE (0.17) but is deceptive: the rolling-3 is nearly unbeatable there due to high year-to-year persistence.</p>      <table class="mtbl"><thead><tr><th>Continent</th><th>Median NRMSE</th><th>patchtst·daily skill</th><th>tabpfn·dekad skill</th><th>Key challenge</th></tr></thead><tbody><tr class="highlight"><td>Europe</td><td>0.23</td><td><span class="pill neg">-4.9%</span></td><td><span class="pill pos">+4.1%</span></td><td style="font-size:11.5px;color:#5E6B62">European maize: tabpfn·dekad beats rolling-3!</td></tr><tr ><td>S. America</td><td>0.36</td><td><span class="pill neg">-14.0%</span></td><td><span class="pill neg">-15.7%</span></td><td style="font-size:11.5px;color:#5E6B62">Argentina/Brazil; roughly tied</td></tr><tr class="highlight"><td>N. America</td><td>0.17</td><td><span class="pill neg">-16.7%</span></td><td><span class="pill pos">+0.2%</span></td><td style="font-size:11.5px;color:#5E6B62">US: low NRMSE but rolling-3 near-unbeatable</td></tr><tr ><td>Africa</td><td>0.41</td><td><span class="pill neg">-23.5%</span></td><td><span class="pill neg">-27.5%</span></td><td style="font-size:11.5px;color:#5E6B62">Highest error; LPJmL rainfed often wins</td></tr><tr ><td>Asia</td><td>0.34</td><td><span class="pill neg">-25.2%</span></td><td><span class="pill neg">-18.4%</span></td><td style="font-size:11.5px;color:#5E6B62">High persistence; tabpfn less bad</td></tr></tbody></table>      <div class="callout ok"><strong>European maize is the best-case scenario:</strong> tabpfn·dekad reaches +4.1% skill vs rolling-3 — the only continent where any model clearly beats the rolling-3 for maize. Central/Eastern Europe (CZ, DE, HU, PL) is where LPJmL rainfed also excels (see F13). African and Asian maize remain hard: high error AND poor skill.</div>    </div>
+  </section>  <section class="q" id="mz-f9" style="margin:16px 0 28px">
+    <div class="qid" aria-hidden="true">F9</div>
+    <div class="qbody">
+      <h3>Does more training data reliably improve maize forecasting skill?</h3>
+      <p class="answer">Non-monotone. The best maize quartile is Q2 (42–80 samples; CZ, PL, LT, BE maize) with skill −1.3% — mid-sized European countries where models actually learn beyond the recent average. The worst are Q1 (small EU outliers, −17.3%) and Q4 (US/BR/AR data-rich but persistence-dominated, −16.5%). More data raises the bar as well as the model.</p>      <figure class="plot"><figcaption>Skill vs rolling-3 by sample quartile (median across top-3 architectures) — maize tasks only.</figcaption><div class="scroll">      <svg class="fig" viewBox="0 0 520 170" xmlns="http://www.w3.org/2000/svg">
+        <line x1="80" y1="30" x2="80" y2="120" stroke="#D9DDD3"/>
+        <line x1="80" y1="120" x2="510" y2="120" stroke="#1D2A22" stroke-width="1.5"/>
+        <text style="font-size:9px;fill:#5E6B62;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:end" x="78" y="33">0%</text>
+        <text style="font-size:9px;fill:#5E6B62;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:end" x="78" y="62">−10%</text>
+        <line x1="80" y1="62" x2="510" y2="62" stroke="#D9DDD3" stroke-width="0.5" stroke-dasharray="3,3"/>
+        <rect x="90" y="20" width="80" height="99" fill="#D0613A" rx="3" fill-opacity="0.9"/>
+        <text style="font-size:9.5px;fill:#5E6B62;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:middle" x="130" y="135">Q1 ✓ best</text>
+        <text style="font-size:9px;fill:#94a3b8;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:middle" x="130" y="148">5–42</text>
+        <text style="font-size:9px;fill:#64748b;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:middle" x="130" y="160">BG, DK, HR, LS, NL</text>
+        <rect x="195" y="112" width="80" height="7" fill="#D39B12" rx="3" fill-opacity="0.9"/>
+        <text style="font-size:9.5px;fill:#5E6B62;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:middle" x="235" y="135">Q2</text>
+        <text style="font-size:9px;fill:#94a3b8;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:middle" x="235" y="148">43–80</text>
+        <text style="font-size:9px;fill:#64748b;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:middle" x="235" y="160">AO, AT, BE, BF, CZ</text>
+        <rect x="300" y="99" width="80" height="20" fill="#3C9A5F" rx="3" fill-opacity="0.9"/>
+        <text style="font-size:9.5px;fill:#5E6B62;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:middle" x="340" y="135">Q3</text>
+        <text style="font-size:9px;fill:#94a3b8;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:middle" x="340" y="148">100–223</text>
+        <text style="font-size:9px;fill:#64748b;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:middle" x="340" y="160">CN, EL, ES, HU, ML</text>
+        <rect x="405" y="24" width="80" height="95" fill="#D39B12" rx="3" fill-opacity="0.9"/>
+        <text style="font-size:9.5px;fill:#5E6B62;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:middle" x="445" y="135">Q4</text>
+        <text style="font-size:9px;fill:#94a3b8;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:middle" x="445" y="148">274–20024</text>
+        <text style="font-size:9px;fill:#64748b;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:middle" x="445" y="160">AR, BR, DE, ET, FR</text>
+        <text style="font-size:9px;fill:#1D2A22;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:middle;font-weight:700" x="130" y="16">-17.3%</text>
+        <text style="font-size:9px;fill:#1D2A22;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:middle;font-weight:700" x="235" y="108">-1.3%</text>
+        <text style="font-size:9px;fill:#1D2A22;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:middle;font-weight:700" x="340" y="95">-3.5%</text>
+        <text style="font-size:9px;fill:#1D2A22;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:middle;font-weight:700" x="445" y="20">-16.5%</text>
+      </svg></div></figure>      <div class="callout info"><strong>Q4 maize (US, BR, AR, DE, FR) is not the easiest despite having the most data</strong> — these are also countries with strong yield persistence (US corn belt, Brazilian soy rotation) where even many training samples cannot break the rolling-3's momentum advantage. Data quantity helps only when task difficulty does not scale with it.</div>    </div>
+  </section>  <section class="q" id="mz-f13" style="margin:16px 0 28px">
+    <div class="qid" aria-hidden="true">F13</div>
+    <div class="qbody">
+      <h3>Which model wins for maize, and where?</h3>
+      <p class="answer">LPJmL rainfed leads maize with 11 wins (11 of 35 tasks), driven by its dominance in Africa and Central European maize. tabpfn·dekad, xlinear·daily and patchtst·dekad each win 7 tasks. No single model dominates maize — the winning choice is geography-dependent.</p>      <table class="mtbl"><thead><tr><th>Model</th><th>Maize tasks won</th><th>Countries</th><th>Why it wins there</th></tr></thead><tbody><tr class="highlight"><td class="best"><span style="font-weight:700">LPJmL rainfed</span></td><td class="best">11</td><td style="font-size:11px">AO, BF, CZ, DE, ET, HU, LS, MZ, NL, PL, SE</td><td style="font-size:11px;color:#5E6B62">African maize + Central EU where crop physiology dominates</td></tr><tr ><td ><span style="font-weight:700">tabpfn·dekad</span></td><td >7</td><td style="font-size:11px">BG, CN, FR, HR, SK, TD, US</td><td style="font-size:11px;color:#5E6B62">Europe (steady yield), Asia, US</td></tr><tr ><td ><span style="font-weight:700">xlinear·daily</span></td><td >7</td><td style="font-size:11px">AT, EL, ES, IN, SN, ZA, ZM</td><td style="font-size:11px;color:#5E6B62">Tropical/Arid + data-scarce</td></tr><tr ><td ><span style="font-weight:700">patchtst·dekad</span></td><td >7</td><td style="font-size:11px">AR, BE, BR, LT, ML, PT, RO</td><td style="font-size:11px;color:#5E6B62">South America + mixed EU</td></tr></tbody></table>      <div class="callout ok"><strong>Practical maize guidance:</strong><ul><li><b>African maize →</b> LPJmL rainfed (data-scarce; process knowledge beats ML)</li><li><b>Central EU maize (CZ, DE, HU, NL, PL) →</b> LPJmL rainfed (crop physiology: vernalization, cold-limited seasons)</li><li><b>European maize elsewhere →</b> tabpfn·dekad (beats rolling-3 in Europe)</li><li><b>US maize →</b> tabpfn·dekad (less catastrophic than patchtst at −16.7%)</li><li><b>Tropical/Arid →</b> xlinear·daily (low-variance linear wins in data-scarce settings)</li></ul></div>    </div>
+  </section>  </div>
+  </div><!-- end panel-maize -->
+
+  <div class="crop-panel" id="panel-wheat" style="display:none">
+  <div class="wrap" style="max-width:1100px;margin:0 auto;padding:0 22px">
+  <div style="background:#fff;border:1px solid var(--rule);border-radius:8px;padding:12px 18px;margin:14px 0 8px;display:flex;gap:14px;flex-wrap:wrap;align-items:center">
+    <span style="font-size:1.3rem">🌾</span>
+    <div>
+      <div style="font-size:14px;font-weight:800;color:#1D2A22">Wheat findings — 27 tasks crop–country tasks, 27 countries countries</div>
+      <div style="font-size:12px;color:#5E6B62">All charts, tables and numbers below are computed on wheat data only. For findings that apply to both crops, use the <strong>Both crops</strong> tab.</div>
+    </div>
+  </div>  <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px"><a href="#wh-f1" style="color:var(--muted);text-decoration:none;font-size:12px;font-weight:600;padding:3px 8px;border-radius:4px;background:#f8fafc">F1 Architecture</a> <a href="#wh-f2" style="color:var(--muted);text-decoration:none;font-size:12px;font-weight:600;padding:3px 8px;border-radius:4px;background:#f8fafc">F2 Daily baseline</a> <a href="#wh-f3" style="color:var(--muted);text-decoration:none;font-size:12px;font-weight:600;padding:3px 8px;border-radius:4px;background:#f8fafc">F3 Resolution</a> <a href="#wh-f4f5" style="color:var(--muted);text-decoration:none;font-size:12px;font-weight:600;padding:3px 8px;border-radius:4px;background:#f8fafc">F4–F5 Tabular</a> <a href="#wh-f8" style="color:var(--muted);text-decoration:none;font-size:12px;font-weight:600;padding:3px 8px;border-radius:4px;background:#f8fafc">F8 Regional</a> <a href="#wh-f9" style="color:var(--muted);text-decoration:none;font-size:12px;font-weight:600;padding:3px 8px;border-radius:4px;background:#f8fafc">F9 Data quartiles</a> <a href="#wh-f13" style="color:var(--muted);text-decoration:none;font-size:12px;font-weight:600;padding:3px 8px;border-radius:4px;background:#f8fafc">F13 Who wins</a> </div>  <section class="q" id="wh-f1" style="margin:16px 0 28px">
+    <div class="qid" aria-hidden="true">F1</div>
+    <div class="qbody">
+      <h3>Which architecture ranks highest for wheat?</h3>
+      <p class="answer">patchtst ranks #1 for wheat decisively (Friedman r&#772;&nbsp;=&nbsp;2.74), nearly a full rank ahead of xlinear (3.63). Unlike maize — where there is a statistical three-way tie — wheat has a clear hierarchy. Wheat is patchtst's natural domain: its patch-based tokenisation suits the regular, well-defined growing seasons of European wheat. Even so, patchtst·daily skill vs rolling-3 is only −3.2% — wheat forecasting is inherently easier than maize.</p>      <figure class="plot"><figcaption>Friedman mean rank on skill_rmse_vs_rolling3 for 14 architectures — wheat tasks only (27 countries). Lower = better.</figcaption><div class="scroll">      <svg class="fig" viewBox="0 0 680 230" xmlns="http://www.w3.org/2000/svg">
+        <defs><style>.fc{font-size:10px;fill:#1D2A22;font-family:'Libre Franklin',Arial,sans-serif}</style></defs>
+        <line x1="170" y1="200" x2="650" y2="200" stroke="#D9DDD3"/>
+        <text style="font-size:9px;fill:#5E6B62;font-family:'Libre Franklin',Arial,sans-serif" x="410" y="212" text-anchor="middle">Friedman mean rank (lower = better)</text>
+        <rect x="170" y="10" width="59" height="13" fill="#3768C8" rx="2"/>
+        <text class="fc" x="166" y="20" text-anchor="end">patchtst</text>
+        <text class="fc" x="233" y="20">2.74</text>
+        <text style="font-size:9px;fill:#94a3b8;font-family:'Libre Franklin',Arial,sans-serif" x="271" y="20">sk=-0.032</text>
+        <rect x="170" y="28" width="89" height="13" fill="#3C9A5F" rx="2"/>
+        <text class="fc" x="166" y="38" text-anchor="end">xlinear</text>
+        <text class="fc" x="263" y="38">3.63</text>
+        <text style="font-size:9px;fill:#94a3b8;font-family:'Libre Franklin',Arial,sans-serif" x="301" y="38">sk=-0.087</text>
+        <rect x="170" y="46" width="126" height="13" fill="#3768C8" rx="2"/>
+        <text class="fc" x="166" y="56" text-anchor="end">tsmixer</text>
+        <text class="fc" x="300" y="56">4.70</text>
+        <text style="font-size:9px;fill:#94a3b8;font-family:'Libre Franklin',Arial,sans-serif" x="338" y="56">sk=-0.119</text>
+        <rect x="170" y="64" width="134" height="13" fill="#3768C8" rx="2"/>
+        <text class="fc" x="166" y="74" text-anchor="end">timesnet</text>
+        <text class="fc" x="308" y="74">4.93</text>
+        <text style="font-size:9px;fill:#94a3b8;font-family:'Libre Franklin',Arial,sans-serif" x="346" y="74">sk=-0.104</text>
+        <rect x="170" y="82" width="176" height="13" fill="#3768C8" rx="2"/>
+        <text class="fc" x="166" y="92" text-anchor="end">itransformer</text>
+        <text class="fc" x="350" y="92">6.19</text>
+        <text style="font-size:9px;fill:#94a3b8;font-family:'Libre Franklin',Arial,sans-serif" x="388" y="92">sk=-0.278</text>
+        <rect x="170" y="100" width="188" height="13" fill="#3768C8" rx="2"/>
+        <text class="fc" x="166" y="110" text-anchor="end">informer</text>
+        <text class="fc" x="362" y="110">6.52</text>
+        <text style="font-size:9px;fill:#94a3b8;font-family:'Libre Franklin',Arial,sans-serif" x="400" y="110">sk=-0.209</text>
+        <rect x="170" y="118" width="210" height="13" fill="#2AA1B3" rx="2"/>
+        <text class="fc" x="166" y="128" text-anchor="end">CNN-LSTM</text>
+        <text class="fc" x="384" y="128">7.19</text>
+        <text style="font-size:9px;fill:#94a3b8;font-family:'Libre Franklin',Arial,sans-serif" x="422" y="128">sk=-0.252</text>
+        <rect x="170" y="136" width="211" height="13" fill="#3768C8" rx="2"/>
+        <text class="fc" x="166" y="146" text-anchor="end">tst</text>
+        <text class="fc" x="385" y="146">7.22</text>
+        <text style="font-size:9px;fill:#94a3b8;font-family:'Libre Franklin',Arial,sans-serif" x="423" y="146">sk=-0.259</text>
+        <rect x="170" y="154" width="223" height="13" fill="#3768C8" rx="2"/>
+        <text class="fc" x="166" y="164" text-anchor="end">autoformer</text>
+        <text class="fc" x="397" y="164">7.56</text>
+        <text style="font-size:9px;fill:#94a3b8;font-family:'Libre Franklin',Arial,sans-serif" x="435" y="164">sk=-0.290</text>
+        <rect x="170" y="172" width="376" height="13" fill="#9CB89A" rx="2"/>
+        <text class="fc" x="166" y="182" text-anchor="end">dlinear</text>
+        <text class="fc" x="550" y="182">12.07</text>
+        <text style="font-size:9px;fill:#94a3b8;font-family:'Libre Franklin',Arial,sans-serif" x="588" y="182">sk=-0.428</text>
+        <rect x="20" y="211" width="11" height="9" fill="#3768C8" rx="1"/><text style="font-size:9px;fill:#5E6B62;font-family:'Libre Franklin',Arial,sans-serif" x="34" y="220">Transformer</text>
+        <rect x="120" y="211" width="11" height="9" fill="#2AA1B3" rx="1"/><text style="font-size:9px;fill:#5E6B62;font-family:'Libre Franklin',Arial,sans-serif" x="134" y="220">CNN-LSTM</text>
+        <rect x="210" y="211" width="11" height="9" fill="#3C9A5F" rx="1"/><text style="font-size:9px;fill:#5E6B62;font-family:'Libre Franklin',Arial,sans-serif" x="224" y="220">Linear</text>
+      </svg></div></figure>      <table class="mtbl"><thead><tr><th>Architecture</th><th>Wheat r&#772;</th><th>Skill vs roll-3</th></tr></thead><tbody><tr class="highlight"><td class="best">patchtst</td><td class="best">2.74</td><td><span class="pill neg">-3.2%</span></td></tr><tr ><td >xlinear</td><td >3.63</td><td><span class="pill neg">-8.7%</span></td></tr><tr ><td >tsmixer</td><td >4.70</td><td><span class="pill neg">-11.9%</span></td></tr><tr ><td >timesnet</td><td >4.93</td><td><span class="pill neg">-10.4%</span></td></tr><tr ><td >itransformer</td><td >6.19</td><td><span class="pill neg">-27.8%</span></td></tr></tbody></table>      <div class="callout info"><strong>Wheat has a clear winner; maize does not.</strong> The gap between patchtst (2.74) and xlinear (3.63) for wheat is 0.89 rank points — meaningful and consistent across countries. For wheat research, patchtst is the unambiguous architecture choice. The weak models for wheat (dlinear 12.07, nlinear 11.74) are far behind.</div>    </div>
+  </section>  <section class="q" id="wh-f2" style="margin:16px 0 28px">
+    <div class="qid" aria-hidden="true">F2</div>
+    <div class="qbody">
+      <h3>At daily resolution, can any model beat the 3-year rolling average for wheat?</h3>
+      <p class="answer">Almost. Wheat patchtst·daily skill vs rolling-3 = <strong>−3.2%</strong> — only 3 percentage points from matching the naive baseline. Models also beat the Mann-Kendall trend by +11.1% and are essentially tied with climatology (−0.4%). Wheat is fundamentally easier than maize: stable European yields mean the rolling-3's momentum advantage is far smaller.</p>      <figure class="plot" style="max-width:640px"><figcaption>patchtst·daily median skill vs each reference — wheat tasks only. Positive = beats the reference.</figcaption>      <table style="width:100%;border-collapse:collapse;font-size:12.5px;margin:10px 0 4px"><tbody>          <tr style="border-bottom:1px solid #f1f5f9">
+            <td style="text-align:right;padding:7px 12px 7px 0;width:46%;color:#1D2A22;font-weight:500">vs Mann-Kendall trend</td>
+            <td style="padding:7px 8px"><div style="display:flex;align-items:center;gap:8px">
+              <div style="width:78px;height:20px;background:#2F6B3A;border-radius:3px;flex-shrink:0"></div>
+              <span style="color:#2F6B3A;font-weight:700;min-width:48px">+11.1%</span>
+              <span style="color:#64748b;font-size:11.5px">✓ beats decisively — wheat has detectable trend signal</span>
+            </div></td>
+          </tr>          <tr style="border-bottom:1px solid #f1f5f9">
+            <td style="text-align:right;padding:7px 12px 7px 0;width:46%;color:#1D2A22;font-weight:500">vs OLS linear trend</td>
+            <td style="padding:7px 8px"><div style="display:flex;align-items:center;gap:8px">
+              <div style="width:20px;height:20px;background:#D0613A;border-radius:3px;flex-shrink:0"></div>
+              <span style="color:#D0613A;font-weight:700;min-width:48px">-2.9%</span>
+              <span style="color:#64748b;font-size:11.5px">slightly loses — OLS fit marginally better for stable trends</span>
+            </div></td>
+          </tr>          <tr style="border-bottom:1px solid #f1f5f9">
+            <td style="text-align:right;padding:7px 12px 7px 0;width:46%;color:#1D2A22;font-weight:500">vs climatology (mean)</td>
+            <td style="padding:7px 8px"><div style="display:flex;align-items:center;gap:8px">
+              <div style="width:3px;height:20px;background:#9CA3AF;border-radius:3px;flex-shrink:0"></div>
+              <span style="color:#9CA3AF;font-weight:700;min-width:48px">-0.4%</span>
+              <span style="color:#64748b;font-size:11.5px">essentially tied with the historical mean</span>
+            </div></td>
+          </tr>          <tr style="border-bottom:1px solid #f1f5f9">
+            <td style="text-align:right;padding:7px 12px 7px 0;width:46%;color:#1D2A22;font-weight:500">vs 3-yr rolling mean</td>
+            <td style="padding:7px 8px"><div style="display:flex;align-items:center;gap:8px">
+              <div style="width:22px;height:20px;background:#F59E0B;border-radius:3px;flex-shrink:0"></div>
+              <span style="color:#F59E0B;font-weight:700;min-width:48px">-3.2%</span>
+              <span style="color:#64748b;font-size:11.5px">⚠ just barely loses — 3.2% gap; dekad nearly closes this</span>
+            </div></td>
+          </tr>      </tbody></table>      <div style="font-size:11px;color:var(--muted);margin-top:2px">patchtst beats rolling-3 in 33% of wheat tasks (vs 29% for maize). At dekad resolution, patchtst·dekad reaches −4.9% — slightly worse in median but tabpfn·weekly reaches −4.3% (beats rolling-3 in some European wheat tasks).</div></figure>      <div class="callout ok"><strong>Wheat is close to being "solved" in Europe.</strong> The rolling-3 skill gap of −3.2% for patchtst·daily is the smallest of any model–crop combination at daily resolution. In Europe specifically, patchtst·daily skill vs rolling-3 = −1.0%, meaning the trained model is essentially matching the naive 3-year lookback. See F8 for the regional breakdown.</div>    </div>
+  </section>  <section class="q" id="wh-f3" style="margin:16px 0 28px">
+    <div class="qid" aria-hidden="true">F3</div>
+    <div class="qbody">
+      <h3>Does changing input resolution help for wheat?</h3>
+      <p class="answer">Surprisingly little. Wheat patchtst is already −3.2% at daily, and dekad achieves −4.9% — a small step backward in median skill. Weekly is much worse (−12.1%), suggesting weekly aggregation loses the intra-season signal patchtst relies on. For xlinear, monthly aggregation ties with daily (both −4.9%). Resolution matters far less for wheat than for maize.</p>      <figure class="plot"><figcaption>Skill vs rolling-3 (median, 27 wheat tasks) for patchtst and xlinear at all 4 resolutions. Green = best; darker red = worse.</figcaption><div class="scroll">      <svg class="fig" viewBox="0 0 620 195" xmlns="http://www.w3.org/2000/svg">
+        <text style="font-size:11px;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:middle;fill:#5E6B62" x="230" y="20">Daily</text>
+        <text style="font-size:11px;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:middle;fill:#5E6B62" x="330" y="20">Weekly</text>
+        <text style="font-size:11px;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:middle;fill:#5E6B62" x="430" y="20">Dekad</text>
+        <text style="font-size:11px;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:middle;fill:#5E6B62" x="530" y="20">Monthly</text>
+        <text style="font-size:12px;font-family:'Libre Franklin',Arial,sans-serif;fill:#1D2A22;font-weight:600" x="10" y="75">patchtst</text>
+        <rect x="180" y="30" width="100" height="50" fill="rgb(156,20,20)" rx="4"/>
+        <text style="font-size:13px;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:middle;font-weight:700;fill:#7F1D1D" x="230" y="62">-3.2%</text>
+        <rect x="280" y="30" width="100" height="50" fill="#86EFAC" rx="4"/>
+        <text style="font-size:13px;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:middle;font-weight:700;fill:#14532D" x="330" y="62">-12.1% ★</text>
+        <rect x="380" y="30" width="100" height="50" fill="rgb(156,20,20)" rx="4"/>
+        <text style="font-size:13px;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:middle;font-weight:700;fill:#7F1D1D" x="430" y="62">-4.9%</text>
+        <rect x="480" y="30" width="100" height="50" fill="rgb(156,20,20)" rx="4"/>
+        <text style="font-size:13px;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:middle;font-weight:700;fill:#7F1D1D" x="530" y="62">-9.6%</text>
+        <text style="font-size:12px;font-family:'Libre Franklin',Arial,sans-serif;fill:#1D2A22;font-weight:600" x="10" y="150">xlinear</text>
+        <rect x="180" y="105" width="100" height="50" fill="rgb(156,20,20)" rx="4"/>
+        <text style="font-size:13px;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:middle;font-weight:700;fill:#7F1D1D" x="230" y="137">-8.7%</text>
+        <rect x="280" y="105" width="100" height="50" fill="rgb(156,20,20)" rx="4"/>
+        <text style="font-size:13px;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:middle;font-weight:700;fill:#7F1D1D" x="330" y="137">-8.9%</text>
+        <rect x="380" y="105" width="100" height="50" fill="#86EFAC" rx="4"/>
+        <text style="font-size:13px;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:middle;font-weight:700;fill:#14532D" x="430" y="137">-9.7% ★</text>
+        <rect x="480" y="105" width="100" height="50" fill="rgb(156,20,20)" rx="4"/>
+        <text style="font-size:13px;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:middle;font-weight:700;fill:#7F1D1D" x="530" y="137">-4.9%</text>
+        <rect x="180" y="170" width="16" height="12" fill="#86EFAC" rx="2"/><text style="font-size:11px;font-family:'Libre Franklin',Arial,sans-serif;fill:#5E6B62" x="200" y="181" text-anchor="start">Best for model ★</text>
+        <rect x="340" y="170" width="16" height="12" fill="#FCA5A5" rx="2"/><text style="font-size:11px;font-family:'Libre Franklin',Arial,sans-serif;fill:#5E6B62" x="360" y="181" text-anchor="start">Worst for model</text>
+      </svg></div></figure>      <div class="callout info"><strong>For wheat, daily resolution is good enough for patchtst</strong> (and already nearly matches the rolling-3). The main reason to prefer dekad for wheat is the 10× faster sweeps — not accuracy. For tabular models (F4–F5), dekad and weekly both perform well for wheat.</div>      <div class="callout warn"><strong>patchtst·weekly is notably bad for wheat (−12.1%).</strong> Weekly aggregation appears to destroy the intra-season timing signal that patchtst's patch tokenisation relies on for wheat. This is crop-specific: patchtst·weekly for maize is only slightly worse than dekad (−13.1% vs −12.6%). Avoid weekly for patchtst on wheat.</div>    </div>
+  </section>  <section class="q" id="wh-f4f5" style="margin:16px 0 28px">
+    <div class="qid" aria-hidden="true">F4–F5</div>
+    <div class="qbody">
+      <h3>How do tabular foundation models compare for wheat, and what is the single best combo?</h3>
+      <p class="answer">tabpfn dominates all three non-daily resolutions for wheat. At dekad and weekly, tabpfn achieves Friedman rank 2.15 (top of the leaderboard). Crucially, tabpfn beats climatology for wheat at all three resolutions (+2.6–2.8%), something no trained sequence model achieves. However, patchtst·daily still has the best <em>median skill</em> (−3.2%) — meaning tabpfn's Friedman lead comes from consistency, not from a higher median.</p>      <div style="display:flex;gap:12px;flex-wrap:wrap;margin:10px 0">      <div style="flex:1;min-width:200px"><div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Weekly resolution</div>      <table class="mtbl" style="max-width:420px"><thead><tr><th>Model</th><th>Friedman r&#772;</th><th>Skill vs rolling-3</th></tr></thead><tbody><tr class="highlight"><td><span style="color:#C2417B;font-weight:700">tabpfn</span></td><td style="font-weight:700">#1 (2.15)</td><td><span class="pill neg">-430.0%</span></td></tr><tr ><td><span style="color:#7C3AED;font-weight:700">tabicl</span></td><td style="font-weight:700">#2 (2.89)</td><td><span class="pill neg">-1100.0%</span></td></tr><tr ><td><span style="color:#3C9A5F;font-weight:700">xlinear</span></td><td style="font-weight:700">#3 (2.93)</td><td><span class="pill neg">-880.0%</span></td></tr><tr ><td><span style="color:#3768C8;font-weight:700">patchtst</span></td><td style="font-weight:700">#4 (2.96)</td><td><span class="pill neg">-1210.0%</span></td></tr><tr ><td><span style="color:#8C8C8C;font-weight:700">tabdpt</span></td><td style="font-weight:700">#5 (4.07)</td><td><span class="pill neg">-2020.0%</span></td></tr></tbody></table>      </div>      <div style="flex:1;min-width:200px"><div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Dekad resolution</div>      <table class="mtbl" style="max-width:420px"><thead><tr><th>Model</th><th>Friedman r&#772;</th><th>Skill vs rolling-3</th></tr></thead><tbody><tr class="highlight"><td><span style="color:#C2417B;font-weight:700">tabpfn</span></td><td style="font-weight:700">#1 (2.15)</td><td><span class="pill neg">-410.0%</span></td></tr><tr ><td><span style="color:#7C3AED;font-weight:700">tabicl</span></td><td style="font-weight:700">#2 (2.63)</td><td><span class="pill neg">-1150.0%</span></td></tr><tr ><td><span style="color:#3C9A5F;font-weight:700">xlinear</span></td><td style="font-weight:700">#3 (2.78)</td><td><span class="pill neg">-970.0%</span></td></tr><tr ><td><span style="color:#3768C8;font-weight:700">patchtst</span></td><td style="font-weight:700">#4 (3.15)</td><td><span class="pill neg">-490.0%</span></td></tr><tr ><td><span style="color:#8C8C8C;font-weight:700">tabdpt</span></td><td style="font-weight:700">#5 (4.30)</td><td><span class="pill neg">-2390.0%</span></td></tr></tbody></table>      </div>      <div style="flex:1;min-width:200px"><div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Monthly resolution</div>      <table class="mtbl" style="max-width:420px"><thead><tr><th>Model</th><th>Friedman r&#772;</th><th>Skill vs rolling-3</th></tr></thead><tbody><tr class="highlight"><td><span style="color:#C2417B;font-weight:700">tabpfn</span></td><td style="font-weight:700">#1 (1.89)</td><td><span class="pill neg">-810.0%</span></td></tr><tr ><td><span style="color:#3C9A5F;font-weight:700">xlinear</span></td><td style="font-weight:700">#2 (2.59)</td><td><span class="pill neg">-490.0%</span></td></tr><tr ><td><span style="color:#7C3AED;font-weight:700">tabicl</span></td><td style="font-weight:700">#3 (2.89)</td><td><span class="pill neg">-1590.0%</span></td></tr><tr ><td><span style="color:#3768C8;font-weight:700">patchtst</span></td><td style="font-weight:700">#4 (3.30)</td><td><span class="pill neg">-960.0%</span></td></tr><tr ><td><span style="color:#8C8C8C;font-weight:700">tabdpt</span></td><td style="font-weight:700">#5 (4.33)</td><td><span class="pill neg">-2080.0%</span></td></tr></tbody></table>      </div>      </div>      <p style="font-size:12px;color:var(--muted);margin:4px 0 10px">Friedman mean rank within each resolution (5 models, 27 wheat tasks). Lower = better.</p>      <div style="font-size:13px;font-weight:700;color:#1D2A22;margin:14px 0 6px">Best combos across all 17 model–resolution pairs (wheat)</div>      <table class="mtbl"><thead><tr><th>Combo</th><th>Friedman r&#772; (wheat)</th><th>Skill vs roll-3</th><th>Skill vs clim.</th></tr></thead><tbody><tr ><td><span style="color:#C2417B;font-weight:700">tabpfn·monthly</span></td><td >5.93</td><td><span class="pill neg">-8.1%</span></td><td><span class="pill pos">+2.7%</span></td></tr><tr class="highlight"><td><span style="color:#C2417B;font-weight:700">tabpfn·weekly</span> <span style="color:#C2417B;font-size:10px;font-weight:700">✓ recommended</span></td><td class="best">6.00</td><td><span class="pill neg">-4.3%</span></td><td><span class="pill pos">+2.8%</span></td></tr><tr ><td><span style="color:#C2417B;font-weight:700">tabpfn·dekad</span></td><td >6.26</td><td><span class="pill neg">-4.1%</span></td><td><span class="pill pos">+2.6%</span></td></tr><tr ><td><span style="color:#3768C8;font-weight:700">patchtst·daily</span> <span style="color:#3768C8;font-size:10px;font-weight:600">best median skill</span></td><td >7.37</td><td><span class="pill neg">-3.2%</span></td><td><span class="pill neg">-0.4%</span></td></tr><tr ><td><span style="color:#7C3AED;font-weight:700">tabicl·dekad</span></td><td >8.04</td><td><span class="pill neg">-11.5%</span></td><td><span class="pill neg">-3.5%</span></td></tr><tr ><td><span style="color:#3C9A5F;font-weight:700">xlinear·monthly</span></td><td >8.30</td><td><span class="pill neg">-4.9%</span></td><td><span class="pill neg">-0.3%</span></td></tr><tr ><td><span style="color:#3C9A5F;font-weight:700">xlinear·daily</span></td><td >8.96</td><td><span class="pill neg">-8.7%</span></td><td><span class="pill neg">-3.2%</span></td></tr></tbody></table>      <div class="callout info"><strong>The Friedman vs median skill discrepancy for wheat:</strong> tabpfn·weekly (fr=6.00, skill=−4.3%) ranks higher in Friedman than patchtst·daily (fr=7.37, skill=−3.2%). This means tabpfn·weekly is more <em>consistently</em> competitive across all 27 wheat countries, while patchtst·daily has better <em>central tendency</em> but higher variance across countries. For robust performance everywhere, use tabpfn·weekly. If you have a specific focus on European wheat, patchtst·daily is excellent.</div>    </div>
+  </section>  <section class="q" id="wh-f8" style="margin:16px 0 28px">
+    <div class="qid" aria-hidden="true">F8</div>
+    <div class="qbody">
+      <h3>Which continents are hardest for wheat, and does tabpfn help?</h3>
+      <p class="answer"><strong>Asia (CN, IN wheat) is by far the hardest</strong>: patchtst·daily skill = −35.2% vs rolling-3 — the worst of any continent for any crop. China's wheat yields are extremely persistent (driven by state procurement prices, not weather), making the rolling-3 nearly unbeatable. In contrast, <strong>North American wheat (US) is the easiest</strong>: patchtst·daily actually beats the rolling-3 (+0.5%).</p>      <table class="mtbl"><thead><tr><th>Continent</th><th>Median NRMSE</th><th>patchtst·daily skill</th><th>tabpfn·dekad skill</th><th>Key insight</th></tr></thead><tbody><tr ><td>Europe</td><td>0.16</td><td><span class="pill neg">-1.0%</span></td><td><span class="pill neg">-3.3%</span></td><td style="font-size:11px;color:#5E6B62">Wheat nearly matches rolling-3 in Europe!</td></tr><tr class="highlight"><td>N. America</td><td>0.21</td><td><span class="pill pos">+0.5%</span></td><td><span class="pill neg">-4.1%</span></td><td style="font-size:11px;color:#5E6B62">patchtst·daily beats rolling-3 for US wheat</td></tr><tr ><td>S. America</td><td>0.31</td><td><span class="pill neg">-3.6%</span></td><td><span class="pill neg">-2.3%</span></td><td style="font-size:11px;color:#5E6B62">Argentina/Brazil; tabpfn marginal edge</td></tr><tr ><td>Asia</td><td>0.23</td><td><span class="pill neg">-35.2%</span></td><td><span class="pill neg">-23.2%</span></td><td style="font-size:11px;color:#5E6B62">CN wheat hardest task in benchmark (−35%)</td></tr><tr ><td>Oceania</td><td>0.48</td><td><span class="pill neg">-3.2%</span></td><td><span class="pill neg">-14.6%</span></td><td style="font-size:11px;color:#5E6B62">AU wheat: high variance but decent skill</td></tr></tbody></table>      <div class="callout warn"><strong>Asia is qualitatively different from other regions for wheat.</strong> CN wheat patchtst·daily = −35.2% skill vs rolling-3 — worse even than African maize (−23.5%). This is not about data quality or model quality: Chinese wheat yields are managed by state pricing and variety releases, creating yield step-changes that do not follow weather patterns. Even tabpfn·dekad reaches only −23.2%. For CN wheat, consider process models or yield-trend-aware architectures.</div>      <div class="callout ok"><strong>North America and Europe are wheat's success cases.</strong> US wheat: patchtst beats rolling-3 (+0.5% skill). Europe: patchtst·daily skill −1.0% (essentially tied with rolling-3), tabpfn·dekad −3.3%. These are the regions where the benchmark shows ML yield forecasting is genuinely competitive with naive temporal baselines.</div>    </div>
+  </section>  <section class="q" id="wh-f9" style="margin:16px 0 28px">
+    <div class="qid" aria-hidden="true">F9</div>
+    <div class="qbody">
+      <h3>Does more training data reliably improve wheat skill?</h3>
+      <p class="answer">Yes — but only once you cross the Q3 threshold (~80 samples). Q3 (AU, CN, EL, ES, HU, RO: 78–205 samples) and Q4 (AR, BR, DE, FR, IN, IT, US: 412–4393 samples) both achieve excellent skill (−1.2% and −1.8%). Q1 and Q2 — small Baltic states, Baltic/CEE wheat — are poor (−31% and −21%), mainly because these are the countries with the highest yield distribution shift (CZ, LT, BG, HU) where test-period yields jumped far above training levels.</p>      <figure class="plot"><figcaption>Skill vs rolling-3 by sample quartile (median across top-3 architectures) — wheat tasks only. Country labels show Q1–Q4 membership.</figcaption><div class="scroll">      <svg class="fig" viewBox="0 0 520 170" xmlns="http://www.w3.org/2000/svg">
+        <line x1="80" y1="30" x2="80" y2="120" stroke="#D9DDD3"/>
+        <line x1="80" y1="120" x2="510" y2="120" stroke="#1D2A22" stroke-width="1.5"/>
+        <text style="font-size:9px;fill:#5E6B62;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:end" x="78" y="33">0%</text>
+        <text style="font-size:9px;fill:#5E6B62;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:end" x="78" y="88">−10%</text>
+        <line x1="80" y1="88" x2="510" y2="88" stroke="#D9DDD3" stroke-width="0.5" stroke-dasharray="3,3"/>
+        <rect x="90" y="20" width="80" height="100" fill="#D0613A" rx="3" fill-opacity="0.9"/>
+        <text style="font-size:9.5px;fill:#5E6B62;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:middle" x="130" y="135">Q1 ✓ best</text>
+        <text style="font-size:9px;fill:#94a3b8;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:middle" x="130" y="148">9–45</text>
+        <text style="font-size:9px;fill:#64748b;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:middle" x="130" y="160">AT, BG, EE, HR, LT</text>
+        <rect x="195" y="51" width="80" height="68" fill="#D39B12" rx="3" fill-opacity="0.9"/>
+        <text style="font-size:9.5px;fill:#5E6B62;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:middle" x="235" y="135">Q2</text>
+        <text style="font-size:9px;fill:#94a3b8;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:middle" x="235" y="148">47–73</text>
+        <text style="font-size:9px;fill:#64748b;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:middle" x="235" y="160">BE, CZ, DK, FI, NL</text>
+        <rect x="300" y="116" width="80" height="3" fill="#3C9A5F" rx="3" fill-opacity="0.9"/>
+        <text style="font-size:9.5px;fill:#5E6B62;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:middle" x="340" y="135">Q3</text>
+        <text style="font-size:9px;fill:#94a3b8;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:middle" x="340" y="148">78–205</text>
+        <text style="font-size:9px;fill:#64748b;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:middle" x="340" y="160">AU, CN, EL, ES, HU</text>
+        <rect x="405" y="114" width="80" height="5" fill="#D39B12" rx="3" fill-opacity="0.9"/>
+        <text style="font-size:9.5px;fill:#5E6B62;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:middle" x="445" y="135">Q4</text>
+        <text style="font-size:9px;fill:#94a3b8;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:middle" x="445" y="148">412–4393</text>
+        <text style="font-size:9px;fill:#64748b;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:middle" x="445" y="160">AR, BR, DE, FR, IN</text>
+        <text style="font-size:9px;fill:#1D2A22;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:middle;font-weight:700" x="130" y="16">-31.4%</text>
+        <text style="font-size:9px;fill:#1D2A22;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:middle;font-weight:700" x="235" y="47">-21.4%</text>
+        <text style="font-size:9px;fill:#1D2A22;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:middle;font-weight:700" x="340" y="112">-1.2%</text>
+        <text style="font-size:9px;fill:#1D2A22;font-family:'Libre Franklin',Arial,sans-serif;text-anchor:middle;font-weight:700" x="445" y="110">-1.8%</text>
+      </svg></div></figure>      <div class="callout warn"><strong>Q2 wheat is worse than Q1 for wheat (−21% vs −31%).</strong> Q2 includes CZ, DK, FI, PL, SE wheat — small-to-medium European countries with moderate data, BUT these are also the countries with the highest yield distribution shift (CZ wheat KS=0.64, DK wheat KS≈0.47). The rolling-3 adapts to their fast-rising yield trends while trained models fit the historical distribution. Data quantity doesn't help when the target variable drifts systematically.</div>    </div>
+  </section>  <section class="q" id="wh-f13" style="margin:16px 0 28px">
+    <div class="qid" aria-hidden="true">F13</div>
+    <div class="qbody">
+      <h3>Which model wins for wheat, and where?</h3>
+      <p class="answer">tabpfn·dekad leads wheat with 10 wins (10 of 27 wheat tasks), concentrated in European wheat and Asia. xlinear variants (daily/monthly) win 8 tasks in diverse contexts. LPJmL rainfed wins 4 (CZ, EE, NL, PL wheat — where crop physiology matters). patchtst (daily + dekad) wins 5 tasks including US wheat.</p>      <table class="mtbl"><thead><tr><th>Model</th><th>Wheat tasks won</th><th>Countries</th><th>Why it wins there</th></tr></thead><tbody><tr class="highlight"><td class="best"><span style="font-weight:700">tabpfn·dekad</span></td><td class="best">10</td><td style="font-size:11px">BE, BR, CN, DE, DK, ES, FI, FR, LT, SE</td><td style="font-size:11px;color:#5E6B62">European wheat + Asia (CN, IN)</td></tr><tr ><td ><span style="font-weight:700">xlinear·daily/monthly</span></td><td >8</td><td style="font-size:11px">AR, AT, AU, BG, EL, HR, HU, IN, PT</td><td style="font-size:11px;color:#5E6B62">Diverse; linear low-variance wins</td></tr><tr ><td ><span style="font-weight:700">LPJmL rainfed</span></td><td >4</td><td style="font-size:11px">CZ, EE, NL, PL</td><td style="font-size:11px;color:#5E6B62">CEE wheat: crop physiology still matters</td></tr><tr ><td ><span style="font-weight:700">patchtst·dekad/daily</span></td><td >3</td><td style="font-size:11px">IT, LV, RO, US</td><td style="font-size:11px;color:#5E6B62">Scatter; best median skill in Europe</td></tr></tbody></table>      <div class="callout ok"><strong>Practical wheat guidance:</strong><ul><li><b>European wheat →</b> tabpfn·weekly or tabpfn·dekad (most consistent; beats climatology); patchtst·daily also excellent (best median skill in Europe)</li><li><b>North American wheat →</b> patchtst·daily (beats rolling-3; +0.5% skill for US wheat)</li><li><b>Asian wheat (CN, IN) →</b> tabpfn·dekad (less catastrophic than patchtst at −35.2%); but neither model is satisfying here</li><li><b>CEE wheat (CZ, NL, PL, EE) →</b> LPJmL rainfed (crop physiology matters for winter wheat)</li><li><b>Oceania (AU wheat) →</b> patchtst·daily (−3.2% skill; tabpfn is worse at −14.6%)</li></ul></div>    </div>
+  </section>  </div>
+  </div><!-- end panel-wheat -->
+
+</main>
+<footer><div class="wrap">
+  <h2>Notes &amp; methods</h2>
+  <ul>
+    <li><b>Architecture sweep:</b> 14 models × 62 tasks (35 maize + 27 wheat countries, ≥10 years) at daily resolution. 868 runs total.</li>
+    <li><b>Resolution sweep:</b> patchtst and xlinear at all 4 resolutions; tabpfn, tabicl, tabdpt at weekly/dekad/monthly only. 62 tasks per combo.</li>
+    <li><b>Friedman rank (crop-specific):</b> ranked per country on skill_rmse_vs_rolling3 (1=best), then averaged — computed separately for maize (35 countries) and wheat (27 countries).</li>
+    <li><b>Skill formula:</b> skill = 1 − RMSE_model / RMSE_reference. Positive = model beats the reference. Rolling-3 = 3-year rolling mean of observed yields (most recent 3 training years per region).</li>
+    <li><b>Winner per task:</b> among {tabpfn·dekad, patchtst·dekad, xlinear·daily, patchtst·daily, LPJmL rainfed} the combo with highest skill_rmse_vs_rolling3 wins that country×crop task.</li>
+    <li><b>Data:</b> CY-Bench v1.0, end-of-season horizon, 5-year fixed test split. mitra excluded (NRMSE &gt; 1.5).</li>
+  </ul>
+</div></footer>
+<script>
+function setCrop(c){
+  document.querySelectorAll('.crop-toggle button').forEach(function(b){b.classList.remove('active');});
+  var btn=document.getElementById('btn-'+c);
+  if(btn){btn.classList.add('active');}
+  document.querySelectorAll('.crop-panel').forEach(function(p){p.style.display='none';});
+  var panel=document.getElementById('panel-'+c);
+  if(panel){panel.style.display='block';}
+  setTimeout(notifyResize,200);
+}
+function notifyResize(){
+  try{var h=document.documentElement.scrollHeight;
+    window.parent.postMessage({type:'resize',height:h},'*');}catch(e){}
+}
+// Anchor-link scrolling inside iframe
+document.addEventListener('click',function(e){
+  var a=e.target.closest('a[href^="#"]');
+  if(!a)return;
+  var id=a.getAttribute('href').slice(1);
+  var el=document.getElementById(id);
+  if(el){e.preventDefault();el.scrollIntoView({behavior:'smooth',block:'start'});}
+});
+window.addEventListener('load',function(){
+  setCrop('both');   // show both panel on load
+  setTimeout(notifyResize,200);
+});
+window.addEventListener('resize',notifyResize);
+window.addEventListener('message',function(e){
+  if(e.data&&e.data.type==='filterSync') setTimeout(notifyResize,100);
+});
+</script>
+</body>
+</html>

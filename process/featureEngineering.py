@@ -23,7 +23,7 @@ from cybench.config import (
 
 #%% Global constants
 # Maximum sequence lengths for padding — ensures uniform tensor shapes
-MAX_SEQ_LENS = {"daily": 365, "weekly": 52, "dekad": 36}
+MAX_SEQ_LENS = {"daily": 365, "weekly": 52, "dekad": 36, "monthly": 12}
 
 # Sentinel value thresholds for remote sensing data
 RS_SENTINEL_THRESHOLDS = {
@@ -53,6 +53,7 @@ GDD_UPPER_LIMIT = {
 DEKAD_FREQ = "10D"
 WEEKLY_FREQ = "W-MON"
 DAILY_FREQ = "D"
+MONTHLY_FREQ = "MS"
 
 REMOTE_SENSING_FEATURES = ['fpar', 'ndvi', 'ssm', 'rsm']
 WEATHER_FEATURES_BASE = ['tmin', 'tmax', 'tavg', 'prec', 'rad']
@@ -64,6 +65,76 @@ SOTA_TEMPORAL_VARS_LIST = [
 ]
 
 print(f"[Feature Config] SOTA Temporal vars ({len(SOTA_TEMPORAL_VARS_LIST)}): {SOTA_TEMPORAL_VARS_LIST}")
+
+# ---------------------------------------------------------------------------
+# Köppen-Geiger climate label encoding
+# Each label (e.g. "Cfa", "BSh", "Aw") is decomposed into 3 ordinal floats
+# that preserve the hierarchical structure of the classification without
+# collapsing 30 classes into one arbitrary integer or exploding to 30 dims.
+#
+# Char 0  — main group (A/B/C/D/E → 1-5, tropical→polar)
+# Char 1  — precipitation/aridity regime (lowercase for A/C/D, uppercase for B/E)
+# Char 2  — temperature sub-type (a/b/c/d for C/D; h/k for B; absent for A/E → 0)
+#
+# References: https://en.wikipedia.org/wiki/Köppen_climate_classification
+# ---------------------------------------------------------------------------
+KOPPEN_MAIN_MAP: Dict[str, float] = {
+    'A': 1.0,   # Tropical
+    'B': 2.0,   # Arid
+    'C': 3.0,   # Temperate
+    'D': 4.0,   # Continental
+    'E': 5.0,   # Polar
+}
+# Second character: precipitation/aridity regime
+KOPPEN_C2_MAP: Dict[str, float] = {
+    'f': 1.0,   # fully humid — A/C/D groups
+    'm': 2.0,   # monsoon — A group
+    's': 3.0,   # dry summer — A/C/D groups
+    'w': 4.0,   # dry winter — A/C/D groups
+    'W': 5.0,   # desert — B group (uppercase)
+    'S': 6.0,   # steppe — B group (uppercase)
+    'T': 7.0,   # tundra — E group (uppercase)
+    'F': 8.0,   # ice cap — E group (uppercase)
+}
+# Third character: temperature sub-type (groups with no third char → 0.0)
+KOPPEN_C3_MAP: Dict[str, float] = {
+    'a': 1.0,   # hot summer ≥22°C — C/D groups
+    'b': 2.0,   # warm summer <22°C — C/D groups
+    'c': 3.0,   # cold summer (<4 months >10°C) — C/D groups
+    'd': 4.0,   # very cold winter (<-38°C) — D group only
+    'h': 5.0,   # hot arid (mean annual >18°C) — B group
+    'k': 6.0,   # cold arid (mean annual <18°C) — B group
+}
+
+
+def _encode_koppen_label(label: str) -> Tuple[float, float, float]:
+    """
+    Decompose a Köppen label string into 3 ordinal floats.
+
+    Returns (main_group, precip_regime, temp_subtype).
+    Any unrecognised or missing component becomes NaN (imputed to 0 in
+    z-score space during normalisation, same as missing soil properties).
+
+    Examples:
+        'Cfa'  → (3.0, 1.0, 1.0)  — temperate, fully humid, hot summer
+        'BSh'  → (2.0, 6.0, 5.0)  — arid, steppe, hot
+        'Aw'   → (1.0, 4.0, 0.0)  — tropical, dry winter, no sub-type
+        'ET'   → (5.0, 7.0, 0.0)  — polar, tundra, no sub-type
+        'NoData' → (nan, nan, nan)
+    """
+    if not label or str(label).strip() in ('NoData', 'nan', '', 'None'):
+        return np.nan, np.nan, np.nan
+    label = str(label).strip()
+    if len(label) < 2:
+        return np.nan, np.nan, np.nan
+    main = KOPPEN_MAIN_MAP.get(label[0])
+    prec = KOPPEN_C2_MAP.get(label[1])
+    temp_ch = KOPPEN_C3_MAP.get(label[2]) if len(label) >= 3 else 0.0
+    return (
+        float(main) if main is not None else np.nan,
+        float(prec) if prec is not None else np.nan,
+        float(temp_ch) if temp_ch is not None else 0.0,
+    )
 
 # %% Helper functions
 def interpolate_to_daily(data: pd.Series, target_dates: pd.DatetimeIndex,
@@ -118,6 +189,16 @@ def _clean_rs_series(series: pd.Series, var_name: str) -> pd.Series:
         Cleaned series with sentinels removed, gaps filled, and values clipped
     """
     s = series.copy().astype(float)
+
+    # CY-Bench ships FPAR as a PERCENTAGE (0-100), but the sentinel/valid-range
+    # tables below assume a [0,1] fraction (like NDVI). Left as percent, every
+    # real FPAR value exceeds the upper sentinel bound and is masked to NaN,
+    # silently zeroing the entire channel. Convert percent -> fraction here so
+    # FPAR is on the same [0,1] scale the thresholds expect. The max>1.05 guard
+    # makes this idempotent and safe if a source ever already ships fractions.
+    if var_name == 'fpar' and np.isfinite(s.values).any() and np.nanmax(s.values) > 1.05:
+        s = s / 100.0
+
     lo, hi = RS_SENTINEL_THRESHOLDS.get(var_name, (-1e6, 1e6))
 
     # mask out-of-physical-range values BEFORE any filling
@@ -254,69 +335,127 @@ def _arrhenius_response(tleaf: np.ndarray,
     tk = tleaf + 273.15
     return np.exp((ea / r) * (1.0 / tref_k - 1.0 / tk))
 
-def _compute_farquhar_series(tavg: np.ndarray, cum_prec: np.ndarray,
-                             cum_rad: np.ndarray,
-                             n: float = 0.1,
-                             co2: float = 400.0) -> np.ndarray:
+# ---------------------------------------------------------------------------
+# RTAI — Radiation–Temperature Assimilation Index (crop-specific photosynthesis
+# proxy; formerly the "Farquhar proxy"). Derived from Farquhar–von Caemmerer–Berry
+# (FvCB) style assimilation equations, but it is a seasonal-scale PROXY, not a
+# mechanistic leaf-level simulation. Maize (C4) and wheat (C3) use genuinely
+# DIFFERENT formulas (not merely different constants) — see the parameter table
+# and literature sources in documentation/design-decisions/rtai-feature.md.
+# ---------------------------------------------------------------------------
+# Crop-specific parameters (sources documented in rtai-feature.md):
+#   tmin/topt/tmax : cardinal temperatures (°C) — Porter & Gawith (1999) for
+#                    wheat, Sánchez et al. (2014) for maize.
+#   pathway        : 'C3' Rubisco CO2-LIMITED (Michaelis-Menten + photorespiration)
+#                    vs 'C4' Rubisco CO2-SATURATED via the CO2-concentrating
+#                    mechanism, photorespiration ≈ 0 (von Caemmerer 2000).
+#   gamma / kc     : CO2 compensation point / Michaelis constant (Bernacchi 2002).
+#   ci_ca          : intercellular:ambient CO2 ratio (0.70 C3, 0.40 C4; PNAS 2025).
+#   water_half     : cum-precip (mm) at half water-sufficiency; maize > wheat
+#                    because maize's seasonal water requirement is higher (FAO).
+_RTAI_PARAMS = {
+    'maize': dict(pathway='C4', tmin=8.0, topt=33.0, tmax=45.0,
+                  gamma=0.0,   kc=None,   ci_ca=0.40, water_half=400.0),
+    'wheat': dict(pathway='C3', tmin=0.0, topt=22.0, tmax=37.0,
+                  gamma=42.75, kc=404.9,  ci_ca=0.70, water_half=300.0),
+}
+
+
+def _cardinal_temp_response(tavg: np.ndarray, tmin: float, topt: float,
+                            tmax: float) -> np.ndarray:
     """
-    Compute Farquhar-von Caemmerer-Berry (FvCB) photosynthesis proxy time series.
-    Approximates seasonal-scale net assimilation using the FvCB C3 model.
+    Normalised beta temperature response (Yan & Hunt 1999): 1.0 at Topt, 0 at or
+    below Tmin and at or above Tmax, declining smoothly on the hot side.
 
-   The FvCB model was derived for instantaneous leaf-scale processes. Applying it at dekadal/weekly/daily crop-season scale
-   will always be a proxy approximation, not a mechanistic simulation. Results should be
-   interpreted as a biophysically-motivated index, not true assimilation rates.
+    Replaces the old monotone Arrhenius term (which implied "hotter is always
+    better") so the index turns DOWN under heat stress, with crop-specific
+    cardinal temperatures.
+    """
+    t = np.asarray(tavg, dtype=float)
+    resp = np.zeros_like(t)
+    mask = (t > tmin) & (t < tmax)
+    tm = t[mask]
+    resp[mask] = (((tmax - tm) / (tmax - topt)) *
+                  ((tm - tmin) / (topt - tmin)) ** ((topt - tmin) / (tmax - topt)))
+    return np.clip(resp, 0.0, 1.0)
 
-    Model components:
-      Ac = Vcmax * (ci - Gamma) / (ci + Kc)     [Rubisco-limited]
-      Aj = J * (ci - Gamma) / (4*ci + 8*Gamma)  [RuBP-limited]
-      A  = harmonic mean(Ac, Aj)                 [co-limitation]
 
-    Constants from Bernacchi et al. (2002):
-      Kc = 404.9 µmol/mol (Michaelis constant for CO2)
-      Gamma = 42.75 µmol/mol (CO2 compensation point)
+def _compute_rtai_series(tavg: np.ndarray, cum_prec: np.ndarray,
+                         cum_rad: np.ndarray,
+                         crop: str = 'maize',
+                         n: float = 0.1,
+                         co2: float = 400.0) -> np.ndarray:
+    """
+    Radiation–Temperature Assimilation Index (RTAI): a crop-specific, seasonal-
+    scale photosynthesis PROXY derived from FvCB-style assimilation equations.
+    NOT a mechanistic simulation — interpret as a biophysically-motivated index,
+    not true assimilation rates.
+
+    Maize (C4) and wheat (C3) use DIFFERENT formulas, not just different
+    constants. The two differences that actually change the index's shape are the
+    temperature response (crop cardinal temperatures) and the carboxylation term
+    (C3 CO2-limited vs C4 CO2-saturated); the CO2 constants mostly rescale.
+    Full equations, parameter values and literature sources:
+    documentation/design-decisions/rtai-feature.md.
+
+    Shared skeleton:
+        PAR    = 0.48 * cum_rad
+        f_T    = cardinal-temperature response (crop Tmin/Topt/Tmax)
+        Vcmax  = 100 * f_T * (1 + 5n)              [Rubisco capacity]
+        J      = 0.1 * PAR * f_T                   [electron transport, light]
+        ci     = ci_ca * co2
+      C3 (wheat): Ac = Vcmax * (ci - Γ)/(ci + Kc)  [CO2-limited + photorespiration]
+      C4 (maize): Ac = Vcmax                       [CO2-saturated, Γ ≈ 0]
+        Aj     = J * (ci - Γ)/(4 ci + 8 Γ)
+        A      = harmonic_mean(Ac, Aj)             [co-limitation]
+        A_final= A * PAR/(PAR+100) * cum_prec/(cum_prec + water_half)
 
     Args:
-        tavg: Mean temperature array (°C), shape (seq_len,)
+        tavg:     Mean temperature (°C), shape (seq_len,)
         cum_prec: Cumulative precipitation (mm), shape (seq_len,)
-        cum_rad: Cumulative radiation (MJ/m²), shape (seq_len,)
-        n: Leaf nitrogen proxy (dimensionless, default 0.1)
-        co2: Ambient CO2 concentration (ppm, default 400.0)
+        cum_rad:  Cumulative radiation (MJ/m²), shape (seq_len,)
+        crop:     'maize' (C4); anything else uses 'wheat' (C3) parameters
+        n:        Leaf nitrogen proxy (dimensionless, default 0.1)
+        co2:      Ambient CO2 concentration (ppm, default 400.0)
 
     Returns:
-        Array of FvCB proxy values, shape (seq_len,)
+        Array of RTAI proxy values, shape (seq_len,)
     """
-    PAR = 0.48 * cum_rad
+    p = _RTAI_PARAMS['maize'] if str(crop).lower() == 'maize' else _RTAI_PARAMS['wheat']
 
-    temp_resp = _arrhenius_response(tavg)
+    PAR = 0.48 * cum_rad
+    f_T = _cardinal_temp_response(tavg, p['tmin'], p['topt'], p['tmax'])
 
     # Vcmax scales with leaf nitrogen (Rubisco is nitrogen-rich)
-    Vcmax = 100.0 * temp_resp * (1.0 + 5.0 * n)
-
+    Vcmax = 100.0 * f_T * (1.0 + 5.0 * n)
     # Electron transport capacity scales with PAR
-    J = 0.1 * PAR * temp_resp
+    J     = 0.1 * PAR * f_T
+    ci    = p['ci_ca'] * co2
+    Gamma = p['gamma']
 
-    # Intercellular CO2 under moderate water stress (C3 plants)
-    # ci/ca ≈ 0.7 for well-watered C3, lower under drought
-    # Reference: Wong et al. (1979) Plant Physiology 78:821–825
-    ci = 0.7 * co2
+    if p['pathway'] == 'C4':
+        # C4: CO2-concentrating mechanism -> Rubisco CO2-saturated; photoresp ≈ 0.
+        Ac = Vcmax
+    else:
+        # C3: Rubisco CO2-limited (Michaelis-Menten) with photorespiration.
+        Ac = Vcmax * (ci - Gamma) / (ci + p['kc'] + 1e-9)
 
-    # FvCB biochemical constants (Bernacchi et al. 2002)
-    Kc = 404.9      # Michaelis constant for CO2 (µmol/mol)
-    Gamma = 42.75   # CO2 compensation point (µmol/mol)
-
-    Ac = Vcmax * (ci - Gamma) / (ci + Kc + 1e-9)
-    Aj = (J * (ci - Gamma)) / (4.0 * ci + 8.0 * Gamma + 1e-9)
-
+    Aj      = (J * (ci - Gamma)) / (4.0 * ci + 8.0 * Gamma + 1e-9)
     # Harmonic-like co-limitation (both limitations simultaneously active)
     A_proxy = (2.0 * Ac * Aj) / (Ac + Aj + 1e-9)
 
-    # Water limitation: Michaelis-Menten form
-    water_lim = cum_prec / (cum_prec + 300.0 + 1e-9)
+    # Water sufficiency (Michaelis-Menten form), crop-specific half-saturation
+    water_lim = cum_prec / (cum_prec + p['water_half'] + 1e-9)
 
-    # Scale by PAR availability and water stress
+    # Scale by PAR availability and water sufficiency
     A_final = A_proxy * (PAR / (PAR + 100.0 + 1e-9)) * water_lim
 
     return np.nan_to_num(A_final, nan=0.0, posinf=0.0, neginf=0.0)
+
+
+# Backward-compatible alias: the internal flag/config key is still `use_rtai`
+# pending a full rename, and some callers may reference the old function name.
+_compute_rtai_series = _compute_rtai_series
 
 def _compute_heat_stress_counts(tavg_series: np.ndarray,
                                 tmin_series: np.ndarray,
@@ -394,7 +533,7 @@ def _get_aggregation_params(aggregation: str, year: int,
         data_fraction: Fraction of season to use (0.25, 0.5, 0.75, 1.0). Default 1.0 (full season).
                       Keeps the first N% of the season from SOS onwards.
     """
-    freq_map = {"daily": (DAILY_FREQ, 365), "weekly": (WEEKLY_FREQ, 52), "dekad": (DEKAD_FREQ, 36)}
+    freq_map = {"daily": (DAILY_FREQ, 365), "weekly": (WEEKLY_FREQ, 52), "dekad": (DEKAD_FREQ, 36), "monthly": (MONTHLY_FREQ, 12)}
     if aggregation not in freq_map:
         raise ValueError(f"Unknown aggregation: {aggregation}")
 
@@ -442,7 +581,7 @@ def _extract_weather_features(dataset: CYDataset, adm_id: str, year: int,
                                debug: bool = False,
                                use_gdd: bool = False,
                                use_rue: bool = False,
-                               use_farquhar: bool = False,
+                               use_rtai: bool = False,
                                crop: str = 'maize',
                                gdd_base: float = 8.0,
                                gdd_upper: float = 30.0,
@@ -463,7 +602,7 @@ def _extract_weather_features(dataset: CYDataset, adm_id: str, year: int,
         debug: Enable debug logging (deprecated, use logging level)
         use_gdd: Add cumulative GDD as a time series channel
         use_rue: Add RUE index as a time series channel
-        use_farquhar: Add Farquhar proxy as a time series channel
+        use_rtai: Add Farquhar proxy as a time series channel
         crop: Crop name for crop-specific parameters
         gdd_base: Base temperature for GDD computation
         gdd_upper: Upper threshold for GDD computation
@@ -478,7 +617,7 @@ def _extract_weather_features(dataset: CYDataset, adm_id: str, year: int,
     """
     seq_len = len(target_dates)
     n_weather = len(weather_features_list)
-    n_domain = sum([use_gdd, use_rue, use_farquhar])
+    n_domain = sum([use_gdd, use_rue, use_rtai])
     n_total = n_weather + n_domain
 
     # Initialize return dict with defaults
@@ -539,7 +678,7 @@ def _extract_weather_features(dataset: CYDataset, adm_id: str, year: int,
                 result['weather'][:, col_idx] = cum_gdd.astype(np.float32)
                 col_idx += 1
 
-            if use_rue or use_farquhar:
+            if use_rue or use_rtai:
                 # Need cumulative prec and rad
                 cum_prec = np.nancumsum(result['prec_raw'])
                 rad_raw = daily_df['rad'].values if 'rad' in daily_df else np.zeros(seq_len)
@@ -550,8 +689,9 @@ def _extract_weather_features(dataset: CYDataset, adm_id: str, year: int,
                     result['weather'][:, col_idx] = rue.astype(np.float32)
                     col_idx += 1
 
-                if use_farquhar:
-                    farq = _compute_farquhar_series(result['tavg_raw'], cum_prec, cum_rad)
+                if use_rtai:
+                    farq = _compute_rtai_series(result['tavg_raw'], cum_prec, cum_rad,
+                                                crop=crop)
                     result['weather'][:, col_idx] = farq.astype(np.float32)
 
             # Leave NaNs in place - normalization will impute to 0.0 (mean in z-score space)
@@ -559,7 +699,7 @@ def _extract_weather_features(dataset: CYDataset, adm_id: str, year: int,
         else:
             # For weekly/dekad: interpolate to full daily resolution first, then aggregate
             # This ensures true temporal averaging instead of point-sampling
-            freq = WEEKLY_FREQ if aggregation == "weekly" else DEKAD_FREQ
+            freq = WEEKLY_FREQ if aggregation == "weekly" else (MONTHLY_FREQ if aggregation == "monthly" else DEKAD_FREQ)
             full_daily_range = pd.date_range(start=target_dates[0], end=target_dates[-1], freq='D')
 
             daily_df_full = pd.DataFrame(index=full_daily_range)
@@ -594,14 +734,14 @@ def _extract_weather_features(dataset: CYDataset, adm_id: str, year: int,
                 # (not mean - you can't average cumulative values)
                 domain_daily['cum_gdd_daily'] = np.cumsum(gdd_daily)
 
-            if use_rue or use_farquhar:
+            if use_rue or use_rtai:
                 cum_prec_d = np.nancumsum(result['prec_raw'])
                 cum_rad_d = np.nancumsum(rad_daily)
                 if use_rue:
                     domain_daily['rue'] = _compute_rue_series(
                         result['tavg_raw'], cum_prec_d, cum_rad_d, crop)
-                if use_farquhar:
-                    domain_daily['farquhar'] = _compute_farquhar_series(
+                if use_rtai:
+                    domain_daily['rtai'] = _compute_rtai_series(
                         result['tavg_raw'], cum_prec_d, cum_rad_d)
 
             # Add domain columns to daily df for resampling
@@ -618,8 +758,8 @@ def _extract_weather_features(dataset: CYDataset, adm_id: str, year: int,
                 agg_methods['cum_gdd_daily'] = 'max'  # was 'sum', use max for cumulative
             if use_rue:
                 agg_methods['rue'] = 'mean'
-            if use_farquhar:
-                agg_methods['farquhar'] = 'mean'
+            if use_rtai:
+                agg_methods['rtai'] = 'mean'
 
             resampled = daily_df_full.resample(freq).agg(agg_methods)
 
@@ -643,8 +783,8 @@ def _extract_weather_features(dataset: CYDataset, adm_id: str, year: int,
             if use_rue and 'rue' in resampled.columns:
                 result['weather'][:, col_idx] = resampled['rue'].values
                 col_idx += 1
-            if use_farquhar and 'farquhar' in resampled.columns:
-                result['weather'][:, col_idx] = resampled['farquhar'].values
+            if use_rtai and 'rtai' in resampled.columns:
+                result['weather'][:, col_idx] = resampled['rtai'].values
 
             # Leave NaNs in place - normalization will impute to 0.0 (mean in z-score space)
     except Exception as e:
@@ -696,7 +836,7 @@ def _extract_remote_sensing_features(dataset: CYDataset, adm_id: str, year: int,
                 rs_features[:, i] = daily_val.values
             else:
                 # For weekly/dekad: interpolate to full daily range, then aggregate
-                freq = WEEKLY_FREQ if aggregation == "weekly" else DEKAD_FREQ
+                freq = WEEKLY_FREQ if aggregation == "weekly" else (MONTHLY_FREQ if aggregation == "monthly" else DEKAD_FREQ)
                 full_daily_range = pd.date_range(start=target_dates[0], end=target_dates[-1], freq='D')
                 daily_val_full = interpolate_to_daily(rs_data, full_daily_range,
                                                       interpolate_data='soil_moisture' if rs_var in ['ssm', 'rsm'] else rs_var)
@@ -726,6 +866,8 @@ def _extract_static_features(dataset: CYDataset, adm_id: str, year: int,
                               prec_series: Optional[np.ndarray] = None,
                               validity_mask: Optional[np.ndarray] = None,
                               multi_year_summaries: Optional[Dict[str, float]] = None,
+                              aez_lookup: Optional[Dict[str, float]] = None,
+                              koppen_lookup: Optional[Dict[str, str]] = None,
                               ) -> Tuple[np.ndarray, Optional[float], Optional[float]]:
     """
     Assemble the static feature vector for one location-year.
@@ -738,6 +880,8 @@ def _extract_static_features(dataset: CYDataset, adm_id: str, year: int,
       5. Lagged yields         (conditional)
       6. Heat stress counts    (conditional)
       7. Multi-year summaries  (conditional)
+      8. AEZ suitability code  (conditional) — 1 float
+      9. Köppen decomposition  (conditional) — 3 floats: main_group, precip_regime, temp_subtype
 
     Args:
         dataset: CY-Bench dataset
@@ -878,6 +1022,17 @@ def _extract_static_features(dataset: CYDataset, adm_id: str, year: int,
         for feature_name in sorted(multi_year_summaries.keys()):
             static_vals.append(multi_year_summaries[feature_name])
 
+    # AEZ suitability code (1 float, crop-specific)
+    if aez_lookup is not None:
+        _aez = aez_lookup.get(adm_id)
+        static_vals.append(float(_aez) if _aez is not None else np.nan)
+
+    # Köppen decomposition (3 floats: main_group, precip_regime, temp_subtype)
+    if koppen_lookup is not None:
+        label = koppen_lookup.get(adm_id, None)
+        kg, kp, kt = _encode_koppen_label(label) if label is not None else (np.nan, np.nan, np.nan)
+        static_vals.extend([kg, kp, kt])
+
     return np.array(static_vals, dtype=np.float32), lat, lon
 
 def _assemble_features(features: Dict, seq_len: int,
@@ -885,14 +1040,14 @@ def _assemble_features(features: Dict, seq_len: int,
                        weather_features_list: List[str],
                        use_gdd: bool = False,
                        use_rue: bool = False,
-                       use_farquhar: bool = False) -> np.ndarray:
+                       use_rtai: bool = False) -> np.ndarray:
     """
     Concatenate time series feature arrays in consistent column order.
     Incorporates weather_features_list parameter instead of using global.
     Incorporates domain features (GDD, RUE, Farquhar) when enabled.
     """
     n_weather = len(weather_features_list)
-    n_domain = sum([use_gdd, use_rue, use_farquhar])
+    n_domain = sum([use_gdd, use_rue, use_rtai])
     n_weather_total = n_weather + n_domain  # weather array now includes domain channels
     n_rs = len(REMOTE_SENSING_FEATURES)      # 4
     n_sota = len(SOTA_TEMPORAL_VARS_LIST) if use_sota_features else 0
@@ -933,9 +1088,13 @@ def build_daily_input_sequence(
         use_gdd: bool = False,
         use_heat_stress_days: bool = False,
         use_rue: bool = False,
-        use_farquhar: bool = False,
+        use_rtai: bool = False,
         crop: str = 'maize',
         multi_year_config: Optional[Dict] = None,
+        use_aez: bool = False,
+        use_koppen: bool = False,
+        aez_lookup: Optional[Dict[str, float]] = None,
+        koppen_lookup: Optional[Dict[str, str]] = None,
 ) -> Tuple[np.ndarray, np.ndarray, float, Dict, np.ndarray]:
     """
     Build model-ready input for one location-year.
@@ -954,7 +1113,7 @@ def build_daily_input_sequence(
         use_gdd: Add cumulative GDD as a time series channel
         use_heat_stress_days: Add heat stress day counts as static features
         use_rue: Add RUE index as a time series channel
-        use_farquhar: Add Farquhar proxy as a time series channel
+        use_rtai: Add Farquhar proxy as a time series channel
         crop: Crop name for crop-specific parameters
         multi_year_config: Dict with 'enabled', 'window', 'features' for multi-year summaries
 
@@ -1008,7 +1167,7 @@ def build_daily_input_sequence(
     # Now returns a dict with weather array and raw daily arrays for heat stress
     weather_result = _extract_weather_features(
         dataset, adm_id, year, target_dates, aggregation, weather_features_list, debug,
-        use_gdd=use_gdd, use_rue=use_rue, use_farquhar=use_farquhar,
+        use_gdd=use_gdd, use_rue=use_rue, use_rtai=use_rtai,
         crop=crop, gdd_base=gdd_base, gdd_upper=gdd_upper,
     )
     features['weather'] = weather_result['weather']
@@ -1038,8 +1197,7 @@ def build_daily_input_sequence(
         if aggregation == "daily":
             features['sota_temporal'] = sota
         else:
-            freq = WEEKLY_FREQ if aggregation == "weekly" else DEKAD_FREQ
-            # Resample and reindex to ensure exact shape match
+            freq = WEEKLY_FREQ if aggregation == "weekly" else (MONTHLY_FREQ if aggregation == "monthly" else DEKAD_FREQ)
             sota_df = pd.DataFrame(sota, index=target_dates)
             resampled = sota_df.resample(freq).mean()
             expected_index = pd.date_range(start=target_dates[0], periods=len(target_dates), freq=freq)
@@ -1060,6 +1218,8 @@ def build_daily_input_sequence(
         prec_series=prec_raw,
         validity_mask=raw_validity_mask,
         multi_year_summaries=multi_year_summaries,
+        aez_lookup=aez_lookup if use_aez else None,
+        koppen_lookup=koppen_lookup if use_koppen else None,
     )
 
     # Target yield
@@ -1077,7 +1237,7 @@ def build_daily_input_sequence(
 
     # Pass weather_features_list and domain feature flags to _assemble_features
     X_ts = _assemble_features(features, seq_len, use_sota_features, weather_features_list,
-                               use_gdd=use_gdd, use_rue=use_rue, use_farquhar=use_farquhar)
+                               use_gdd=use_gdd, use_rue=use_rue, use_rtai=use_rtai)
     X_static = features['static'].astype(np.float32)
 
     logging.debug(f"[{adm_id}] X_ts={X_ts.shape}, X_static={X_static.shape}")
@@ -1652,6 +1812,8 @@ def _get_static_feature_names(
     lag_years: int,
     use_heat_stress_days: bool = False,
     multi_year_config: Optional[Dict] = None,
+    use_aez: bool = False,
+    use_koppen: bool = False,
 ) -> List[str]:
     """
     Return static feature names in the EXACT order that _extract_static_features()
@@ -1673,6 +1835,8 @@ def _get_static_feature_names(
       5. Lagged yields (conditional)
       6. Heat stress counts (conditional)
       7. Multi-year summaries (conditional)
+      8. AEZ suitability code (conditional) — 1 feature
+      9. Köppen decomposition (conditional) — 3 features: main_group, precip_regime, temp_subtype
     """
     names = list(SOIL_PROPERTIES)
     names.extend(LOCATION_PROPERTIES)
@@ -1707,5 +1871,13 @@ def _get_static_feature_names(
         feature_types = multi_year_config.get('features', ['weather'])
         multi_year_names = MultiYearFeatureEngineer.get_feature_names(window, feature_types)
         names.extend(multi_year_names)
+
+    # AEZ suitability code (1 ordinal float, crop-specific)
+    if use_aez:
+        names.append('aez_suitability_code')
+
+    # Köppen-Geiger decomposition (3 ordinal floats)
+    if use_koppen:
+        names.extend(['koppen_main_group', 'koppen_precip_regime', 'koppen_temp_subtype'])
 
     return names

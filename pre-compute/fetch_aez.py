@@ -35,9 +35,15 @@ Input level: High (standard high-input assumption).
 Scope: All Land in Grid Cell (full-cell suitability).
 CO2 fertilization: Enabled (reality-consistent).
 
-CLASS LEGEND -- Source: FAO GAEZ v4 data catalog, "Crop suitability index in
-classes, all land in grid cell" (map code RES05-SCI), matching the
-DEFAULT_RENDERER used below.
+CLASS LEGEND -- Source: FAO GAEZ v4 data catalog (map code RES05-SCI),
+"Crop suitability index in classes, all land in grid cell", matching the
+DEFAULT_RENDERER used below. The URL below is a catalog entry for one
+specific crop (wheat/cotton/sugarcane); it is cited here only as the
+reference for the class-code definitions and SI thresholds (codes 0–9),
+NOT as the raster source. The actual raster downloaded at runtime is
+crop-specific: find_crop_raster() queries the GAEZ v4 ImageServer with
+crop=<crop> (e.g. 'maize'), so a maize run fetches the maize suitability
+raster, a wheat run fetches the wheat one, and so on.
 https://data.apps.fao.org/catalog/iso/a6965302-55bf-46e9-8e42-6d046938333b
 
 Code | Label              | SI Range (approximate)
@@ -148,17 +154,8 @@ RETRY_DELAY = 2  # seconds
 # DATA PATHS
 # =============================================================================
 
-def get_cybench_root():
-    """Find the CyBench root directory (parent of cybench/)."""
-    current = Path(__file__).resolve().parent
-    while current.name != "cybench" and current.parent != current:
-        current = current.parent
-    if current.name == "cybench":
-        return current.parent
-    raise RuntimeError("Could not find CyBench root directory")
-
-
-CYBENCH_ROOT = get_cybench_root()
+CYBENCH_ROOT = Path(__file__).resolve().parent.parent.parent
+# pre-compute → YIELD-HUB → AgML-CY-Bench (the repo root)
 DATA_DIR = CYBENCH_ROOT / "cybench" / "data"
 OUTPUT_DIR = CYBENCH_ROOT / "cybench" / "data"/ "acz_labels"
 
@@ -189,7 +186,7 @@ def filter_countries_by_min_years(crop: str, countries: list = None, min_years: 
     valid_countries = []
 
     # Load years_dict.json
-    years_dict_path = CYBENCH_ROOT / 'cybench' / 'setups' / 'configurations' / 'years_dict.json'
+    years_dict_path = CYBENCH_ROOT / 'YIELD-HUB' / 'setups' / 'configurations' / 'years_dict.json'
     with open(years_dict_path, 'r') as f:
         years_dict = json.load(f)
 
@@ -711,11 +708,11 @@ def main():
                         help="Country codes to process (default: all available). Pass 'all' to be explicit.")
     parser.add_argument("--water-supply", default=DEFAULT_WATER_SUPPLY,
                         help=f"Water source (default: {DEFAULT_WATER_SUPPLY})")
-    parser.add_argument("--input-level", default=DEFAULT_INPUT_LEVEL,
+    parser.add_argument("--input_level", default=DEFAULT_INPUT_LEVEL,
                         help=f"Input level (default: {DEFAULT_INPUT_LEVEL})")
-    parser.add_argument("--time-period", default=DEFAULT_TIME_PERIOD,
+    parser.add_argument("--time_period", default=DEFAULT_TIME_PERIOD,
                         help=f"GAEZ time period (default: {DEFAULT_TIME_PERIOD})")
-    parser.add_argument("--output-dir", default=str(OUTPUT_DIR),
+    parser.add_argument("--output_dir", default=str(OUTPUT_DIR),
                         help=f"Output directory (default: {OUTPUT_DIR})")
     parser.add_argument("--resume", action="store_true",
                         help="Resume from previous run (uses existing JSONL cache)")
@@ -725,7 +722,7 @@ def main():
                         help="Discover available GAEZ options for the crop (debugging)")
     parser.add_argument("--verbose", action="store_true", default=True,
                         help="Print detailed progress (default: True)")
-    parser.add_argument("--no-filter", action="store_true",
+    parser.add_argument("--no_filter", action="store_true",
                         help="Skip the minimum 8-year data filter (include all countries)")
 
     args = parser.parse_args()

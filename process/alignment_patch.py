@@ -148,7 +148,8 @@ def test_alignment_patch():
         return False
 
 
-def verify_forecast_horizon_config(config, fold_idx=None, sample_data=None):
+def verify_forecast_horizon_config(config, fold_idx=None, sample_data=None,
+                                   resolution_bins=None, active_resolution=None):
     """
     Verifies and display forecast horizon configuration for a given fold. Shows how data_fraction translates to actual sequence lengths.
     Called at each fold during walk-forward validation to confirm the forecast horizon is being applied correctly.
@@ -157,6 +158,12 @@ def verify_forecast_horizon_config(config, fold_idx=None, sample_data=None):
         config: Model config object with data_fraction and aggregation attributes
         fold_idx: Optional fold index for display
         sample_data: Optional dict with 'sos_date' and 'eos_date' to show dates
+        resolution_bins: Optional {resolution_name: n_bins} map (tabular path only).
+            When given, the daily/weekly/dekad list is shown as the LOAD source and a
+            second "Tabular resolution" block lists the post-load binning with the
+            active one marked. Sequence scripts omit it -> output is unchanged.
+        active_resolution: The --resolution actually used (key of resolution_bins);
+            marked "← This one activated" in the tabular-resolution block.
 
     Returns:
         dict: Summary of forecast horizon configuration
@@ -196,8 +203,21 @@ def verify_forecast_horizon_config(config, fold_idx=None, sample_data=None):
 
     for agg, length in agg_lengths.items():
         max_len = MAX_SEQ_LENS[agg]
-        indicator = " ← This one activated" if agg == aggregation else ""
+        if resolution_bins is not None:
+            # Tabular path: daily/weekly/dekad is the LOAD source; the active
+            # resolution is a post-load binning, marked in the block below.
+            indicator = "   ← loaded (source)" if agg == aggregation else ""
+        else:
+            indicator = " ← This one activated" if agg == aggregation else ""
         print(f" {agg:>8s}: {length:>3d} / {max_len} time steps{indicator}")
+
+    # Tabular path only: show the post-load per-channel binning with the active one.
+    if resolution_bins is not None:
+        print(f"\n  Tabular resolution (daily series binned per channel):")
+        for res, nbins in resolution_bins.items():
+            arrow = "   ← This one activated" if res == active_resolution else ""
+            unit = "bin" if nbins == 1 else "bins"
+            print(f" {res:>8s}: {nbins:>3d} {unit}{arrow}")
 
     # Show date range if sample_data provided
     if sample_data and 'sos_date' in sample_data and 'eos_date' in sample_data:
@@ -229,4 +249,6 @@ def verify_forecast_horizon_config(config, fold_idx=None, sample_data=None):
         'forecast_type': forecast_type,
         'aggregation': aggregation,
         'sequence_lengths': agg_lengths,
+        'resolution_bins': resolution_bins,
+        'active_resolution': active_resolution,
     }

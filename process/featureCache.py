@@ -62,7 +62,7 @@ class FeatureCache:
         use_gdd: bool,
         use_heat_stress_days: bool,
         use_rue: bool,
-        use_farquhar: bool,
+        use_rtai: bool,
         use_cwb_feature: bool,
         drop_tavg: bool,
         use_exponential_weighting: bool,
@@ -71,6 +71,8 @@ class FeatureCache:
         multi_year_window: int,
         multi_year_features: List[str],
         weather_features: List[str],
+        use_aez: bool = False,
+        use_koppen: bool = False,
     ) -> str:
         """
         Generate a deterministic hash from all feature-related configuration parameters.
@@ -84,11 +86,11 @@ class FeatureCache:
         hash_input = (
             f"{crop}|{country}|{aggregation}|{data_fraction}|"
             f"{use_sota_features}|{include_spatial_features}|{lag_years}|"
-            f"{use_gdd}|{use_heat_stress_days}|{use_rue}|{use_farquhar}|"
+            f"{use_gdd}|{use_heat_stress_days}|{use_rue}|{use_rtai}|"
             f"{use_cwb_feature}|{drop_tavg}|"
             f"{use_exponential_weighting}|{exponential_tau}|"
             f"{multi_year_summaries}|{multi_year_window}|{multi_year_features_sorted}|"
-            f"{sorted(weather_features)}"
+            f"{sorted(weather_features)}|{use_aez}|{use_koppen}"
         )
 
         return hashlib.sha256(hash_input.encode()).hexdigest()[:16]
@@ -138,7 +140,7 @@ class FeatureCache:
                 use_gdd=config['use_gdd'],
                 use_heat_stress_days=config['use_heat_stress_days'],
                 use_rue=config['use_rue'],
-                use_farquhar=config['use_farquhar'],
+                use_rtai=config['use_rtai'],
                 use_cwb_feature=config.get('use_cwb_feature', False),
                 drop_tavg=config.get('drop_tavg', False),
                 use_exponential_weighting=config.get('use_exponential_weighting', False),
@@ -156,7 +158,7 @@ class FeatureCache:
 
             logger.info(f"  [{i+1}/{total_configs}] Building: {feature_hash[:8]}... "
                         f"(SOTA={config['use_sota_features']}, GDD={config['use_gdd']}, "
-                        f"RUE={config['use_rue']}, Farquhar={config['use_farquhar']}, "
+                        f"RUE={config['use_rue']}, Farquhar={config['use_rtai']}, "
                         f"HeatStress={config['use_heat_stress_days']}, Lag={config['lag_years']})")
 
             # Build features for all samples
@@ -187,7 +189,7 @@ class FeatureCache:
                     use_gdd=config['use_gdd'],
                     use_heat_stress_days=config['use_heat_stress_days'],
                     use_rue=config['use_rue'],
-                    use_farquhar=config['use_farquhar'],
+                    use_rtai=config['use_rtai'],
                     crop=config['crop'],
                     multi_year_config=multi_year_config,
                 )
@@ -317,7 +319,7 @@ def generate_common_feature_configs(
         'data_fraction': data_fraction, 'use_sota_features': False,
         'include_spatial_features': False, 'lag_years': 0,
         'use_gdd': False, 'use_heat_stress_days': False,
-        'use_rue': False, 'use_farquhar': False,
+        'use_rue': False, 'use_rtai': False,
         'use_cwb_feature': False, 'drop_tavg': False,
         'use_exponential_weighting': False, 'exponential_tau': 10.0,
         'multi_year_summaries': False, 'multi_year_window': 1,
@@ -339,7 +341,7 @@ def generate_common_feature_configs(
         {'use_rue': True},
 
         # Farquhar
-        {'use_farquhar': True},
+        {'use_rtai': True},
 
         # Spatial features
         {'include_spatial_features': True},
@@ -351,7 +353,7 @@ def generate_common_feature_configs(
         # Common combos
         {'use_sota_features': True, 'lag_years': 1},
         {'use_gdd': True, 'use_heat_stress_days': True},
-        {'use_rue': True, 'use_farquhar': True},
+        {'use_rue': True, 'use_rtai': True},
         {'use_sota_features': True, 'include_spatial_features': True, 'lag_years': 1},
 
         # Exponential weighting variations
@@ -372,7 +374,7 @@ def generate_common_feature_configs(
             'data_fraction': data_fraction,
             'use_sota_features': False, 'include_spatial_features': False,
             'lag_years': 0, 'use_gdd': False, 'use_heat_stress_days': False,
-            'use_rue': False, 'use_farquhar': False,
+            'use_rue': False, 'use_rtai': False,
             'use_cwb_feature': False, 'drop_tavg': False,
             'use_exponential_weighting': False, 'exponential_tau': 10.0,
             'multi_year_summaries': False, 'multi_year_window': 1,

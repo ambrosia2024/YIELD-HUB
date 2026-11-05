@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#f1f3f6;color:#1e293b}
+.coming-soon{text-align:center;padding:80px 20px;color:#cbd5e1;font-size:.92rem}
+.coming-soon span{display:block;font-size:2rem;margin-bottom:10px}
+</style>
+</head>
+<body>
+<div class="coming-soon">
+  <span>🔀</span>
+  Individual vs Pooled model comparison coming soon.
+</div>
+<script>
+function notifyResize(){
+  if(window.parent!==window)
+    window.parent.postMessage({type:'resize',height:document.body.scrollHeight},'*');
+}
+window.addEventListener('load', notifyResize);
+</script>
+</body>
+</html>

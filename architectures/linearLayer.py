@@ -24,9 +24,9 @@ from biasCorrectionLayer import BiasCorrection
 from modelconfig import LinearModelConfig
 
 sys.path.append('../process/')
-from validateModel import ModelMetrics, UncertaintyMetrics, compute_uncertainty_metrics
+from metrics import ModelMetrics, UncertaintyMetrics, compute_uncertainty_metrics
 from loadData import _get_static_feature_names
-from spatiotemporal_metrics import (
+from metrics import (
     compute_all_spatiotemporal_metrics,
     flatten_spatiotemporal_metrics_simple
 )
@@ -99,7 +99,7 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
 
         use_sota = config.use_sota_features
         # Domain features (GDD, RUE, Farquhar) – additional TS channels beyond weather
-        n_domain_ts = sum([config.use_gdd, config.use_rue, config.use_farquhar])
+        n_domain_ts = sum([config.use_gdd, config.use_rue, config.use_rtai])
         self.n_ts_features = (
             len(config.time_series_vars)
             + n_domain_ts
@@ -161,7 +161,7 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
 
         self.base_model = self._build_model()
 
-        self.train_metrics = ModelMetrics(prefix="train", include_nrmse=False)
+        self.train_metrics = ModelMetrics(prefix="train", include_nrmse=True)
         self.val_metrics = ModelMetrics(prefix="val")
         self.test_metrics = ModelMetrics(prefix="test")
 
@@ -260,6 +260,8 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
             self.config.lag_years,
             self.config.use_heat_stress_days,
             multi_year_config=self.config.multi_year_config if hasattr(self.config, 'multi_year_config') else None,
+            use_aez=getattr(self.config, 'use_aez', False),
+            use_koppen=getattr(self.config, 'use_koppen', False),
         )
 
     def _apply_tokenization(self, x_ts: torch.Tensor,
@@ -329,8 +331,8 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
             names.append('domain_cum_gdd')
         if self.config.use_rue:
             names.append('domain_rue_index')
-        if self.config.use_farquhar:
-            names.append('domain_farquhar_proxy')
+        if self.config.use_rtai:
+            names.append('domain_rtai_proxy')
 
         names += [f'rs_{f}' for f in REMOTE_SENSING_FEATURES]
         if self.config.use_sota_features:
@@ -764,9 +766,15 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
 
         final_pred_clipped = torch.clamp(final_pred_orig, min=0.0)
 
+        # Enforce quantile monotonicity: sort so q10 <= q50 <= q90
+        # (clamp alone doesn't prevent crossing; crossed quantiles silently
+        # corrupt PICP, width, Winkler, and CRPS)
+        if self.loss_type == "mql" and final_pred_clipped.dim() == 2 and final_pred_clipped.shape[1] > 1:
+            final_pred_clipped, _ = torch.sort(final_pred_clipped, dim=1)
+
         # Log clip rate as diagnostic (helps identify model issues)
         clip_rate = (final_pred_orig < 0.0).float().mean()
-        self.log(f'{stage}/clip_rate', clip_rate, prog_bar=False)
+        self.log(f'{stage}/clip_rate', clip_rate, prog_bar=False, logger=False)
 
         # Update metrics based on loss type
         if self.loss_type == "mql":
@@ -796,12 +804,13 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
 
     def on_train_epoch_end(self):
         results = self.train_metrics.compute()
-        self.log('train/mse', results['mse'], prog_bar=False)
-        self.log('train/mae', results['mae'], prog_bar=False)
+        self.log('train/mse', results['mse'], prog_bar=False, logger=False)
+        self.log('train/mae', results['mae'], prog_bar=False, logger=False)
         self.log('train/r2', results['r2'], prog_bar=False)
-        self.log('train/rmse', torch.sqrt(results['mse']).item(), prog_bar=False)
-        self.log('train/mape', results['mape'], prog_bar=False)
+        self.log('train/rmse', torch.sqrt(results['mse']).item(), prog_bar=False, logger=False)
+        self.log('train/mape', results['mape'], prog_bar=False, logger=False)
         self.log('train/smape', results['smape'], prog_bar=False)
+        self.log('train/nrmse', results['nrmse'], prog_bar=False)
         self.train_metrics.log_results("train")
         self.train_metrics.reset()
 
@@ -825,11 +834,11 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
 
     def on_validation_epoch_end(self):
         results = self.val_metrics.compute()
-        self.log('val/mse', results['mse'], prog_bar=False)
-        self.log('val/mae', results['mae'], prog_bar=False)
+        self.log('val/mse', results['mse'], prog_bar=False, logger=False)
+        self.log('val/mae', results['mae'], prog_bar=False, logger=False)
         self.log('val/r2', results['r2'], prog_bar=False)
-        self.log('val/rmse', torch.sqrt(results['mse']).item(), prog_bar=False)
-        self.log('val/mape', results['mape'], prog_bar=False)
+        self.log('val/rmse', torch.sqrt(results['mse']).item(), prog_bar=False, logger=False)
+        self.log('val/mape', results['mape'], prog_bar=False, logger=False)
         self.log('val/smape', results['smape'], prog_bar=False)
         self.log('val/nrmse', results['nrmse'], prog_bar=False)
         self.val_metrics.log_results("val")
@@ -938,132 +947,48 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
                     self._per_year_preds[year_int]['adm_ids'].append(adm_id)
 
     def _compute_per_year_metrics_from_preds(self) -> dict:
-        # Compute per-year metrics from accumulated predictions using torchmetrics.
+        """Per-year + overall metrics from accumulated predictions.
+
+        Calls the SAME shared primitives (metrics.point_metrics /
+        compute_uncertainty_metrics) used by the post-hoc evaluation, so the
+        training-time per-year numbers and the post-hoc numbers come from one
+        implementation. Output keys are unchanged ('<metric>_<year>' /
+        '<metric>_overall').
+        """
+        from metrics import point_metrics, compute_uncertainty_metrics
         results = {}
 
+        all_preds, all_targets = [], []
         for year, data in self._per_year_preds.items():
             if len(data['preds']) == 0:
                 continue
+            for k, v in point_metrics(data['targets'], data['preds']).items():
+                results[f'{k}_{year}'] = v
+            all_preds.extend(data['preds'])
+            all_targets.extend(data['targets'])
 
-            # Convert to torch tensors
-            preds = torch.tensor(data['preds'])
-            targets = torch.tensor(data['targets'])
+        if all_preds and all_targets:
+            for k, v in point_metrics(all_targets, all_preds).items():
+                results[f'{k}_overall'] = v
 
-            # Compute metrics using torchmetrics for consistency
-            mse = MeanSquaredError()
-            r2 = R2Score()
-            mae = MeanAbsoluteError()
-            mape = MeanAbsolutePercentageError()
-
-            mse_val = mse(preds, targets)
-            mae_val = mae(preds, targets)
-            mape_val = mape(preds, targets)
-            rmse_val = torch.sqrt(mse_val)
-
-            # SMAPE - manual computation
-            smape_val = torch.mean(2.0 * torch.abs(preds - targets) /
-                                  (torch.abs(preds) + torch.abs(targets) + 1e-8))
-
-            # R² score requires at least 2 samples
-            if len(preds) >= 2:
-                r2_val = r2(preds, targets)
-            else:
-                r2_val = torch.tensor(float('nan'))  # Cannot compute R² with single sample
-
-            # Store results with year suffix
-            results[f'mse_{year}'] = mse_val.item()
-            results[f'mae_{year}'] = mae_val.item()
-            results[f'rmse_{year}'] = rmse_val.item()
-            results[f'r2_{year}'] = r2_val.item()
-            results[f'mape_{year}'] = mape_val.item()
-            results[f'smape_{year}'] = smape_val.item()
-            # Add nrmse for per-year metrics (consistent with FM script)
-            nrmse_val = rmse_val / (targets.mean().clamp(min=1e-8))
-            results[f'nrmse_{year}'] = nrmse_val.item()
-
-        # Compute overall metrics (across all years)
-        all_preds = []
-        all_targets = []
-        for data in self._per_year_preds.values():
-            if len(data['preds']) > 0:
-                all_preds.extend(data['preds'])
-                all_targets.extend(data['targets'])
-
-        if all_preds:
-            all_preds_tensor = torch.tensor(all_preds)
-            all_targets_tensor = torch.tensor(all_targets)
-
-            mse_overall = MeanSquaredError()
-            r2_overall = R2Score()
-            mae_overall = MeanAbsoluteError()
-            mape_overall = MeanAbsolutePercentageError()
-
-            mse_val = mse_overall(all_preds_tensor, all_targets_tensor)
-            mae_val = mae_overall(all_preds_tensor, all_targets_tensor)
-            mape_val = mape_overall(all_preds_tensor, all_targets_tensor)
-            rmse_val = torch.sqrt(mse_val)
-            smape_val = torch.mean(2.0 * torch.abs(all_preds_tensor - all_targets_tensor) /
-                                  (torch.abs(all_preds_tensor) + torch.abs(all_targets_tensor) + 1e-8))
-            nrmse_val = rmse_val / (all_targets_tensor.mean().clamp(min=1e-8))
-
-            # R² score requires at least 2 samples
-            if len(all_preds_tensor) >= 2:
-                r2_val = r2_overall(all_preds_tensor, all_targets_tensor)
-            else:
-                r2_val = torch.tensor(float('nan'))  # Cannot compute R² with single sample
-
-            results['mse_overall'] = mse_val.item()
-            results['mae_overall'] = mae_val.item()
-            results['rmse_overall'] = rmse_val.item()
-            results['r2_overall'] = r2_val.item()
-            results['mape_overall'] = mape_val.item()
-            results['smape_overall'] = smape_val.item()
-            results['nrmse_overall'] = nrmse_val.item()
-
-        # Compute uncertainty metrics for MQL
+        # Uncertainty metrics for MQL (same shared function as post-hoc)
         if self.loss_type == "mql":
-            # Collect all quantile predictions and targets
-            all_quantile_preds = []
-            all_targets_for_unc = []
-            quantile_preds_by_year = {year: [] for year in self._per_year_preds.keys()}
-            targets_by_year = {year: [] for year in self._per_year_preds.keys()}
-
+            all_quantile_preds, all_targets_for_unc = [], []
             for year, data in self._per_year_preds.items():
-                if 'quantile_preds' in data and data['quantile_preds']:
-                    # Convert list of lists to numpy array
+                if data.get('quantile_preds'):
                     year_quantile_preds = np.array(data['quantile_preds'])
                     year_targets = np.array(data['targets'])
-
                     if len(year_quantile_preds) > 0:
-                        quantile_preds_by_year[year] = year_quantile_preds
-                        targets_by_year[year] = year_targets
+                        for metric_name, value in compute_uncertainty_metrics(
+                                year_targets, year_quantile_preds, self.quantiles).items():
+                            results[f'{metric_name}_{year}'] = value
                         all_quantile_preds.append(year_quantile_preds)
                         all_targets_for_unc.append(year_targets)
 
-            # Compute per-year uncertainty metrics
-            for year in quantile_preds_by_year.keys():
-                if len(quantile_preds_by_year[year]) > 0:
-                    year_preds = quantile_preds_by_year[year]  # (n_samples, n_quantiles)
-                    year_targets = targets_by_year[year]  # (n_samples,)
-
-                    # Use the compute_uncertainty_metrics function from validateModel
-                    year_unc_metrics = compute_uncertainty_metrics(
-                        year_targets, year_preds, self.quantiles
-                    )
-
-                    for metric_name, value in year_unc_metrics.items():
-                        results[f'{metric_name}_{year}'] = value
-
-            # Compute overall uncertainty metrics
             if all_quantile_preds:
-                all_quantile_preds_combined = np.vstack(all_quantile_preds)
-                all_targets_combined = np.concatenate(all_targets_for_unc)
-
-                overall_unc_metrics = compute_uncertainty_metrics(
-                    all_targets_combined, all_quantile_preds_combined, self.quantiles
-                )
-
-                for metric_name, value in overall_unc_metrics.items():
+                for metric_name, value in compute_uncertainty_metrics(
+                        np.concatenate(all_targets_for_unc),
+                        np.vstack(all_quantile_preds), self.quantiles).items():
                     results[f'{metric_name}_overall'] = value
 
         return results
@@ -1114,11 +1039,11 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
 
     def on_test_epoch_end(self):
         results = self.test_metrics.compute()
-        self.log('test/mse', results['mse'], prog_bar=False)
-        self.log('test/mae', results['mae'], prog_bar=False)
+        self.log('test/mse', results['mse'], prog_bar=False, logger=False)
+        self.log('test/mae', results['mae'], prog_bar=False, logger=False)
         self.log('test/r2', results['r2'], prog_bar=False)
-        self.log('test/rmse', torch.sqrt(results['mse']).item(), prog_bar=False)
-        self.log('test/mape', results['mape'], prog_bar=False)
+        self.log('test/rmse', torch.sqrt(results['mse']).item(), prog_bar=False, logger=False)
+        self.log('test/mape', results['mape'], prog_bar=False, logger=False)
         self.log('test/smape', results['smape'], prog_bar=False)
         self.log('test/nrmse', results['nrmse'], prog_bar=False)
         self.test_metrics.log_results("test")
@@ -1128,7 +1053,7 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
         if self.loss_type == "mql" and self.test_uncertainty_metrics is not None:
             uncertainty_results = self.test_uncertainty_metrics.compute()
             for metric_name, value in uncertainty_results.items():
-                self.log(f'test/{metric_name}', value, prog_bar=False)
+                self.log(f'test/{metric_name}', value, prog_bar=False, logger=False)
             self.test_uncertainty_metrics.reset()
 
         # Compute per-year metrics and store on model for CSV saving
@@ -1139,7 +1064,7 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
             st_metrics = self._compute_spatiotemporal_metrics_from_preds()
             if st_metrics:
                 for metric_name, value in st_metrics.items():
-                    self.log(f'test/{metric_name}', value, prog_bar=False)
+                    self.log(f'test/{metric_name}', value, prog_bar=False, logger=False)
                 # Store for final results display
                 self._spatiotemporal_metrics = st_metrics
 
@@ -1194,6 +1119,10 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
         # Clip predictions to physically meaningful range
         predictions_clipped = torch.clamp(predictions_orig, min=0.0)
 
+        # Enforce quantile monotonicity: sort so q10 <= q50 <= q90
+        if self.loss_type == "mql" and predictions_clipped.dim() == 2 and predictions_clipped.shape[1] > 1:
+            predictions_clipped, _ = torch.sort(predictions_clipped, dim=1)
+
         return {
             'predictions': predictions_clipped,
             'predictions_z': final_pred_z,
@@ -1239,15 +1168,7 @@ class BaseTimeSeriesModel(ABC, pl.LightningModule):
         print(f"Total parameters: {total_params:,}")
         print(f"{'=' * 60}\n")
 
-        # Log directly to wandb (self.log() is not allowed in on_fit_start)
-        if self.logger and hasattr(self.logger, 'experiment'):
-            # Only log if the logger supports direct logging (e.g., WandBLogger)
-            # CSVLogger and other loggers don't support this
-            if hasattr(self.logger.experiment, 'log') and callable(getattr(self.logger.experiment, 'log')):
-                self.logger.experiment.log({
-                    'model_size_mb': model_size_mb,
-                    'total_params': total_params
-                })
+        # (model_size_mb / total_params intentionally not logged to wandb)
 
 
 # Linear Baseline architectures
@@ -1788,9 +1709,18 @@ class XLinearYieldModel(BaseTimeSeriesModel):
         x_ts: torch.Tensor,
         x_static: torch.Tensor,
         observed_mask: Optional[torch.Tensor] = None,
-    ) -> torch.Tensor:
+        return_embeddings: bool = False,
+    ):
         """
         XLinear forward pass.
+
+        Args:
+            return_embeddings: If True, also return the shared pre-head
+                representation `combined` = [endo_pooled | exo_pooled | x_static]
+                of shape (B, hidden + C*hidden + n_static). This is the tensor an
+                auxiliary head must attach to so that its gradient reaches the
+                shared encoder (TGM/VGM/embeddings). Default False keeps the
+                single-tensor return used by the base training/eval steps.
         """
         B, T, C = x_ts.shape
 
@@ -1864,7 +1794,10 @@ class XLinearYieldModel(BaseTimeSeriesModel):
         predictions = self.regression_head(combined)
 
         # Reshape output based on loss type
-        return self._reshape_output(predictions)
+        predictions = self._reshape_output(predictions)
+        if return_embeddings:
+            return predictions, combined
+        return predictions
 
 
 class OLinearYieldModel(BaseTimeSeriesModel):
@@ -2194,7 +2127,7 @@ def create_model(config: LinearModelConfig) -> BaseTimeSeriesModel:
         from wfan_layer import WFANWrapper
         # Calculate number of time series features for WFAN
         use_sota = config.use_sota_features
-        n_domain_ts = sum([config.use_gdd, config.use_rue, config.use_farquhar])
+        n_domain_ts = sum([config.use_gdd, config.use_rue, config.use_rtai])
         n_ts_features = (
             len(config.time_series_vars)
             + n_domain_ts

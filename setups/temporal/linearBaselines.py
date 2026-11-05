@@ -65,7 +65,7 @@ Other optional/advanced features:
    --use_gdd : Adds cumulative GDD as a time series channel
    --use_heat_stress_days: Adds heat/frost/dry stress day counts as static features
    --use_rue: Adds RUE (Radiation Use Efficiency) index as a time series channel
-   --use_farquhar: Adds Farquhar photosynthesis proxy as a time series channel
+   --use_rtai: Adds RTAI (Radiation-Temperature Assimilation Index, crop-specific photosynthesis proxy) as a time series channel
 
 -------------
 Training workflow:
@@ -163,10 +163,11 @@ from cybench.datasets.dataset import Dataset as CYDataset
 
 # Loading custom functions and classes
 sys.path.append('../../process/')
-from helpers import generate_checkpoint_name, save_test_results_to_csv
-from validateModel import print_metrics_table
+from helpers import generate_checkpoint_name
+from metrics import print_metrics_table
 from loadData import calculate_fixed_split, DailyCYBenchSeqDataModule
 from alignment_patch import verify_forecast_horizon_config
+from metrics import run_evaluation, ALL_EVALUATION_TIERS
 
 sys.path.append('../../architectures/')
 from modelconfig import LinearModelConfig
@@ -192,10 +193,10 @@ if __name__ == "__main__":
     parser.add_argument('--model_type', default="nlinear",
                         choices=['nlinear', 'dlinear', 'xlinear', 'rlinear', 'olinear'])
     parser.add_argument('--aggregation', default="dekad",
-                        choices=['daily', 'weekly', 'dekad'])
+                        choices=['daily', 'weekly', 'dekad', 'monthly'])
     parser.add_argument('--use_sota_features', action='store_true')
     parser.add_argument('--include_spatial_features', action='store_true')
-    parser.add_argument('--lag_years', type=int, default=1, choices=[0, 1, 2],
+    parser.add_argument('--lag_years', type=int, default=1, choices=[0, 1, 2, 3],
                         help='Number of lagged yield years (max 2, default: 1)')
     parser.add_argument('--load_checkpoint', default=None,
                         help='Path to checkpoint to load for fine-tuning')
@@ -211,7 +212,11 @@ if __name__ == "__main__":
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--use_residual_trend', action='store_true')
     parser.add_argument('--use_recursive_lags', action='store_true',
-                        help='Use predicted yields as lags during testing (true out-of-sample)')
+                        help='REQUIRED when --lag_years > 0. Use predicted yields as lags during testing '
+                             'for true out-of-sample evaluation. Omitting this flag when --lag_years > 0 '
+                             'leaks OBSERVED test-year yields into lag features, invalidating the entire '
+                             'out-of-sample evaluation. Enforced at runtime: a Lag run without this flag '
+                             'is a fatal error.')
     # Domain feature engineering flags
     parser.add_argument('--use_gdd', action='store_true',
                         help='Add cumulative GDD as a time series channel. '
@@ -223,9 +228,18 @@ if __name__ == "__main__":
     parser.add_argument('--use_rue', action='store_true',
                         help='Add RUE (Radiation Use Efficiency) index as a time series channel. '
                              'RUE = cumPAR * T_stress * W_stress. Experimental.')
-    parser.add_argument('--use_farquhar', action='store_true',
-                        help='Add Farquhar photosynthesis proxy as a time series channel. '
-                             'Based on FvCB C3 model. Seasonal-scale approximation only.')
+    parser.add_argument('--use_rtai', action='store_true',
+                        help='Add RTAI (Radiation-Temperature Assimilation Index) as a '
+                             'time series channel. Crop-specific C3/C4 photosynthesis '
+                             'proxy (maize=C4, wheat=C3). Seasonal-scale approximation only.')
+    parser.add_argument('--use_aez', action='store_true',
+                        help='Add AEZ (GAEZ v4) crop suitability code as a static feature '
+                             '(1 ordinal float, 1=very high to 8=not suitable). '
+                             'Requires pre-computed acz_labels_{crop}.csv.')
+    parser.add_argument('--use_koppen', action='store_true',
+                        help='Add Köppen-Geiger climate decomposition as 3 static features '
+                             '(main_group, precip_regime, temp_subtype). '
+                             'Requires pre-computed koppen_labels.csv.')
     parser.add_argument('--num_workers', type=int, default=None,
                         help='DataLoader workers. Default: auto-calculated as min(cpu_count//4, 8). '
                              'For 3 concurrent scripts, this balances CPU usage. Set manually to override.')
@@ -303,14 +317,53 @@ if __name__ == "__main__":
     # Loss type argument
     parser.add_argument('--loss_type', default='mse', type=str, choices=['mse', 'mql'],
                         help='Loss function to use: "mse" for standard MSE loss, "mql" for Multi-Quantile Loss. '
-                             'When "mql" is used, the model outputs 3 quantiles (0.1, 0.5, 0.9) and '
+                             'When "mql" is used, the model outputs quantile predictions and '
                              'uncertainty metrics (Pinball Loss, CRPS, PICP, PINAW, Winkler Score) are logged. '
                              'Default: "mse"')
+    parser.add_argument('--quantiles', nargs='+', type=float, default=[0.1, 0.5, 0.9],
+                        help='Quantile levels for MQL loss (default: 0.1 0.5 0.9). '
+                             'Must include 0.5 (median) for point metrics. '
+                             'Example: --quantiles 0.05 0.25 0.5 0.75 0.95 for a 5-quantile fan.')
     # Load and test trained model
     parser.add_argument('--load_and_test_trained_model', action='store_true',
                         help='If enabled, load the best trained model from checkpoint and evaluate on test set again. '
                              'This happens at the end of training. Useful for verifying model loading and getting final test metrics.')
+    # --- Tiered evaluation substrate (see process/evaluationProtocol.py) ---
+    parser.add_argument('--arm', default='B0',
+                        help='Fusion-ladder / regime label written to every results row (B0..B6). '
+                             'Pure label; does not affect training. Default: B0.')
+    parser.add_argument('--model_name', default=None,
+                        help='Display name of the model written to results rows. '
+                             'Defaults to --model_type when omitted.')
+    parser.add_argument('--evaluation_tier', nargs='+',
+                        default=['accuracy', 'uncertainity', 'generalization', 'operational'],
+                        choices=['accuracy', 'uncertainity', 'generalization', 'operational',
+                                 'cross_country_transfer'],
+                        help='Which evaluation tiers to compute and save. The first four each write '
+                             'one canonical row per cell to <tier>.csv; cross_country_transfer also '
+                             'scores the trained specialist zero-shot on other countries into '
+                             'transfer_<tier>.csv. Default: the four in-domain tiers.')
+    parser.add_argument('--transfer_countries', nargs='+', default=None,
+                        help='Target country codes for cross_country_transfer '
+                             '(default: all other countries for the crop).')
+    parser.add_argument('--generate_predictions', action='store_true',
+                        help='Also write the per-sample prediction frame to predictions/<run>.csv '
+                             '(required by the year-block bootstrap in ranking.py). Off by default.')
     args = parser.parse_args()
+
+    # Lag leakage guard (mandatory — see evaluation_protocol.md).
+    # Without recursive lags, OBSERVED test-year yields feed into lag features,
+    # leaking ground truth into every out-of-sample prediction.
+    if args.lag_years > 0 and not args.use_recursive_lags:
+        parser.error(
+            f"\n[LAG LEAKAGE GUARD] --lag_years={args.lag_years} was set but "
+            f"--use_recursive_lags was not passed.\n"
+            f"  Without recursive lags, OBSERVED test-year yields are used as lag features,\n"
+            f"  leaking ground truth into every out-of-sample prediction and invalidating\n"
+            f"  the entire out-of-sample evaluation.\n"
+            f"  Fix: add --use_recursive_lags to your command.\n"
+            f"  Alternative: set --lag_years 0 to run without lag features."
+        )
 
     # The original alignment.py in cybench repo only supports "middle-of-season", "quarter-of-season", and "N-days" predictions. Since, we wanted to have "middle-of-season", "quarter-of-season", "end-of-season" and "three-quarter-of-season", we set lead_time to "0-days" which makes alignment.py load
     # the full season (SOS to EOS). The actual forecast timing is then controlled via data_fraction parameter below during feature building.
@@ -349,7 +402,7 @@ if __name__ == "__main__":
           f"Lag={args.lag_years}  RevIN={args.use_revin}")
     print(f"RecursiveLags={args.use_recursive_lags}  ResidualTrend={args.use_residual_trend}")
     print(f"Domain features: GDD={args.use_gdd}  HeatStress={args.use_heat_stress_days}  "
-          f"RUE={args.use_rue}  Farquhar={args.use_farquhar}")
+          f"RUE={args.use_rue}  RTAI={args.use_rtai}")
     print(f"TestYears={args.test_years}")
     print(f"Exponential Weighting: {args.use_exponential_weighting} (tau={args.exponential_tau})")
     print(f"Multi-Year Summaries: {args.multi_year_summaries} (window={args.multi_year_window}, features={args.multi_year_features})")
@@ -384,7 +437,9 @@ if __name__ == "__main__":
         use_gdd=args.use_gdd,
         use_heat_stress_days=args.use_heat_stress_days,
         use_rue=args.use_rue,
-        use_farquhar=args.use_farquhar,
+        use_rtai=args.use_rtai,   # downstream kwarg still named use_rtai
+        use_aez=args.use_aez,
+        use_koppen=args.use_koppen,
         use_cwb_feature=args.use_cwb_feature,
         drop_tavg=args.drop_tavg,
         use_revin=args.use_revin,
@@ -406,6 +461,9 @@ if __name__ == "__main__":
         wfan_k=args.wfan_k,
         wfan_lambda=args.wfan_lambda,
         loss_type=args.loss_type,
+        quantiles=args.quantiles,
+        arm=args.arm,
+        model_name=args.model_name,
     )
 
     # Show forecast horizon configuration
@@ -616,13 +674,20 @@ if __name__ == "__main__":
         if len(parts) == 2 and parts[1].isdigit():
             actual_test_years.add(int(parts[1]))
 
-    save_test_results_to_csv(
-        config=config,
-        test_results=per_year_metrics,
-        test_years=sorted(actual_test_years),
-        run_id=run_id,
-        timestamp=timestamp
+    # Tiered evaluation substrate: one canonical row per cell into
+    # accuracy/uncertainity/generalization/operational.csv (+ hyperparameters.csv),
+    # selected by --evaluation_tier. cross_country_transfer (if requested) writes
+    # transfer_*.csv; per-sample predictions are written only with
+    # --generate_predictions. Supersedes the old results_summary/by_year writers.
+    eval_metrics = run_evaluation(
+        model_final, dm_final, config,
+        tiers=args.evaluation_tier,
+        run_id=run_id, timestamp=timestamp,
+        generate_predictions=args.generate_predictions,
+        transfer_countries=args.transfer_countries,
     )
+    for key, value in eval_metrics.items():
+        final_metrics[f"eval/{key}"] = value
 
     # Print split summary
     print(f"\n{'=' * 70}")
@@ -691,7 +756,7 @@ if __name__ == "__main__":
     if wandb_logger is not None:
         import wandb
         if wandb.run is not None:
-            wandb.log(final_metrics)
+            wandb.log({k: v for k, v in final_metrics.items() if k in ('nrmse', 'r2', 'smape') and v is not None})
             wandb.finish()
 
     # Print experiment completion message

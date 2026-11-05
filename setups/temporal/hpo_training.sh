@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=temporal_training
 #SBATCH --time=48:00:00
-#SBATCH -p gpu_h100
+#SBATCH -p gpu_a100
 #SBATCH -n 1
 #SBATCH --gpus=1
 #SBATCH --mail-type=END,FAIL
@@ -65,14 +65,14 @@ echo "  Wheat countries: $(echo ${!WHEAT_COUNTRIES[@]} | tr ' ' '\n' | sort | tr
 get_patchtst_flags() {
     local crop=$1
     if [ "$crop" = "wheat" ]; then
-        echo "--use_gdd --use_rue --use_farquhar --use_sota_features"
+        echo "--use_gdd --use_rue --use_rtai --use_sota_features"
     elif [ "$crop" = "maize" ]; then
         echo "--use_sota_features"
     fi
 }
 
 get_xlinear_flags() {
-    echo "--use_gdd --use_rue --use_farquhar --use_sota_features --include_spatial_features --use_heat_stress_days --lag_years 2 --use_revin"
+    echo "--use_gdd --use_rue --use_rtai --use_sota_features --include_spatial_features --use_heat_stress_days --lag_years 2 --use_revin"
 }
 
 # Path to eosHyperparameters.json config file
@@ -201,7 +201,7 @@ for crop in "${crops[@]}"; do
                 "${hps_args[@]}"
                 --save_checkpoint_dir "$checkpoint_save_dir"
                 --results_dir "$checkpoint_save_dir"
-                --wandb_project "AAAI2027-CYP-HPO-without"
+                --wandb_project "AAAI2027-CYP-HPO"
                 --run_id "$RUN_ID"
                 --forecast_type "end-of-season"
             )

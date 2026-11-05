@@ -47,7 +47,7 @@ class TSTModelConfig:
     use_gdd: bool = False
     use_heat_stress_days: bool = False
     use_rue: bool = False
-    use_farquhar: bool = False
+    use_rtai: bool = False
     use_revin: bool = False
     use_positional_encoding: bool = True  # Add sinusoidal positional encoding to preserve temporal ordering
     use_exponential_weighting: bool = False  # Enable exponential sample weighting for non-stationarity
@@ -59,6 +59,10 @@ class TSTModelConfig:
     patchtst_ffn_dim: int = 256
     patchtst_num_layers: int = 3
     patchtst_dropout: float = 0.1
+    # CNN-LSTM-specific hyperparameters (dedicated fields; no longer reuse patchtst_*)
+    cnnlstm_hidden_size: int = 64   # LSTM hidden size
+    cnnlstm_num_layers: int = 1     # Number of stacked LSTM layers
+    cnnlstm_dropout: float = 0.1    # LSTM dropout (applied only when num_layers > 1)
     # Multi-year context features
     multi_year_summaries: bool = False  # Enable multi-year summary features from previous growing seasons
     multi_year_window: int = 1  # Years of historical context (1=T-1, 2=T-1,T-2, 3=T-1,T-2,T-3)
@@ -76,11 +80,19 @@ class TSTModelConfig:
     # Loss type for quantile regression
     loss_type: str = "mse"  # Loss function: "mse" for standard MSE, "mql" for Multi-Quantile Loss
     quantiles: List[float] = field(default_factory=lambda: [0.1, 0.5, 0.9])  # Quantile levels for MQLoss
+    # Evaluation identity labels (see helpers.CELL_KEY_COLS). Pure labels; do not
+    # affect training. arm = fusion-ladder label (B0..B6); model_name = display
+    # name of the architecture (falls back to model_type when None).
+    arm: str = "B0"
+    model_name: Optional[str] = None
+    # Climate zone static features
+    use_aez: bool = False      # Add AEZ crop suitability code as a static feature (1 float)
+    use_koppen: bool = False   # Add Köppen decomposition as 3 static features (main_group, precip_regime, temp_subtype)
 
     @property
     def seq_len(self):
         # Sequence length derived from aggregation frequency.
-        return {"daily": 365, "weekly": 52, "dekad": 36}.get(self.aggregation, 365)
+        return {"daily": 365, "weekly": 52, "dekad": 36, "monthly": 12}.get(self.aggregation, 365)
 
     @property
     def weather_features(self) -> List[str]:
@@ -136,7 +148,7 @@ class TSTModelConfig:
                 self.multi_year_window, feature_types
             ))
 
-        return n_soil + n_location + n_crop + n_spatial + n_lagged + n_heat_stress + n_multi_year
+        return n_soil + n_location + n_crop + n_spatial + n_lagged + n_heat_stress + n_multi_year + (1 if self.use_aez else 0) + (3 if self.use_koppen else 0)
     
 
 @dataclass
@@ -166,7 +178,7 @@ class LinearModelConfig:
     use_gdd: bool = False
     use_heat_stress_days: bool = False
     use_rue: bool = False
-    use_farquhar: bool = False
+    use_rtai: bool = False
     use_positional_encoding: bool = True  # Add sinusoidal positional encoding to preserve temporal ordering
     use_exponential_weighting: bool = False  # Enable exponential sample weighting for non-stationarity
     exponential_tau: float = 10.0  # Decay constant for exponential weighting (higher = slower decay)
@@ -193,11 +205,19 @@ class LinearModelConfig:
     # Loss type for quantile regression
     loss_type: str = "mse"  # Loss function: "mse" for standard MSE, "mql" for Multi-Quantile Loss
     quantiles: List[float] = field(default_factory=lambda: [0.1, 0.5, 0.9])  # Quantile levels for MQLoss
+    # Evaluation identity labels (see helpers.CELL_KEY_COLS). Pure labels; do not
+    # affect training. arm = fusion-ladder label (B0..B6); model_name = display
+    # name of the architecture (falls back to model_type when None).
+    arm: str = "B0"
+    model_name: Optional[str] = None
+    # Climate zone static features
+    use_aez: bool = False      # Add AEZ crop suitability code as a static feature (1 float)
+    use_koppen: bool = False   # Add Köppen decomposition as 3 static features (main_group, precip_regime, temp_subtype)
 
     @property
     def seq_len(self):
         """Sequence length derived from aggregation frequency."""
-        return {"daily": 365, "weekly": 52, "dekad": 36}.get(self.aggregation, 365)
+        return {"daily": 365, "weekly": 52, "dekad": 36, "monthly": 12}.get(self.aggregation, 365)
 
     @property
     def weather_features(self) -> List[str]:
@@ -254,4 +274,4 @@ class LinearModelConfig:
                 self.multi_year_window, feature_types
             ))
 
-        return n_soil + n_location + n_crop + n_spatial + n_lagged + n_heat_stress + n_multi_year
+        return n_soil + n_location + n_crop + n_spatial + n_lagged + n_heat_stress + n_multi_year + (1 if self.use_aez else 0) + (3 if self.use_koppen else 0)

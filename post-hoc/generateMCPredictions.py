@@ -72,7 +72,7 @@ sys.path.append('../process/')
 sys.path.append('../architectures/')
 
 from loadData import calculate_fixed_split, DailyCYBenchSeqDataModule
-from validateModel import print_metrics_table
+from metrics import print_metrics_table
 
 # Import all model classes so Lightning can find them when loading checkpoint
 from linearLayer import XLinearYieldModel
