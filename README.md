@@ -1,5 +1,5 @@
 # A Python Toolkit for Machine Learning based Crop Yield Analysis, Prediction, and Benchmarking
-This repository is evolving into an SDK and CLI for crop-yield inference on CY-BENCH-compatible data. It can also still be used for model training and evaluation.
+This repository is evolving into an [dashboard](https://ambrosia2024.github.io/YIELD-HUB/main.html), SDK, and CLI for crop-yield inference on CY-BENCH-compatible data. It can also still be used for model training and evaluation.
 
 # Quickstart
 
