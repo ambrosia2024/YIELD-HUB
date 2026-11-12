@@ -175,7 +175,7 @@ select.country-multi{min-height:90px;height:90px;min-width:190px;font-size:.78re
       <label class="model-check"><input type="checkbox" class="arch-checkbox" value="cnnlstm" checked onchange="update()"> cnnlstm</label>
       <label class="model-check"><input type="checkbox" class="arch-checkbox" value="lpjml_rainfed" checked onchange="update()"> LPJmL Rainfed</label>
       <label class="model-check"><input type="checkbox" class="arch-checkbox" value="lpjml_irrigated" checked onchange="update()"> LPJmL Irrigated</label>
-      <span style="font-size:.65rem;color:#94a3b8;display:block;margin-top:4px;max-width:220px">LPJmL covers 24 maize + 27 wheat countries (European + major exporters). African maize countries (AO, BF, ET…) have no LPJmL simulation.</span>
+      <span style="font-size:.65rem;color:#94a3b8;display:block;margin-top:4px;max-width:220px">LPJmL covers all 35 maize + 27 wheat countries, including African maize (AO, BF, ET, LS, ML, MZ, NE, SN, TD, ZA, ZM). Shown as a process-model baseline, not ranked among the architectures.</span>
     </div>
   </div>
   <div class="ctrl" id="countryMultiCtrl" style="display:none">
@@ -301,7 +301,7 @@ function latexBtn(tableId,caption,label){
 
 function notifyResize(){
   if(window.parent!==window)
-    window.parent.postMessage({type:'resize',height:document.documentElement.scrollHeight},'*');
+    window.parent.postMessage({type:'resize',height:document.body.scrollHeight},'*');
 }
 
 
@@ -592,7 +592,7 @@ function renderSummaries(data){
   const RANK_METRIC=6; // index of skill_rmse_vs_rolling3 in METRICS
   const comp=countries.map((c,ci)=>models.map((m,ri)=>ctryRanks[ci][RANK_METRIC][ri]));
   const Prank=countries.map((c,ci)=>{
-    const vals=models.map((m,ri)=>({ri,v:hasData[ci][ri]?comp[ci][ri]:null}));
+    const vals=models.map((m,ri)=>({ri,v:(hasData[ci][ri]&&m!=='lpjml_rainfed'&&m!=='lpjml_irrigated')?comp[ci][ri]:null}));
     const valid=vals.filter(x=>x.v!=null).sort((a,b)=>a.v-b.v);
     const r=new Array(n).fill(null);
     let i=0;while(i<valid.length){let j=i;while(j<valid.length&&valid[j].v===valid[i].v)j++;for(let k=i;k<j;k++)r[valid[k].ri]=i+1;i=j;}

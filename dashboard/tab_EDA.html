@@ -194,14 +194,10 @@ section.fs{margin:24px 0}
     </select>
     <span class="ctrl-label" style="margin-left:6px">View</span>
     <div class="view-toggle">
-      <button class="vt-btn active" id="btn-perf"     onclick="setView('performance')">Performance</button>
-      <button class="vt-btn"        id="btn-summary"  onclick="setView('summary')">Summary</button>
-      <button class="vt-btn"        id="btn-quantile" onclick="setView('quantile')">Quantile Profile</button>
+      <button class="vt-btn active" id="btn-perf"     onclick="setView('performance')" title="yield = annual; other variables = seasonal median (q50)">Performance</button>
+      <button class="vt-btn"        id="btn-summary"  onclick="setView('summary')"      title="yield = annual; other variables = seasonal median (q50)">Summary</button>
+      <button class="vt-btn"        id="btn-quantile" onclick="setView('quantile')"     title="Shift across the full distribution (q2.25–q97.25)">Quantile Profile</button>
     </div>
-    <span style="font-size:.64rem;color:#94a3b8;margin-left:6px">
-      Performance/Summary: yield=annual, others=seasonal median (q50).
-      Quantile Profile: shift across the full distribution (q2.25–q97.25).
-    </span>
   </div>
 
   <!-- Info row -->
@@ -249,27 +245,36 @@ section.fs{margin:24px 0}
           Median yield KS = <b>0.32</b>. Most extreme: HU (0.71, +33%), CZ (0.64, +19%), RO (0.61, +42%). Wheat shifts concentrate in Central/Eastern Europe — intensification and improved varieties, not climate.
         </div>
 
+        <div style="padding:8px 12px;border-bottom:1px solid #e2e8ef;background:#f0fdf4">
+          <div style="font-size:.65rem;font-weight:700;color:#065F46;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">NEW — Yield shift (detrended)</div>
+          After removing per-region OLS trend: median KS = <b>0.32</b>. Shift <em>persists</em> for: DK (0.90), LT (0.80), HR (0.69), ET (0.68), HU (0.64). These are genuine distributional changes beyond trend — structural breaks, not just rising averages.
+        </div>
+        <div style="padding:8px 12px;border-bottom:1px solid #e2e8ef;border-left:1px solid #e2e8ef;background:#f0fdf4">
+          <div style="font-size:.65rem;font-weight:700;color:#065F46;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">NEW — Yield shift (detrended)</div>
+          After detrending: median KS = <b>0.35</b>. Shift persists for: BG (0.81), HR (0.78), PT (0.65), HU (0.63), RO (0.56). For CZ wheat, raw KS=0.64 drops to 0.14 after detrending — that "shift" was almost entirely trend.
+        </div>
+
         <div style="padding:8px 12px;border-bottom:1px solid #e2e8ef">
           <div style="font-size:.65rem;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">F3 — Yield shift → skill</div>
-          r = <b>−0.26</b> (yield KS vs rolling-3 skill). Stronger than wheat. DK, LT, BG, ET all sit in the high-shift / poor-skill quadrant. Adoption-driven trends are abrupt and unpredictable from weather.
+          r = <b>−0.16</b> (p=0.36, not significant). Weaker and noisier than wheat. DK, LT, BG, ET all sit in the high-shift / poor-skill quadrant. Adoption-driven trends are abrupt and unpredictable from weather.
         </div>
         <div style="padding:8px 12px;border-bottom:1px solid #e2e8ef;border-left:1px solid #e2e8ef">
           <div style="font-size:.65rem;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">F3 — Yield shift → skill</div>
-          r = <b>−0.22</b>. Concentrated in CEE (HU, CZ, RO). Western European wheat (FR, GB) shows near-zero yield shift and near-zero skill gap — where the distribution is stable, models perform comparably to rolling-3.
+          r = <b>−0.45</b> (p=0.02). Concentrated in CEE (HU, CZ, RO). Western European wheat (FR, GB) shows near-zero yield shift and near-zero skill gap — where the distribution is stable, models perform comparably to rolling-3.
         </div>
 
         <div style="padding:8px 12px;border-bottom:1px solid #e2e8ef">
           <div style="font-size:.65rem;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">F4 — Steepest shifts</div>
-          Top maize: DK (0.80), ET (0.69), BG (0.64), LT (0.62), AR (0.56). Africa + CEE — driven by variety adoption, not primarily climate change.
+          Top maize: DK (0.80), ET (0.69), BG (0.64), LT (0.62), ML (0.59), ZA (0.58), AT (0.58), RO (0.57). Africa + CEE — driven by variety adoption, not primarily climate change.
         </div>
         <div style="padding:8px 12px;border-bottom:1px solid #e2e8ef;border-left:1px solid #e2e8ef">
           <div style="font-size:.65rem;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">F4 — Steepest shifts</div>
-          Top wheat: HU (0.71), CZ (0.64), RO (0.61), LT (0.45), BG (0.49). All Central/Eastern European — post-2000 agricultural intensification and improved varieties drove rapid yield gains.
+          Top wheat: HU (0.71), CZ (0.64), RO (0.61), BR (0.55), LV (0.53), EE (0.52), BG (0.49). Mostly Central/Eastern European (plus Brazil) — post-2000 agricultural intensification and improved varieties drove rapid yield gains.
         </div>
 
         <div style="padding:8px 12px">
           <div style="font-size:.65rem;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">F5 — CWB decline</div>
-          CWB −11% despite precipitation barely changing (+0.3%). Maize (summer crop) is more sensitive — the ET₀ surge occurs precisely during the maize growing season.
+          CWB declines by ~−0.07 mm/d despite precipitation barely changing. Maize (summer crop) is more sensitive — the ET₀ surge occurs precisely during the maize growing season.
         </div>
         <div style="padding:8px 12px;border-left:1px solid #e2e8ef">
           <div style="font-size:.65rem;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">F5 — CWB decline</div>
@@ -282,20 +287,21 @@ section.fs{margin:24px 0}
     <section class="fs" id="ef2-both">
       <div class="fs-num" aria-hidden="true">F2</div>
       <div class="fs-body">
-        <h3>Temperature is warming consistently: +0.66°C tmax, +0.56°C tavg, +0.43°C tmin</h3>
-        <p class="ans">The mean shift in temperature variables is not noise — it is a systematic warming across all crops and continents. tmax has the largest absolute shift (+0.66°C median); tmin the smallest (+0.43°C), consistent with greenhouse gas amplification patterns. VPD also increases (+4.8%), reflecting higher evaporative demand. This is a property of the data period (training vs test years), not a crop-specific effect.</p>
+        <h3>Temperature is warming consistently: +0.69°C tmax, +0.64°C tavg, +0.52°C tmin</h3>
+        <p class="ans">The mean shift in temperature variables is not noise — it is a systematic warming across all crops and continents. tmax has the largest absolute shift (+0.69°C mean); tmin the smallest of the temperatures (+0.52°C), consistent with greenhouse-gas amplification patterns. VPD also increases (+0.53, +3.7%), reflecting higher evaporative demand. This is a property of the data period (training vs test years), not a crop-specific effect.</p>
         <table class="fs-tbl">
-          <thead><tr><th>Variable</th><th>Median KS stat</th><th>Mean shift (units)</th><th>Mean shift (%)</th><th>% significant (p&lt;0.05) <span title="High ≥80%; Moderate 50–79%; Low &lt;50%">ⓘ</span></th></tr></thead>
+          <thead><tr><th>Variable</th><th>Mean KS (all quantiles)</th><th>Mean shift (units)</th><th>Mean shift (%)</th><th>% significant (p&lt;0.05) <span title="High ≥80%; Moderate 50–79%; Low &lt;50%">ⓘ</span></th></tr></thead>
           <tbody>
-            <tr><td>tmax (°C)</td><td>0.24</td><td class="hi">+0.66°C</td><td>+4.2%</td><td>High ≥80%</td></tr>
-            <tr><td>tavg (°C)</td><td>0.24</td><td class="hi">+0.56°C</td><td>+5.0%</td><td>High ≥80%</td></tr>
-            <tr><td>vpd (hPa)</td><td>0.20</td><td>+0.55</td><td>+4.8%</td><td>Moderate 50–79%</td></tr>
-            <tr><td>tmin (°C)</td><td>0.19</td><td>+0.43°C</td><td>+5.3%</td><td>Moderate 50–79%</td></tr>
-            <tr><td>et0 (mm)</td><td>0.19</td><td>+0.06 mm/d</td><td>+2.2%</td><td>Moderate 50–79%</td></tr>
-            <tr><td>cwb (mm)</td><td>0.16</td><td class="lo">−0.07 mm/d</td><td>−11.1%</td><td>Moderate 50–79%</td></tr>
-            <tr><td>prec (mm)</td><td>0.15</td><td class="lo">+0.01 mm/d</td><td>+0.3%</td><td>Low &lt;50%</td></tr>
+            <tr><td>tmax (°C)</td><td>0.23</td><td class="hi">+0.69°C</td><td>+3.7%</td><td>Moderate 50–79%</td></tr>
+            <tr><td>tavg (°C)</td><td>0.22</td><td class="hi">+0.64°C</td><td>+4.6%</td><td>Moderate 50–79%</td></tr>
+            <tr><td>vpd (hPa)</td><td>0.21</td><td>+0.53</td><td>+3.7%</td><td>Moderate 50–79%</td></tr>
+            <tr><td>tmin (°C)</td><td>0.20</td><td>+0.52°C</td><td>+5.5%</td><td>Moderate 50–79%</td></tr>
+            <tr><td>et0 (mm)</td><td>0.20</td><td>+0.06 mm/d</td><td>+2.0%</td><td>Moderate 50–79%</td></tr>
+            <tr><td>cwb (mm)</td><td>0.18</td><td class="lo">−0.08 mm/d</td><td>n/a</td><td>Low &lt;50%</td></tr>
+            <tr><td>prec (mm)</td><td>0.13</td><td class="lo">−0.02 mm/d</td><td>n/a</td><td>Low &lt;50%</td></tr>
           </tbody>
         </table>
+        <p class="note" style="margin-top:6px">KS and shifts here are <b>means across all within-season quantiles (q2.25–q97.25)</b>, pooled over both crops — so they run higher than the per-crop median-KS tables (which use the seasonal median q50). Percent-change is omitted for cwb/prec (baselines near zero make it unstable).</p>
         <div class="callout info"><strong>What this means for forecasting:</strong> Models trained on historical weather see systematically cooler, lower-VPD conditions than they face at test time. Heat-stress responses and drought signals that were rare in training become more common in test years. This is an inherent out-of-distribution challenge regardless of model architecture.</div>
       </div>
     </section>
@@ -305,7 +311,7 @@ section.fs{margin:24px 0}
       <div class="fs-num" aria-hidden="true">F5</div>
       <div class="fs-body">
         <h3>CWB is declining despite stable precipitation — ET₀ is the driver</h3>
-        <p class="ans">Climate water balance (CWB = precipitation − ET₀) shows a median decline of −11% in test vs training period. Precipitation itself barely changes (+0.3%). The drying signal comes from increasing ET₀ (+2.2%), which in turn comes from warmer temperatures and higher VPD. This is a subtle but important distinction: drought stress is increasing even where rainfall is stable.</p>
+        <p class="ans">Climate water balance (CWB = precipitation − ET₀) shows a small but consistent decline (median −0.07 mm/d at q50, test vs training); no percentage is reported because CWB crosses zero, which makes percent-change unstable and sign-flipping. Precipitation itself barely changes (+0.3%). The drying signal comes from increasing ET₀ (+2.2%), which in turn comes from warmer temperatures and higher VPD. This is a subtle but important distinction: drought stress is increasing even where rainfall is stable.</p>
         <div class="callout info"><strong>For crop yield forecasting:</strong> CWB is a more informative stress indicator than raw precipitation alone. The declining CWB in the test period means test conditions are drier than training in a water-demand sense, even where rainfall statistics look identical. Models using only precipitation as a water feature may miss this systematic shift.</div>
         <div class="callout warn"><strong>Overlooked implication:</strong> The variables that show high test-period shift (yield, tmax, fpar, et0, vpd) are linked — warming → higher ET₀ and VPD → higher water stress → potential yield impact. FPAR (vegetation photosynthetic capacity) also increasing in test period suggests vegetation response to both CO₂ fertilisation and earlier seasons. These co-occurring signals make it difficult for a model to attribute yield gains to any single channel.</div>
       </div>
@@ -318,7 +324,7 @@ section.fs{margin:24px 0}
   <div class="eda-crop-panel" id="eda-panel-maize">
 
     <div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:10px 14px;margin-bottom:12px">
-      <span style="font-size:.8rem;font-weight:700;color:#78350F">🌽 Maize EDA findings — 38 country×maize pairs</span>
+      <span style="font-size:.8rem;font-weight:700;color:#78350F">🌽 Maize EDA findings — 35 country×maize pairs</span>
       <span style="font-size:.74rem;color:#92400e;margin-left:8px">All KS statistics and correlations below are for maize only.</span>
     </div>
 
@@ -327,18 +333,19 @@ section.fs{margin:24px 0}
       <div class="fs-num" aria-hidden="true">F1</div>
       <div class="fs-body">
         <h3>Maize yield is the most shifted variable (median KS = 0.38)</h3>
-        <p class="ans">Maize yield has the highest median KS statistic of all 13 variables for maize tasks — 0.38. Test-period maize yields are higher than training-period yields in 89% of maize countries. This is a strong upward trend driven primarily by variety adoption and intensification, not climate.</p>
+        <p class="ans">Maize yield has the highest median KS statistic of all 13 variables for maize tasks — 0.38. Test-period maize yields are higher than training-period yields in 86% of maize countries. This is a strong upward trend driven primarily by variety adoption and intensification, not climate.</p>
+        <div class="callout ok" style="margin-top:8px"><strong>NEW — Trend-residual shift:</strong> After removing per-region OLS trend (fit on train years only), median yield KS = <b>0.32</b> (vs 0.38 raw). For US maize, raw KS=0.43 → detrended 0.11 (−76%): the shift was almost entirely trend. But DK (0.80→0.90), LT (0.62→0.80), HR (0.51→0.69) show shift that <em>increases</em> after detrending — genuine structural breaks that no trend model can handle.</div>
         <table class="fs-tbl">
           <thead><tr><th>Variable</th><th>Maize median KS</th><th>Direction</th></tr></thead>
           <tbody>
             <tr><td class="hi">yield</td><td class="hi">0.38</td><td>↑ higher in test — largest shift of any variable</td></tr>
-            <tr><td>fpar</td><td>0.19</td><td>↑ higher in test (photosynthetic capacity)</td></tr>
-            <tr><td>tavg</td><td>0.22</td><td>↑ warmer</td></tr>
-            <tr><td>tmax</td><td>0.19</td><td>↑ warmer — heat stress risk during silking</td></tr>
-            <tr><td>tmin</td><td>0.18</td><td>↑ warmer</td></tr>
-            <tr><td>et0</td><td>0.15</td><td>↑ higher ET₀ — peak demand during summer growing season</td></tr>
-            <tr><td>ndvi</td><td>0.16</td><td>↑ greener in test</td></tr>
-            <tr><td class="lo">prec / rad / cwb / ssm / rsm</td><td class="lo">0.14–0.15</td><td>Minor / stable</td></tr>
+            <tr><td>fpar</td><td>0.16</td><td>↑ higher in test (photosynthetic capacity)</td></tr>
+            <tr><td>tavg</td><td>0.15</td><td>↑ warmer</td></tr>
+            <tr><td>tmax</td><td>0.17</td><td>↑ warmer — heat stress risk during silking</td></tr>
+            <tr><td>tmin</td><td>0.13</td><td>↑ warmer</td></tr>
+            <tr><td>et0</td><td>0.14</td><td>↑ higher ET₀ — peak demand during summer growing season</td></tr>
+            <tr><td>ndvi</td><td>0.12</td><td>↑ greener in test</td></tr>
+            <tr><td class="lo">prec / rad / cwb / ssm / rsm</td><td class="lo">0.12–0.14</td><td>Minor / stable</td></tr>
           </tbody>
         </table>
         <div class="callout warn"><strong>Implication:</strong> Maize yield trends are abrupt (adoption-driven +40–99% in LT, ET, BG). The rolling-3 baseline uses the 3 most recent training years — already partially adapted to this trend — while trained models fit the full historical distribution and lag behind. This mechanistically explains why rolling-3 is unbeatable in 71% of maize tasks.</div>
@@ -350,10 +357,10 @@ section.fs{margin:24px 0}
     <section class="fs" id="ef3-maize">
       <div class="fs-num" aria-hidden="true">F3</div>
       <div class="fs-body">
-        <h3>Maize yield shift predicts worse rolling-3 skill (r = −0.26)</h3>
-        <p class="ans">For maize, the correlation between yield KS statistic and rolling-3 skill is r = −0.26 (p &lt; 0.05) — slightly stronger than the combined (r = −0.24) or wheat-only (r = −0.22) values. The correlation is stronger for maize because maize yield trends are more abrupt and adoption-driven, creating larger step-changes that the rolling-3 partially captures but trained models miss entirely.</p>
+        <h3>Maize yield shift is only weakly (not significantly) linked to worse rolling-3 skill (r = −0.16)</h3>
+        <p class="ans">For maize, the correlation between yield KS and each country's median model skill vs rolling-3 is r = −0.16 (p = 0.36, not significant at n = 35) — weaker than wheat (r = −0.45, p = 0.02); the combined-crop value is r = −0.29 (p = 0.02). Rolling-3 is the reference baseline (a standard, parameter-free benchmark) and skill is the per-country median across all benchmarked models, so no single architecture is privileged. The correlation is stronger for maize because maize yield trends are more abrupt and adoption-driven, creating larger step-changes that the rolling-3 partially captures but trained models miss entirely.</p>
         <div class="callout ok"><strong>The mechanism for maize:</strong> LT maize yield grew 99% over the benchmark period (3.2 → 6.3 t/ha). The rolling-3 baseline in the last training year ≈ 5.5 t/ha — already close to the test mean. A model trained on the full distribution ≈ 4.5 t/ha will systematically under-predict by ~1 t/ha. This is not fixable with better architecture — it requires either trend-adaptive features (lag years, yield history) or a process model that knows the yield trajectory.</div>
-        <div class="callout warn"><strong>Hardest maize countries by yield shift:</strong> DK (KS=0.80), ET (0.69), BG (0.64), LT (0.62), AR (0.56), AT (0.58). These are also the benchmark's poorest-skill maize tasks. For DK, LT, BG: Central/Eastern European intensification. For ET: Sub-Saharan adoption. No weather feature can explain a step-change in yield potential.</div>
+        <div class="callout warn"><strong>Hardest maize countries by yield shift:</strong> DK (KS=0.80), ET (0.69), BG (0.64), LT (0.62), ML (0.59), ZA (0.58), AT (0.58), RO (0.57). These are also the benchmark's poorest-skill maize tasks. For DK, LT, BG: Central/Eastern European intensification. For ET: Sub-Saharan adoption. No weather feature can explain a step-change in yield potential.</div>
       </div>
     </section>
 
@@ -386,7 +393,7 @@ section.fs{margin:24px 0}
   <div class="eda-crop-panel" id="eda-panel-wheat">
 
     <div style="background:#ede9fe;border:1px solid #c4b5fd;border-radius:8px;padding:10px 14px;margin-bottom:12px">
-      <span style="font-size:.8rem;font-weight:700;color:#4c1d95">🌾 Wheat EDA findings — 29 country×wheat pairs</span>
+      <span style="font-size:.8rem;font-weight:700;color:#4c1d95">🌾 Wheat EDA findings — 27 country×wheat pairs</span>
       <span style="font-size:.74rem;color:#5b21b6;margin-left:8px">All KS statistics and correlations below are for wheat only.</span>
     </div>
 
@@ -395,23 +402,24 @@ section.fs{margin:24px 0}
       <div class="fs-num" aria-hidden="true">F1</div>
       <div class="fs-body">
         <h3>Wheat yield is significantly shifted (median KS = 0.32) — concentrated in Central/Eastern Europe</h3>
-        <p class="ans">Wheat yield has a median KS statistic of 0.32 — slightly lower than maize (0.38) but still the highest of any variable for wheat. Test-period wheat yields are higher than training in 83% of wheat countries. The shift is concentrated in Central/Eastern Europe, where post-2000 intensification drove rapid yield gains. Western European wheat (FR, GB, DE) is remarkably stable.</p>
+        <p class="ans">Wheat yield has a median KS statistic of 0.32 — slightly lower than maize (0.38) but still the highest of any variable for wheat. Test-period wheat yields are higher than training in 96% of wheat countries. The shift is concentrated in Central/Eastern Europe, where post-2000 intensification drove rapid yield gains. Western European wheat (FR, GB, DE) is remarkably stable.</p>
         <table class="fs-tbl">
           <thead><tr><th>Variable</th><th>Wheat median KS</th><th>Direction</th></tr></thead>
           <tbody>
             <tr><td class="hi">yield</td><td class="hi">0.32</td><td>↑ higher in test — largest shift of any variable</td></tr>
-            <tr><td>tmax</td><td>0.30</td><td>↑ warmer — wheat tmax KS higher than maize (0.19) due to spring warming</td></tr>
-            <tr><td>fpar</td><td>0.30</td><td>↑ higher in test</td></tr>
-            <tr><td>tavg</td><td>0.28</td><td>↑ warmer</td></tr>
-            <tr><td>tmin</td><td>0.22</td><td>↑ warmer — milder winters reduce vernalization</td></tr>
-            <tr><td>et0</td><td>0.24</td><td>↑ higher ET₀ (evapotranspiration) — spring demand increasing</td></tr>
-            <tr><td>ndvi</td><td>0.20</td><td>↑ greener in test</td></tr>
-            <tr><td class="lo">prec / rad / cwb / ssm / rsm</td><td class="lo">0.15–0.18</td><td>Minor / stable</td></tr>
+            <tr><td>tmax</td><td>0.18</td><td>↑ warmer — spring warming in the winter-wheat zone</td></tr>
+            <tr><td>fpar</td><td>0.19</td><td>↑ higher in test</td></tr>
+            <tr><td>tavg</td><td>0.14</td><td>↑ warmer</td></tr>
+            <tr><td>tmin</td><td>0.10</td><td>↑ warmer — milder winters reduce vernalization</td></tr>
+            <tr><td>et0</td><td>0.20</td><td>↑ higher ET₀ (evapotranspiration) — spring demand increasing</td></tr>
+            <tr><td>ndvi</td><td>0.17</td><td>↑ greener in test</td></tr>
+            <tr><td class="lo">prec / rad / cwb / ssm / rsm</td><td class="lo">0.13–0.17</td><td>Minor / stable</td></tr>
           </tbody>
         </table>
-        <div class="callout info"><strong>Notable wheat-specific observation:</strong> Wheat tmax KS (0.30) is notably higher than maize tmax KS (0.19). This is because spring warming is more pronounced than summer warming in many benchmark regions — the winter wheat zone (Central Europe, Baltic) sees larger shifts in its critical growth period than the summer maize season in the same locations.</div>
+        <div class="callout info"><strong>Notable wheat-specific observation:</strong> Wheat's largest weather shifts are in VPD (median KS 0.23) and ET₀ (0.20) — the spring evaporative-demand signal — not temperature: wheat tmax median KS (0.18) is essentially the same as maize (0.17). The winter-wheat zone's distributional change is concentrated in moisture-demand variables rather than raw warming.</div>
         <div class="callout warn"><strong>Implication for model training:</strong> Wheat yield trends in CEE are real and fast (HU +33%, CZ +19%, RO +42%). Models trained on 2000–2015 will under-predict 2016–2021 yields. The rolling-3 baseline partially compensates because it anchors to 2013–2015 (already higher yields). However, the gap is smaller than maize (−3.2% rolling-3 skill vs −16.3%) because CEE wheat trends are less explosive than ETH/LTU maize.</div>
         <p class="note">Most extreme wheat yield shift: HU KS=0.714 (4.03→5.36 t/ha, +33%), CZ KS=0.637 (4.97→5.91 t/ha, +19%), RO KS=0.611 (2.88→4.09 t/ha, +42%). France wheat: KS=0.041 (+0%) — the benchmark's most stable wheat country.</p>
+        <div class="callout ok" style="margin-top:8px"><strong>NEW — Trend-residual shift:</strong> After detrending, median wheat yield KS = <b>0.35</b> (vs 0.32 raw). CZ wheat: raw KS=0.64 → detrended 0.14 (−78%), almost entirely trend. BG (0.50→0.81) and HR (0.47→0.78) show shift that <em>increases</em> — genuine distributional change beyond trend.</div>
       </div>
     </section>
 
@@ -419,10 +427,10 @@ section.fs{margin:24px 0}
     <section class="fs" id="ef3-wheat">
       <div class="fs-num" aria-hidden="true">F3</div>
       <div class="fs-body">
-        <h3>Wheat yield shift predicts worse rolling-3 skill (r = −0.22)</h3>
-        <p class="ans">For wheat, the correlation between yield KS and rolling-3 skill is r = −0.22 (p &lt; 0.05) — slightly weaker than maize (r = −0.26). The pattern holds: countries with higher yield distribution shift show worse skill vs rolling-3. The key difference is that Western European wheat (FR, GB) has near-zero yield shift AND near-zero skill gap — these are benchmark's "easy" wheat tasks where the rolling-3 is barely better than a trained model.</p>
-        <div class="callout ok"><strong>The wheat contrast:</strong> FR wheat KS = 0.041 (yield barely changed) → patchtst·daily skill vs rolling-3 ≈ −0.5% (essentially tied). CZ wheat KS = 0.637 (yield up 19% from intensification) → patchtst·daily skill ≈ −50% (catastrophically losing to rolling-3). The same model, same architecture, 100-fold difference in skill gap — driven entirely by yield distribution shift. This is the strongest evidence that the benchmark's difficulty is a data property, not a model property.</div>
-        <div class="callout warn"><strong>Hardest wheat countries by yield shift:</strong> HU (KS=0.71), CZ (0.64), RO (0.61), LT (0.45), BG (0.49). All Central/Eastern European — the same geographic cluster that dominates the most-shifted maize countries. The underlying driver is the same (post-2000 agricultural intensification) but the magnitude is somewhat lower for wheat because CEE wheat was already partially modernized before the benchmark data period starts.</div>
+        <h3>Wheat yield shift predicts worse rolling-3 skill (r = −0.45)</h3>
+        <p class="ans">For wheat, the correlation between yield KS and each country's median model skill vs rolling-3 is r = −0.45 (p = 0.02, significant at n = 27) — stronger than maize (r = −0.16, not significant). The pattern holds: countries with higher yield distribution shift show worse skill vs rolling-3. The key difference is that Western European wheat (FR, GB) has near-zero yield shift AND near-zero skill gap — these are benchmark's "easy" wheat tasks where the rolling-3 is barely better than a trained model.</p>
+        <div class="callout ok"><strong>The wheat contrast:</strong> FR wheat KS = 0.041 (yield barely changed) → median model skill vs rolling-3 ≈ +15.6% (models actually beat rolling-3). CZ wheat KS = 0.637 (yield up 19% from intensification) → median model skill ≈ −87% (catastrophically losing to rolling-3). Same benchmark, opposite outcomes — a ~100-point skill swing driven by yield distribution shift. This is the strongest evidence that the benchmark's difficulty is a data property, not a model property.</div>
+        <div class="callout warn"><strong>Hardest wheat countries by yield shift:</strong> HU (KS=0.71), CZ (0.64), RO (0.61), BR (0.55), LV (0.53), EE (0.52). Mostly Central/Eastern European (BR being the exception) — the same geographic cluster that dominates the most-shifted maize countries. The underlying driver is the same (post-2000 agricultural intensification) but the magnitude is somewhat lower for wheat because CEE wheat was already partially modernized before the benchmark data period starts.</div>
       </div>
     </section>
 
@@ -430,7 +438,7 @@ section.fs{margin:24px 0}
     <section class="fs" id="ef4-wheat">
       <div class="fs-num" aria-hidden="true">F4</div>
       <div class="fs-body">
-        <h3>Top wheat yield shifts: HU, CZ, RO, LT, BG — all Central/Eastern Europe</h3>
+        <h3>Top wheat yield shifts: HU, CZ, RO, BR, LV, EE — mostly Central/Eastern Europe (plus Brazil)</h3>
         <p class="ans">Unlike maize — where top shifts span Africa and CEE — the top wheat-shifted countries are almost exclusively Central/Eastern European. This reflects the same post-2000 intensification wave but concentrated in the winter wheat belt. The contrast between HU (KS=0.71) and FR (KS=0.04) shows how differently the same 20-year period looks for structurally different agricultural economies.</p>
         <table class="fs-tbl">
           <thead><tr><th>Country</th><th>KS stat</th><th>Train mean (t/ha)</th><th>Test mean (t/ha)</th><th>Change</th><th>Driver</th></tr></thead>
@@ -632,12 +640,9 @@ function renderPerformance(data){
   document.getElementById('perfView').innerHTML=`
     <div class="tbl-wrap">
       <div class="tbl-title">Distribution shift per variable and country
-        <span class="sub">KS stat: 0=no change, 1=completely different; Wasserstein: in original variable units</span>
+        <span class="sub" style="cursor:help" title="KS stat: 0 = no change, 1 = completely different distributions. Wasserstein: distance in original variable units (e.g. t/ha for yield).">&#9432;</span>
       </div>
-      <div style="padding:6px 14px;font-size:.7rem;color:#64748b">
-        KS stat: ideal = 0 (identical distributions). Significant shift p&lt;0.05 means test and train come from different distributions.
-        Wasserstein (Earth Mover's Distance): how far the distribution mass moved in the variable's own units (°C for temperature, t/ha for yield, etc.).
-      </div>
+
       <div class="tbl-scr"><table class="dt"><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table></div>
       ${clip}
     </div>`;
@@ -861,7 +866,7 @@ function renderQuantile(data){
 // PARENT FRAME COMMS
 // ═══════════════════════════════════════════
 function notify(){
-  try{const h=document.documentElement.scrollHeight;
+  try{const h=document.body.scrollHeight;
     window.parent.postMessage({type:'resize',height:h},'*');}catch(e){}
 }
 window.addEventListener('message',e=>{

@@ -79,7 +79,7 @@ select.fb-sel:focus{border-color:#93c5fd;box-shadow:0 0 0 3px #eff6ff}
   color:#94a3b8;border-bottom:2px solid transparent;transition:all .12s;user-select:none}
 .subtab.active{color:#0ea5e9;border-bottom-color:#0ea5e9;font-weight:600}
 .subtab:hover:not(.active){color:#475569}
-#tabFrame{width:100%;border:none;display:block;min-height:700px}
+#tabFrame{width:100%;border:none;display:block;min-height:0}
 </style>
 </head>
 <body>
@@ -154,10 +154,11 @@ select.fb-sel:focus{border-color:#93c5fd;box-shadow:0 0 0 3px #eff6ff}
   <div class="tab"        id="tab-predictions"  onclick="switchMainTab('predictions')">Predictions</div>
 </div>
 <div id="subtabBar" style="display:none">
-  <span class="subtab active" id="sub-architectures" onclick="switchSubTab('architectures')">Architectures</span>
-  <span class="subtab"        id="sub-resolution"    onclick="switchSubTab('resolution')">Data Resolution</span>
-  <span class="subtab"        id="sub-pooling"       onclick="switchSubTab('pooling')">Individual vs Pooled</span>
-  <span class="subtab"        id="sub-findings"      onclick="switchSubTab('findings')">Findings</span>
+  <span class="subtab active" id="sub-tst"            onclick="switchSubTab('tst')">TST</span>
+  <span class="subtab"        id="sub-tabular"        onclick="switchSubTab('tabular')">Tabular</span>
+  <!-- <span class="subtab"        id="sub-resolution"     onclick="switchSubTab('resolution')">Data Resolution</span> -->
+  <span class="subtab"        id="sub-pooling"        onclick="switchSubTab('pooling')">Individual vs Pooled</span>
+  <span class="subtab"        id="sub-findings"       onclick="switchSubTab('findings')">Findings</span>
 </div>
 <iframe id="tabFrame" src="tab_EDA.html"></iframe>
 
@@ -282,10 +283,10 @@ function switchMainTab(name) {
   const subtabBar = document.getElementById('subtabBar');
   if (name === 'benchmarking') {
     subtabBar.style.display = '';
-    iframe.src = 'tab_architectures.html';
+    iframe.src = 'tab_tst.html';
     // restore active subtab
     document.querySelectorAll('.subtab').forEach(t => t.classList.remove('active'));
-    document.getElementById('sub-architectures').classList.add('active');
+    document.getElementById('sub-tst').classList.add('active');
   } else {
     subtabBar.style.display = 'none';
     const TAB_SRC={eda:'tab_EDA.html',predictions:'tab_predictions.html'};
@@ -295,7 +296,7 @@ function switchMainTab(name) {
 }
 
 // ── Tab switching ─────────────────────────────────────────────────
-const SUBTAB_SRC={'findings':'tab_benchmarking_findings.html'};
+const SUBTAB_SRC={'findings':'tab_benchmarking_findings.html','tabular':'tab_tabular.html','tst':'tab_tst.html'};
 function switchSubTab(n){
   document.querySelectorAll('.subtab').forEach(t=>t.classList.remove('active'));
   document.getElementById('sub-'+n).classList.add('active');
@@ -304,7 +305,7 @@ function switchSubTab(n){
 }
 window.addEventListener('message',e=>{
   if(!e.data) return;
-  if(e.data.type==='resize') iframe.style.height=Math.max(700,e.data.height+20)+'px';
+  if(e.data.type==='resize') iframe.style.height=Math.max(120,e.data.height+2)+'px';
   if(e.data.type==='clearCountry') clearCountry();
 });
 
