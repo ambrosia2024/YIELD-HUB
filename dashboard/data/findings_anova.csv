@@ -1,0 +1,13 @@
+crop,factor,ss,pct_variance
+maize,country,130.2031,86.73
+maize,crop,0.0,0.0
+maize,model,1.6228,1.08
+maize,residual,18.2997,12.19
+wheat,country,103.0729,88.4
+wheat,crop,0.0,0.0
+wheat,model,3.1023,2.66
+wheat,residual,10.4207,8.94
+both,country,209.6453,70.85
+both,crop,29.16,9.86
+both,model,3.2831,1.11
+both,residual,53.793,18.18
