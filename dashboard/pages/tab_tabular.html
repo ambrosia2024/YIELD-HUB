@@ -124,9 +124,65 @@ select.country-multi{min-height:90px;height:90px;min-width:190px;font-size:.78re
   user-select:none;white-space:nowrap;margin:2px}
 .dist-model-check:has(input:checked){background:#eff6ff;border-color:#93c5fd;color:#1d4ed8;font-weight:600}
 .dist-model-check input{accent-color:#3b82f6;cursor:pointer;margin:0}
+
+/* ── Stats banner ── */
+.stats-banner{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px}
+.stat-card{background:#fff;border:1px solid #e2e8ef;border-radius:10px;padding:16px 18px;
+  display:flex;flex-direction:column;gap:4px;box-shadow:0 1px 4px rgba(0,0,0,.05)}
+.stat-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;
+  justify-content:center;margin-bottom:6px;flex-shrink:0}
+.stat-icon.blue{background:#eff6ff}.stat-icon.green{background:#f0fdf4}
+.stat-icon.purple{background:#faf5ff}.stat-icon.amber{background:#fffbeb}
+.stat-num{font-size:1.55rem;font-weight:800;color:#0f172a;letter-spacing:-.5px;line-height:1}
+.stat-label{font-size:.74rem;font-weight:600;color:#475569;margin-top:1px}
+.stat-sub{font-size:.67rem;color:#94a3b8;line-height:1.4}
+@media(max-width:700px){.stats-banner{grid-template-columns:repeat(2,1fr)}}
 </style>
 </head>
 <body>
+<div class="stats-banner">
+  <div class="stat-card">
+    <div class="stat-icon blue">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/>
+        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+      </svg>
+    </div>
+    <div class="stat-num">62</div>
+    <div class="stat-label">Country–crop datasets</div>
+    <div class="stat-sub">35 maize &middot; 27 wheat</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon green">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
+      </svg>
+    </div>
+    <div class="stat-num">10,751</div>
+    <div class="stat-label">Administrative regions</div>
+    <div class="stat-sub">10,402 maize &middot; 5,906 wheat</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon purple">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+      </svg>
+    </div>
+    <div class="stat-num">3</div>
+    <div class="stat-label">Tabular Foundational Forecasting models</div>
+    <div class="stat-sub">Weekly &middot; Dekad &middot; Monthly Resolutions </div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon amber">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>
+      </svg>
+    </div>
+    <div class="stat-num">1</div>
+    <div class="stat-label">Model Family</div>
+    <div class="stat-sub">Tabular</div>
+  </div>
+</div>
 <div id="filterBadge">
   <span id="filterBadgeText"></span>
   <button onclick="clearMapFilter()" title="Clear">&#x2715;</button>
@@ -1628,7 +1684,19 @@ function renderInfVsFtRankTable(crop, continent) {
 }
 
 
-window.addEventListener('load', ()=>{ update(); });
+window.addEventListener('load', ()=>{ update(); setTimeout(notifyResize, 400); });
+</script>
+<script>
+// Auto-resize iframe to content height whenever content changes
+(function(){
+  function _notify(){
+    try{window.parent.postMessage({type:'resize',height:document.body.scrollHeight},'*');}catch(e){}
+  }
+  if(window.ResizeObserver){
+    new ResizeObserver(_notify).observe(document.body);
+  }
+  window.addEventListener('resize', _notify);
+})();
 </script>
 </body>
 </html>

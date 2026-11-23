@@ -1,0 +1,1105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>YIELD-HUB — EDA: Variable Shift</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#f1f3f6;color:#1e293b;font-size:14px}
+
+/* ── Subtab bar ── */
+#edaSubtabBar{background:#fff;border-bottom:1px solid #e2e8ef;padding:0 20px}
+.estab{display:inline-block;padding:9px 16px;cursor:pointer;font-size:.78rem;
+  color:#94a3b8;border-bottom:2px solid transparent;transition:all .12s;user-select:none}
+.estab.active{color:#0ea5e9;border-bottom-color:#0ea5e9;font-weight:600}
+.estab:hover:not(.active){color:#475569}
+
+/* ── Panels ── */
+.panel{display:none;padding:14px 20px}
+.panel.active{display:block}
+
+/* ── Controls ── */
+.ctrl-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px;
+  background:#fff;border:1px solid #e2e8ef;border-radius:8px;padding:10px 14px}
+.ctrl-label{font-size:.68rem;font-weight:600;color:#94a3b8;text-transform:uppercase;
+  letter-spacing:.7px;white-space:nowrap;margin-right:2px}
+select.cs{background:#f8fafc;border:1px solid #e2e8ef;color:#334155;
+  padding:4px 24px 4px 8px;border-radius:5px;font-size:.78rem;cursor:pointer;
+  outline:none;appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='5'%3E%3Cpath d='M0 0l4.5 5 4.5-5z' fill='%2394a3b8'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 7px center}
+select.cs:focus{border-color:#93c5fd}
+.view-toggle{display:flex;gap:0;border-radius:6px;overflow:hidden;border:1px solid #e2e8ef}
+.vt-btn{padding:5px 14px;font-size:.76rem;cursor:pointer;background:#f8fafc;color:#64748b;
+  border:none;transition:all .12s}
+.vt-btn.active{background:#2563eb;color:#fff;font-weight:600}
+
+/* ── Info boxes ── */
+.info-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px;margin-bottom:12px}
+.ibox{background:#fff;border:1px solid #e2e8ef;border-radius:8px;padding:10px 14px}
+.ibox .num{font-size:1.4rem;font-weight:800;color:#1e293b;line-height:1}
+.ibox .lbl{font-size:.7rem;color:#94a3b8;margin-top:3px}
+
+/* ── Tables ── */
+.tbl-wrap{background:#fff;border:1px solid #e2e8ef;border-radius:8px;overflow:hidden}
+.tbl-title{padding:10px 14px;border-bottom:1px solid #f1f5f9;font-size:.8rem;
+  font-weight:700;color:#1e293b;display:flex;align-items:center;justify-content:space-between}
+.tbl-title .sub{font-size:.7rem;font-weight:400;color:#94a3b8;margin-left:8px}
+.tbl-scr{overflow-x:auto;max-height:600px;overflow-y:auto}
+table.dt{width:100%;border-collapse:collapse;font-size:.76rem}
+table.dt thead th{position:sticky;top:0;background:#f8fafc;padding:7px 10px;
+  text-align:left;font-weight:600;color:#64748b;text-transform:uppercase;
+  font-size:.65rem;letter-spacing:.5px;border-bottom:1px solid #e2e8ef;white-space:nowrap;
+  cursor:pointer;user-select:none}
+table.dt thead th:hover{background:#eff6ff;color:#2563eb}
+table.dt thead th.sort-asc::after{content:' ↑'}
+table.dt thead th.sort-desc::after{content:' ↓'}
+table.dt tbody tr{border-bottom:1px solid #f1f5f9}
+table.dt tbody tr:hover{background:#f8fafc}
+table.dt td{padding:6px 10px;white-space:nowrap}
+table.dt .country-cell{font-weight:600}
+table.dt .num-cell{text-align:right;font-variant-numeric:tabular-nums}
+table.dt .pill{display:inline-block;padding:1px 7px;border-radius:10px;
+  font-size:.68rem;font-weight:600}
+table.dt .pill-sig{background:#FEE2E2;color:#991B1B}
+table.dt .pill-ns {background:#F1F5F9;color:#64748b}
+table.dt .pill-pos{background:#D1FAE5;color:#065F46}
+table.dt .pill-neg{background:#FEE2E2;color:#991B1B}
+table.dt .pill-heat{background:#FEF3C7;color:#92400E}
+table.dt .pill-cold{background:#EFF6FF;color:#1E3A8A}
+table.dt .pill-frost{background:#E0F2FE;color:#075985}
+table.dt .pill-wet {background:#EFF6FF;color:#1E3A8A}
+table.dt .pill-dry {background:#FEF9C3;color:#78350F}
+table.dt .pill-soil-dry{background:#FEF9C3;color:#713F12}
+table.dt .pill-soil-wet{background:#DBEAFE;color:#1E40AF}
+.cond-card{background:#fff;border:1px solid #e2e8ef;border-radius:8px;padding:12px 14px}
+.cond-card .cond-title{font-size:.72rem;font-weight:700;color:#1e293b;margin-bottom:4px}
+.cond-card .cond-freq{font-size:1.3rem;font-weight:800;line-height:1}
+.cond-card .cond-sub{font-size:.68rem;color:#94a3b8;margin-top:2px}
+.cond-card .cond-impact{font-size:.75rem;margin-top:6px;padding:4px 8px;border-radius:5px}
+
+/* ── KS bar cells ── */
+.ks-bar-wrap{display:flex;align-items:center;gap:5px;min-width:80px}
+.ks-bar{height:8px;border-radius:3px;min-width:2px;flex-shrink:0}
+.ks-val{font-size:.72rem;font-variant-numeric:tabular-nums;min-width:35px}
+
+/* ── Heatmap table (Performance view) ── */
+.hm-wrap{overflow:auto;max-height:580px}
+table.hm{border-collapse:collapse;font-size:.7rem;white-space:nowrap}
+table.hm th{position:sticky;background:#f8fafc;padding:5px 8px;border:1px solid #e2e8ef;
+  font-weight:600;color:#64748b;font-size:.65rem;text-transform:uppercase;letter-spacing:.4px}
+table.hm th.row-h{left:0;z-index:2;position:sticky;min-width:60px}
+table.hm th:first-child{top:0;left:0;z-index:3}
+table.hm td{padding:4px 8px;border:1px solid #f1f5f9;text-align:center;
+  font-size:.7rem;font-variant-numeric:tabular-nums;min-width:50px}
+table.hm td.country-h{position:sticky;left:0;background:#fff;font-weight:600;
+  border-right:1px solid #e2e8ef;z-index:1;min-width:60px}
+
+/* ── Legend ── */
+.ks-legend{display:flex;align-items:center;gap:6px;font-size:.68rem;color:#64748b;margin:8px 0}
+.ks-legend .swatch{height:12px;width:30px;border-radius:3px}
+
+/* ── Summary view ── */
+.summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px;margin-top:4px}
+.sum-card{background:#fff;border:1px solid #e2e8ef;border-radius:8px;padding:12px 14px}
+.sum-card h4{font-size:.78rem;font-weight:700;color:#1e293b;margin-bottom:8px;
+  display:flex;align-items:center;gap:6px}
+.sum-card .src-pill{font-size:.62rem;padding:1px 6px;border-radius:8px;font-weight:600}
+.sum-card table{width:100%;border-collapse:collapse;font-size:.72rem}
+.sum-card th{text-align:left;color:#94a3b8;font-size:.65rem;font-weight:600;
+  text-transform:uppercase;padding:3px 4px;border-bottom:1px solid #f1f5f9}
+.sum-card td{padding:3px 4px;border-bottom:1px solid #f8fafc}
+.sum-card .bar-cell{display:flex;align-items:center;gap:4px}
+.sum-card .minibar{height:6px;border-radius:2px;min-width:2px}
+
+/* ── Findings panel ── */
+.findings-wrap{max-width:900px;margin:0 auto}
+.f-hero{background:#fff;border:1px solid #e2e8ef;border-radius:10px;padding:18px 22px;margin-bottom:14px}
+.f-hero h2{font-size:1.1rem;font-weight:800;color:#0f172a;margin-bottom:6px}
+.f-hero p{font-size:.82rem;color:#64748b;line-height:1.6;max-width:70ch}
+.f-index{list-style:none;border-top:2px solid #0f172a;margin-top:14px}
+.f-index li{border-bottom:1px solid #e2e8ef}
+.f-index a{display:grid;grid-template-columns:44px 1fr;gap:8px;padding:9px 2px;
+  color:#0f172a;text-decoration:none;font-size:.8rem}
+.f-index a:hover .lt{text-decoration:underline;color:#2563eb}
+.f-index .fq{font-weight:800;color:#2563eb}
+
+section.fs{margin:24px 0}
+.fs-num{font-size:2.4rem;font-weight:800;color:#e2e8ef;line-height:1;float:left;
+  margin-right:12px;letter-spacing:-.03em}
+.fs-body{overflow:hidden}
+.fs-body h3{font-size:.95rem;font-weight:700;color:#0f172a;margin-bottom:5px}
+.fs-body .ans{font-size:.85rem;font-weight:600;color:#0f172a;padding-left:10px;
+  border-left:3px solid #2563eb;margin-bottom:10px;line-height:1.5}
+.fs-body .note{font-size:.78rem;color:#475569;line-height:1.55;max-width:72ch}
+.callout{border-radius:7px;padding:10px 14px;margin:8px 0;font-size:.76rem;line-height:1.5}
+.callout.warn{background:#FEF3C7;border-left:3px solid #F59E0B;color:#78350F}
+.callout.info{background:#EFF6FF;border-left:3px solid #3B82F6;color:#1E3A8A}
+.callout.ok  {background:#F0FDF4;border-left:3px solid #22C55E;color:#14532D}
+.callout strong{font-weight:700}
+.fs-tbl{width:100%;border-collapse:collapse;font-size:.74rem;margin:8px 0}
+.fs-tbl th{text-align:left;padding:5px 8px;border-bottom:2px solid #0f172a;
+  font-size:.65rem;color:#64748b;text-transform:uppercase;letter-spacing:.4px}
+.fs-tbl td{padding:5px 8px;border-bottom:1px solid #f1f5f9}
+.fs-tbl tr:hover{background:#f8fafc}
+.fs-tbl .hi{font-weight:700;color:#15803D}
+.fs-tbl .lo{color:#94a3b8}
+.pbar{display:flex;align-items:center;gap:5px}
+.pbar .b{height:9px;border-radius:3px}
+/* ── Crop insight boxes (findings panel) ── */
+.ci-box{background:#fff;border:1px solid #e2e8ef;border-radius:6px;padding:9px 13px;
+  margin:9px 0 11px;font-size:.77rem;border-left:3px solid #94a3b8;max-width:72ch}
+.ci-box strong{font-weight:700;font-size:.68rem;text-transform:uppercase;letter-spacing:.4px;
+  color:#94a3b8;display:block;margin-bottom:3px}
+.ci-box.mz{border-left-color:#D39B12}.ci-box.wh{border-left-color:#7B61C9}
+.ci-maize{display:none}.ci-wheat{display:none}
+
+/* ── EDA crop panels ── */
+.eda-crop-panel{display:none}
+.eda-crop-btn{border:1px solid #e2e8ef;border-radius:16px;padding:3px 12px;
+  font-size:.74rem;font-family:inherit;cursor:pointer;font-weight:600;transition:background .12s}
+.eda-crop-btn.active{background:#1e293b;color:#fff;border-color:#1e293b}
+.eda-crop-btn.mz.active{background:#D39B12;border-color:#D39B12;color:#fff}
+.eda-crop-btn.wh.active{background:#7B61C9;border-color:#7B61C9;color:#fff}
+</style>
+</head>
+<body>
+<!-- Loading overlay -->
+<div id="eda-loader" style="display:none;position:fixed;inset:0;background:rgba(255,255,255,.88);
+  z-index:9999;align-items:center;justify-content:center;flex-direction:column;gap:14px">
+  <div style="width:38px;height:38px;border:3px solid #e2e8ef;border-top-color:#2563eb;
+    border-radius:50%;animation:eda-spin .75s linear infinite"></div>
+  <div style="color:#64748b;font-size:.82rem">Loading data&hellip;</div>
+</div>
+<style>@keyframes eda-spin{to{transform:rotate(360deg)}}</style>
+
+<!-- Generated 2026-11-23 12:33 UTC by generate_eda.py -->
+
+<div id="edaSubtabBar">
+  <span class="estab active" id="esubtab-results"  onclick="switchETab('results')">Results</span>
+  <span class="estab"        id="esubtab-findings" onclick="switchETab('findings')">Findings</span>
+  <span class="estab"        id="esubtab-methods" style="display:none"  onclick="switchETab('methods')">Methods</span>
+</div>
+
+<!-- ═══════════════ RESULTS PANEL ═══════════════ -->
+<div class="panel active" id="epanel-results">
+
+  <!-- Controls -->
+  <div class="ctrl-bar">
+    <span class="ctrl-label">Crop</span>
+    <select class="cs" id="selCrop" onchange="update()">
+      <option value="all">Both crops</option>
+      <option value="maize">Maize</option>
+      <option value="wheat">Wheat</option>
+    </select>
+    <span class="ctrl-label" style="margin-left:6px">Region</span>
+    <select class="cs" id="selContinent" onchange="update()">
+      <option value="all">All Regions</option>
+      <option value="Africa">Africa</option>
+      <option value="Asia">Asia</option>
+      <option value="Europe">Europe</option>
+      <option value="North America">North America</option>
+      <option value="Oceania">Oceania</option>
+      <option value="South America">South America</option>
+    </select>
+    <span class="ctrl-label" style="margin-left:6px">Country</span>
+    <select class="cs" id="selCountry" onchange="update()">
+      <option value="all">All Countries</option>
+    </select>
+    <span class="ctrl-label" style="margin-left:6px">Variable group</span>
+    <select class="cs" id="selSource" onchange="update()">
+      <option value="all">All groups</option>
+      <option value="yield">Yield</option>
+      <option value="meteo">Meteorology</option>
+      <option value="soil_moisture">Soil moisture</option>
+      <option value="remote_sensing">Remote Sensing (NDVI + FPAR)</option>
+    </select>
+    <span class="ctrl-label" style="margin-left:6px">Test Year</span>
+    <select class="cs" id="selTestYear" onchange="update()">
+      <option value="0">All years</option>
+      <option value="1">1st year</option>
+      <option value="2">2nd year</option>
+      <option value="3">3rd year</option>
+      <option value="4">4th year</option>
+      <option value="5">5th year</option>
+    </select>
+    <span class="ctrl-label" style="margin-left:6px">View</span>
+    <div class="view-toggle">
+      <button class="vt-btn active" id="btn-perf"     onclick="setView('performance')" title="yield = annual; other variables = seasonal median (q50)">Performance</button>
+      <button class="vt-btn"        id="btn-summary"  onclick="setView('summary')"      title="yield = annual; other variables = seasonal median (q50)">Summary</button>
+      
+      <button class="vt-btn" id="btn-extremes" style="display:none" onclick="setView('extremes')" title="Drought, heat, frost and wet years: frequency and yield impact">Extremes</button>
+    </div>
+  </div>
+
+  <!-- Info row -->
+  <div class="info-row" id="infoRow"></div>
+
+  <!-- View containers -->
+  <div id="perfView"></div>
+  <div id="summaryView" style="display:none"></div>
+  <div id="extremeView"  style="display:none"></div>
+</div>
+
+<div class="panel" id="epanel-findings">
+<div class="findings-wrap">
+
+  <!-- Crop toggle -->
+  <div style="background:#fff;border:1px solid #e2e8ef;border-radius:8px;padding:8px 12px;
+              margin-bottom:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+    <span style="font-size:.68rem;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.6px">View findings for</span>
+    <button class="eda-crop-btn active" id="ebtn-both"  onclick="setECrop('both')">Both crops</button>
+    <button class="eda-crop-btn mz"    id="ebtn-maize" onclick="setECrop('maize')">🌽 Maize (35 countries)</button>
+    <button class="eda-crop-btn wh"    id="ebtn-wheat" onclick="setECrop('wheat')">🌾 Wheat (27 countries)</button>
+  </div>
+
+  <!-- ══════════════ BOTH CROPS PANEL ══════════════ -->
+  <div class="eda-crop-panel" id="eda-panel-both" style="display:block">
+
+    <div class="f-hero">
+      <h2>EDA findings — both crops combined</h2>
+      <p>Six findings from the distribution shift and extreme-year analysis.
+         F2 (warming) and F3 (soil moisture) are shared across crops and shown here only.
+         F4 and F5 (extreme years) are new sections computed from per-year weather data.
+         Crop-specific yield shift details are in the Maize and Wheat tabs.</p>
+    </div>
+
+    <!-- Quick summary table -->
+    <div style="background:#fff;border:1px solid #e2e8ef;border-radius:8px;padding:14px 18px;margin-bottom:16px">
+      <div style="font-size:.82rem;font-weight:800;color:#1D2A22;margin-bottom:12px">Key numbers at a glance</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid #e2e8ef;border-radius:6px;overflow:hidden;font-size:.77rem">
+        <div style="background:#fef3c7;padding:7px 12px;font-weight:700;color:#78350F;border-bottom:1px solid #e2e8ef">🌽 Maize</div>
+        <div style="background:#ede9fe;padding:7px 12px;font-weight:700;color:#4c1d95;border-bottom:1px solid #e2e8ef;border-left:1px solid #e2e8ef">🌾 Wheat</div>
+        <div style="padding:8px 12px;border-bottom:1px solid #e2e8ef">
+          <div style="font-size:.65rem;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">F1 — Yield shift</div>
+          Median +0.87 t/ha. 86% of countries shifted up (86% significant). Top: DK (+40%), ET (+70%), BG (+57%), LT (+98%).
+        </div>
+        <div style="padding:8px 12px;border-bottom:1px solid #e2e8ef;border-left:1px solid #e2e8ef">
+          <div style="font-size:.65rem;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">F1 — Yield shift</div>
+          Median +0.66 t/ha. 96% of countries shifted up (85% significant). Top: HU (+33%), CZ (+19%), RO (+42%), BR (+67%), LV (+41%).
+        </div>
+        <div style="padding:8px 12px;border-bottom:1px solid #e2e8ef">
+          <div style="font-size:.65rem;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">F4 — Extreme condition frequency</div>
+          Dry soil: 33% of test years (3× expected). Extreme heat: 30%. Drought: 20%. All above the 10% baseline.
+        </div>
+        <div style="padding:8px 12px;border-bottom:1px solid #e2e8ef;border-left:1px solid #e2e8ef">
+          <div style="font-size:.65rem;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">F4 — Extreme condition frequency</div>
+          Dry soil: 39% (4× expected). Extreme heat: 31%. Drought: 24%. Even more skewed than maize.
+        </div>
+        <div style="padding:8px 12px;border-bottom:1px solid #e2e8ef">
+          <div style="font-size:.65rem;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">F5 — Yield in extreme years</div>
+          Drought −6.8%. Frost −8.3% (worst). <b>Warm seasons +9.1%</b> (maize benefits from heat). Extreme tmax neutral (+0.1%).
+        </div>
+        <div style="padding:8px 12px;border-bottom:1px solid #e2e8ef;border-left:1px solid #e2e8ef">
+          <div style="font-size:.65rem;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">F5 — Yield in extreme years</div>
+          Drought −6.9%. Extreme heat −4.9%. Heat stress (warm tavg) −6.9%. <b>Wheat responds opposite to maize</b> under warm conditions.
+        </div>
+        <div style="padding:8px 12px">
+          <div style="font-size:.65rem;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">F6 — Per-year shift progression</div>
+          Maize shift hovers 12–18% across all 5 test years (no clear trend). Structural step-change.
+        </div>
+        <div style="padding:8px 12px;border-left:1px solid #e2e8ef">
+          <div style="font-size:.65rem;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">F6 — Per-year shift progression</div>
+          Wheat accelerates: yr1 +9.7% → yr5 +16.2%. Later test years are harder for models to predict.
+        </div>
+      </div>
+    </div>
+
+    <!-- F2: Temperature / VPD / ET0 -->
+    <section class="fs" id="ef2-both">
+      <div class="fs-num" aria-hidden="true">F2</div>
+<div class="fs-body">
+  <h3>VPD (+0.49 hPa, 67.7% sig) and ET&#8320; (+0.09 mm/d, 64.5% sig) are the most consistently shifted weather variables</h3>
+  <p class="ans">Median shift and significance across all countries (both crops combined).</p>
+  <table class="fs-tbl"><thead><tr><th>Variable</th><th>Median shift</th><th>% Sig</th><th>% Countries &uarr;</th></tr></thead><tbody><tr><td>vpd (hPa)</td><td>+0.49 hPa</td><td class="hi">67.7%</td><td class="hi">90.3%</td></tr>
+<tr><td>et0 (mm/d)</td><td>+0.09 mm/d</td><td class="hi">64.5%</td><td class="hi">87.1%</td></tr>
+<tr><td>tmax (&deg;C)</td><td>+0.29 &deg;C</td><td class="hi">54.8%</td><td class="hi">91.9%</td></tr>
+<tr><td>tmin (&deg;C)</td><td>+0.14 &deg;C</td><td class="">37.1%</td><td class="hi">75.8%</td></tr>
+<tr><td>tavg (&deg;C)</td><td>+0.23 &deg;C</td><td class="">46.8%</td><td class="hi">87.1%</td></tr>
+<tr><td>prec (mm/d)</td><td>-0.02 mm/d</td><td class="">37.1%</td><td class="lo">33.9%</td></tr>
+<tr><td>cwb (mm/d)</td><td>-0.07 mm/d</td><td class="">50.0%</td><td class="lo">16.1%</td></tr>
+</tbody></table>
+</div>
+    </section>
+
+    <!-- F3: Soil moisture -->
+    <section class="fs" id="ef3-both">
+      <div class="fs-num" aria-hidden="true">F3</div>
+<div class="fs-body">
+  <h3>Root-zone soil moisture is declining (-4.3 mm) despite stable precipitation &mdash; ET&#8320; is extracting more water</h3>
+  <p class="ans">Median RSM shifted -4.32 mm (range -14.96 mm to +14.08 mm); 73% of countries show a decline; 38.7% significant. Precipitation: -0.017 mm/d (37.1% sig). Rising ET&#8320; is extracting soil moisture faster than precipitation replenishes it, increasing structural agricultural drought risk in the test period.</p>
+</div>
+    </section>
+
+    <!-- F4: Extreme condition frequency (NEW) -->
+    <section class="fs" id="ef4-both">
+      <div class="fs-num" aria-hidden="true">F4</div>
+<div class="fs-body">
+  <h3>Frequency of extreme conditions (heat, frost, excess rainfall) in test years</h3>
+  <p class="ans">Using the 10th/90th percentile of each country’s training distribution as thresholds, expected frequency per condition is ~10%. Test-period frequencies are systematically higher, confirming the test period is not a random draw from the training distribution.</p>
+  <table class="fs-tbl"><thead><tr><th>Condition</th><th>Maize (% test years)</th><th>Wheat (% test years)</th></tr></thead><tbody><tr><td>&#128293; Extreme Heat</td><td class="hi">74.9%</td><td class="hi">46.7%</td></tr>
+<tr><td>&#129482; Frost Risk</td><td class="hi">51.4%</td><td class="hi">85.2%</td></tr>
+<tr><td>&#9928;&#65039; Excess Rainfall</td><td class="hi">42.3%</td><td class="hi">33.3%</td></tr>
+</tbody></table>
+</div>
+    </section>
+
+    <!-- F5: Yield response to extremes (NEW) -->
+    <section class="fs" id="ef5-both">
+      <div class="fs-num" aria-hidden="true">F5</div>
+<div class="fs-body">
+  <h3>Yield response to extreme conditions varies by crop and condition type</h3>
+  <p class="ans">Yield impact = mean deviation in condition years minus mean deviation in normal years, both relative to the country’s test-period mean (removes structural yield trend).</p>
+  <table class="fs-tbl">
+    <thead><tr><th>Condition</th><th>Maize yield vs normal</th><th>Wheat yield vs normal</th></tr></thead>
+    <tbody><tr><td>&#128293; Extreme Heat</td><td class="lo">-1.7%</td><td class="hi">+1.1%</td></tr>
+<tr><td>&#129482; Frost Risk</td><td>-0.1%</td><td>+0.0%</td></tr>
+<tr><td>&#9928;&#65039; Excess Rainfall</td><td>+0.3%</td><td class="hi">+3.5%</td></tr>
+</tbody>
+  </table>
+  <div class="callout ok"><strong>C4 vs C3 physiology:</strong> Maize (C4) benefits from warm seasons; wheat (C3) is harmed by the same conditions during grain fill.</div>
+  <div class="callout warn"><strong>Forecasting implication:</strong> Dry soil and extreme heat each appear 2&ndash;4&times; more often in test years &mdash; models face systematic out-of-distribution weather, which partly explains the skill gap.</div>
+</div>
+    </section>
+
+  </div><!-- end eda-panel-both -->
+
+
+  <!-- ══════════════ MAIZE PANEL ══════════════ -->
+  <div class="eda-crop-panel" id="eda-panel-maize">
+
+    <div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:10px 14px;margin-bottom:12px">
+      <span style="font-size:.8rem;font-weight:700;color:#78350F">🌽 Maize EDA findings — 35 countries</span>
+      <span style="font-size:.74rem;color:#92400e;margin-left:8px">All statistics below are for maize only.</span>
+    </div>
+
+    <!-- F1 Maize -->
+    <section class="fs" id="ef1-maize">
+      <div class="fs-num" aria-hidden="true">F1</div>
+<div class="fs-body">
+  <h3>Maize yield shifted +0.87 t/ha (median); 85.7% of countries trending up, variability widening 8%</h3>
+  <p class="ans">Across 35 countries, yield in test years shifted +0.87 t/ha (range -1.50 t/ha to +3.30 t/ha). 85.7% show an upward trend; 85.7% are statistically significant (KS p&lt;0.05). Per-year progression: yr1: +15.3% &middot; yr2: +13.4% &middot; yr3: +17.6% &middot; yr4: +11.7% &middot; yr5: +18.3%.</p>
+</div>
+    </section>
+
+    <!-- F4 Maize extremes -->
+    <section class="fs" id="ef4-maize">
+      <div class="fs-num" aria-hidden="true">F4</div>
+<div class="fs-body">
+  <h3>Maize test years: Extreme Heat (75%), Frost Risk (51%)</h3>
+  <p class="ans">Using the 10th/90th percentile of each country’s training distribution as thresholds, expected frequency per condition is ~10%. Test-period frequencies are systematically higher, confirming the test period is not a random draw from the training distribution.</p>
+  <table class="fs-tbl"><thead><tr><th>Condition</th><th>% test years</th></tr></thead><tbody><tr><td>&#128293; Extreme Heat</td><td class="hi">74.9%</td></tr>
+<tr><td>&#129482; Frost Risk</td><td class="hi">51.4%</td></tr>
+<tr><td>&#9928;&#65039; Excess Rainfall</td><td class="hi">42.3%</td></tr>
+</tbody></table>
+</div>
+    </section>
+
+  </div><!-- end eda-panel-maize -->
+
+
+  <!-- ══════════════ WHEAT PANEL ══════════════ -->
+  <div class="eda-crop-panel" id="eda-panel-wheat">
+
+    <div style="background:#ede9fe;border:1px solid #c4b5fd;border-radius:8px;padding:10px 14px;margin-bottom:12px">
+      <span style="font-size:.8rem;font-weight:700;color:#4c1d95">🌾 Wheat EDA findings — 27 countries</span>
+      <span style="font-size:.74rem;color:#5b21b6;margin-left:8px">All statistics below are for wheat only.</span>
+    </div>
+
+    <!-- F1 Wheat -->
+    <section class="fs" id="ef1-wheat">
+      <div class="fs-num" aria-hidden="true">F1</div>
+<div class="fs-body">
+  <h3>Wheat yield shifted +0.66 t/ha (median); 96.3% of countries trending up, variability widening 18%</h3>
+  <p class="ans">Across 27 countries, yield in test years shifted +0.66 t/ha (range -0.09 t/ha to +1.33 t/ha). 96.3% show an upward trend; 85.2% are statistically significant (KS p&lt;0.05). Per-year progression: yr1: +9.7% &middot; yr2: +11.6% &middot; yr3: +4.3% &middot; yr4: +17.1% &middot; yr5: +16.2%.</p>
+</div>
+    </section>
+
+    <!-- F4 Wheat extremes -->
+    <section class="fs" id="ef4-wheat">
+      <div class="fs-num" aria-hidden="true">F4</div>
+<div class="fs-body">
+  <h3>Wheat test years: Frost Risk (85%), Extreme Heat (47%)</h3>
+  <p class="ans">Using the 10th/90th percentile of each country’s training distribution as thresholds, expected frequency per condition is ~10%. Test-period frequencies are systematically higher, confirming the test period is not a random draw from the training distribution.</p>
+  <table class="fs-tbl"><thead><tr><th>Condition</th><th>% test years</th></tr></thead><tbody><tr><td>&#128293; Extreme Heat</td><td class="hi">46.7%</td></tr>
+<tr><td>&#129482; Frost Risk</td><td class="hi">85.2%</td></tr>
+<tr><td>&#9928;&#65039; Excess Rainfall</td><td class="hi">33.3%</td></tr>
+</tbody></table>
+</div>
+    </section>
+
+  </div><!-- end eda-panel-wheat -->
+
+</div><!-- end findings-wrap -->
+</div><!-- end epanel-findings -->
+
+<script>
+// ── Global data (populated by loadData) ─────────────────────────────────────
+let RAW = [], RAW_QUANT = [], PER_YEAR_DATA = [], EXTREME_DATA = [], EXTREME_SUMMARY = {};
+
+// ── Data loading ─────────────────────────────────────────────────────────────
+async function loadData() {
+  const loader = document.getElementById('eda-loader');
+  if (loader) loader.style.display = 'flex';
+  try {
+    const [vs, pyr] = await Promise.all([
+      fetch('../data/eda_variable_shift.json').then(r => { if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); }),
+      fetch('../data/eda_peryear.json').then(r => { if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+    ]);
+    RAW             = vs.annual        || [];
+    RAW_QUANT       = vs.quantile      || [];
+    PER_YEAR_DATA   = pyr.per_year_shift || [];
+    EXTREME_DATA    = pyr.extreme_years  || [];
+    EXTREME_SUMMARY = pyr.extreme_summary || {};
+  } catch(e) {
+    if (loader) {
+      loader.innerHTML = `<div style="text-align:center;color:#991b1b;font-size:.85rem;padding:20px">
+        <div style="font-size:1.1rem;margin-bottom:8px">Failed to load data</div>
+        <div style="margin-bottom:12px">${e.message}</div>
+        <div style="color:#64748b;font-size:.78rem">
+          Serve over HTTP, not file://:<br>
+          <code style="background:#f1f5f9;padding:3px 8px;border-radius:4px">
+            python3 -m http.server 8080
+          </code><br>from the <code>dashboard/</code> folder, then open<br>
+          <code>http://localhost:8080/pages/tab_EDA.html</code>
+        </div>
+      </div>`;
+      loader.style.display = 'flex';
+    }
+    throw e;
+  } finally {
+    const loader2 = document.getElementById('eda-loader');
+    if (loader2 && loader2.innerHTML.indexOf('Failed') === -1) loader2.style.display = 'none';
+  }
+}
+
+
+// Build lookup structures
+const countries = [...new Set(RAW.map(r=>r.country))].sort();
+const continents = [...new Set(RAW.map(r=>r.continent).filter(Boolean))].sort();
+const sources = ['yield','meteo','soil_moisture','remote_sensing'];
+const variables = [...new Set(RAW.map(r=>r.variable))].sort();
+const VARS_BY_SOURCE = {
+  yield:['yield'],
+  meteo:['tmin','tmax','tavg','prec','rad','et0','vpd','cwb'],
+  soil_moisture:['ssm','rsm'],
+  remote_sensing:['ndvi','fpar']
+};
+const SRC_COLOR = {yield:'#C2417B',meteo:'#3768C8',soil_moisture:'#B45309',remote_sensing:'#059669'};
+const SRC_LABEL = {yield:'Yield',meteo:'Meteorology',soil_moisture:'Soil Moisture',remote_sensing:'Remote Sensing'};
+const VAR_UNITS = {tmin:'°C',tmax:'°C',tavg:'°C',prec:'mm/d',rad:'J/m²',et0:'mm/d',
+  vpd:'hPa',cwb:'mm/d',ssm:'-',rsm:'-',ndvi:'-',fpar:'-',yield:'t/ha'};
+
+let _view = 'performance';
+let _sortCol = 'ks_stat', _sortDir = -1;
+
+// ═══════════════════════════════════════════
+// SUBTAB SWITCHING
+// ═══════════════════════════════════════════
+function switchETab(name){
+  document.querySelectorAll('.estab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('esubtab-'+name).classList.add('active');
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.getElementById('epanel-'+name).classList.add('active');
+  notify();
+}
+
+// ═══════════════════════════════════════════
+// FILTERS
+// ═══════════════════════════════════════════
+function getFilters(){
+  return {
+    crop: document.getElementById('selCrop').value,
+    continent: document.getElementById('selContinent').value,
+    country: document.getElementById('selCountry').value,
+    source: document.getElementById('selSource').value,
+    testYear: parseInt(document.getElementById('selTestYear').value||'0')
+  };
+}
+function filtered(){
+  const f=getFilters();
+  // RAW already holds the right rows:
+  //   yield → quantile='annual', all others → quantile='q50' (seasonal median)
+  return RAW.filter(r=>
+    r.variable !== 'yield_detrended' &&
+    (f.crop==='all'||r.crop===f.crop) &&
+    (f.continent==='all'||r.continent===f.continent) &&
+    (f.country==='all'||r.country===f.country) &&
+    (f.source==='all'||r.source===f.source)
+  );
+}
+// Filtered quantile aggregated data (uses RAW_QUANT)
+function filteredQuant(){
+  const f=getFilters();
+  return RAW_QUANT.filter(r=>
+    (f.crop==='all'||r.crop===f.crop) &&
+    (f.continent==='all'||r.continent===f.continent||r.continent==='All') &&
+    (f.source==='all'||(f.source==='remote_sensing'?(r.source==='ndvi'||r.source==='fpar'):r.source===f.source))
+  );
+}
+function populateCountries(){
+  const f=getFilters();
+  const eligible=new Set(RAW.filter(r=>
+    (f.crop==='all'||r.crop===f.crop) &&
+    (f.continent==='all'||r.continent===f.continent)
+  ).map(r=>r.country));
+  const sel=document.getElementById('selCountry');
+  const cur=sel.value;
+  sel.innerHTML='<option value="all">All Countries</option>';
+  [...eligible].sort().forEach(c=>{
+    const o=document.createElement('option');
+    o.value=c; o.textContent=RAW.find(r=>r.country===c)?.country_name||c;
+    if(c===cur) o.selected=true;
+    sel.appendChild(o);
+  });
+}
+
+// ═══════════════════════════════════════════
+// KS COLOR
+// ═══════════════════════════════════════════
+function ksColor(v){
+  if(v==null) return '#f8fafc';
+  // 0=white, 0.5=amber, 1=deep red
+  const t=Math.min(v/0.7,1);
+  if(t<0.5){const s=t*2; return `rgb(${Math.round(255)},${Math.round(255-s*55)},${Math.round(255-s*200)})`;}
+  const s=(t-0.5)*2; return `rgb(${Math.round(255-s*60)},${Math.round(200-s*170)},${Math.round(55-s*55)})`;
+}
+function ksTextColor(v){return (v!=null&&v>0.5)?'#fff':'#1e293b';}
+
+// ═══════════════════════════════════════════
+// INFO ROW
+// ═══════════════════════════════════════════
+function renderInfo(data){
+  const n_pairs = new Set(data.map(r=>r.country+'_'+r.crop)).size;
+  const n_sig = data.filter(r=>r.sig===1).length;
+  const med_ks = data.map(r=>r.ks_stat).filter(v=>v!=null).sort((a,b)=>a-b);
+  const mks = med_ks.length?med_ks[Math.floor(med_ks.length/2)]:0;
+  const yield_up = data.filter(r=>r.variable==='yield'&&r.direction>0).length;
+  const yield_all = data.filter(r=>r.variable==='yield').length;
+  document.getElementById('infoRow').innerHTML=`
+    <div class="ibox"><div class="num">${data.length}</div><div class="lbl">Variable × Country rows</div></div>
+    <div class="ibox"><div class="num">${n_pairs}</div><div class="lbl">Crop–country pairs</div></div>
+    <div class="ibox"><div class="num">${(n_sig/data.length*100).toFixed(0)}%</div><div class="lbl">Significantly shifted (p&lt;0.05)</div></div>
+    <div class="ibox"><div class="num">${mks.toFixed(3)}</div><div class="lbl">Median KS statistic</div></div>
+    ${yield_all?`<div class="ibox"><div class="num">${(yield_up/yield_all*100).toFixed(0)}%</div><div class="lbl">Countries: test yield &gt; train yield</div></div>`:''}
+  `;
+}
+
+// ═══════════════════════════════════════════
+// PERFORMANCE VIEW (detailed table)
+// ═══════════════════════════════════════════
+function renderPerformanceByYear(f){
+  // Show year-specific shifts from PER_YEAR_DATA
+  const pyd = PER_YEAR_DATA.filter(r =>
+    r.test_year_idx === f.testYear &&
+    (f.crop==='all'||r.crop===f.crop) &&
+    (f.country==='all'||r.country===f.country) &&
+    r.variable !== 'yield_detrended'
+  );
+  const container = document.getElementById('performanceView');
+  if(!pyd.length){container.innerHTML='<div style="padding:20px;color:#94a3b8">No per-year data for selected filters.</div>';return;}
+  const sorted = [...pyd].sort((a,b)=>(a.country||"").localeCompare(b.country||"")||(a.variable||"").localeCompare(b.variable||""));
+  const ordinals=['All','1st','2nd','3rd','4th','5th'];
+  const trs = sorted.slice(0,500).map(r=>{
+    const unit = VAR_UNITS[r.variable]||'t/ha';
+    const dStr = r.shift!=null ? (r.shift>=0?'+':'')+r.shift.toFixed(2)+' '+unit : '—';
+    const dColor = r.shift==null?'#64748b':r.shift>0?'#15803D':'#991B1B';
+    const pStr = r.shift_pct!=null ? (r.shift_pct>=0?'+':'')+r.shift_pct.toFixed(1)+'%' : '—';
+    const srcKey = r.source==='ndvi'||r.source==='fpar'?'remote_sensing':r.source||'yield';
+    const srcC = SRC_COLOR[srcKey]||'#94a3b8';
+    return `<tr>
+      <td class="country-cell">${r.country}</td>
+      <td>${r.country_name||r.country}</td>
+      <td>${r.crop==='maize'?'Maize':'Wheat'}</td>
+      <td style="font-weight:600">${r.variable} <span style="color:#94a3b8;font-size:.65rem">${unit}</span></td>
+      <td style="font-weight:600;color:${dColor}">${dStr}</td>
+      <td style="color:#64748b">${pStr}</td>
+      <td>${r.test_year||'—'}</td>
+    </tr>`;
+  }).join('');
+  container.innerHTML = `
+    <div style="font-size:.7rem;color:#64748b;padding:7px 12px;background:#fff;border:1px solid #e2e8ef;border-radius:7px;margin-bottom:10px">
+      Showing ${ordinals[f.testYear]} test year shifts per country. Shift = that year's country mean minus training mean.
+    </div>
+    <div class="tbl-scr"><table class="dt">
+      <thead><tr><th>Code</th><th>Country</th><th>Crop</th><th>Variable</th><th>Shift</th><th>Shift %</th><th>Year</th></tr></thead>
+      <tbody>${trs}</tbody>
+    </table></div>`;
+}
+
+function renderPerformance(data){
+  const f=getFilters();
+  if(f.testYear>0){renderPerformanceByYear(f);return;}
+  const cols=[
+    {k:'country',     l:'Code'},
+    {k:'country_name',l:'Country'},
+    {k:'crop',        l:'Crop'},
+    {k:'source',      l:'Group'},
+    {k:'variable',    l:'Variable'},
+    {k:'shift',       l:'Shift'},
+    {k:'temporal',    l:'Temporal [Min, Max]'},
+    {k:'spatial',     l:'Spatial [Min, Max]'},
+  ];
+
+  const sorted=[...data].sort((a,b)=>{
+    const av=a[_sortCol]??-Infinity, bv=b[_sortCol]??-Infinity;
+    return _sortDir*(typeof av==='string'?av.localeCompare(bv):bv-av)*-1;
+  });
+
+  const ths=cols.map(c=>`<th onclick="sortBy('${c.k}')" class="${_sortCol===c.k?('sort-'+(_sortDir>0?'asc':'desc')):''}"">${c.l}</th>`).join('');
+
+  // Build temporal shift lookup from PER_YEAR_DATA
+  const trs=sorted.slice(0,500).map(r=>{
+    const delta=r.mean_test!=null&&r.mean_train!=null?r.mean_test-r.mean_train:null;
+    const unit=VAR_UNITS[r.variable]||'';
+    const dStr=delta!=null?((delta>=0?'+':'')+delta.toFixed(2)+(unit?' '+unit:'')):'—';
+    const dColor=delta==null?'#64748b':delta>0?'#15803D':'#991B1B';
+    const sigMark=r.sig===1?' <span style="color:#15803d;font-size:.65rem;font-weight:600">sig</span>':'';
+    const srcKey=r.source==='ndvi'||r.source==='fpar'?'remote_sensing':r.source;
+    const srcC=SRC_COLOR[srcKey]||'#94a3b8';
+    // Temporal shift [min,max] from temporal_shift_* columns in eda_variable_shift.json
+    let pyrStr='—';
+    if(r.temporal_shift_median!=null&&isFinite(r.temporal_shift_median)){
+      const fmt=v=>(v>=0?'+':'')+v.toFixed(2);
+      pyrStr=`${fmt(r.temporal_shift_median)} [${fmt(r.temporal_shift_min)}, ${fmt(r.temporal_shift_max)}]`+(unit?' '+unit:'');
+    }
+    // Spatial shift from per-region data
+    let spStr='—';
+    if(r.spatial_shift_median!=null&&isFinite(r.spatial_shift_median)){
+      const fmt=v=>(v>=0?'+':'')+v.toFixed(2);
+      spStr=`${fmt(r.spatial_shift_median)} [${fmt(r.spatial_shift_min)}, ${fmt(r.spatial_shift_max)}]`+(unit?' '+unit:'');
+      if(r.n_regions) spStr+=` <span style="color:#94a3b8;font-size:.65rem">(${r.n_regions} regions)</span>`;
+    }
+    return `<tr>
+      <td class="country-cell">${r.country}</td>
+      <td>${r.country_name||r.country}</td>
+      <td>${r.crop==='maize'?'Maize':'Wheat'}</td>
+      <td><span style="color:${srcC};font-weight:600;font-size:.7rem">${SRC_LABEL[srcKey]||r.source}</span></td>
+      <td style="font-weight:600">${r.variable} <span style="color:#94a3b8;font-size:.65rem">${unit}</span></td>
+      <td style="font-weight:600;color:${dColor}">${dStr}<span style="color:#15803d;font-size:.7rem">${sigMark}</span></td>
+      <td style="color:#475569;font-size:.72rem">${pyrStr}</td>
+      <td style="color:#475569;font-size:.72rem">${spStr}</td>
+    </tr>`;
+  }).join('');
+
+  const clip=data.length>500?`<div style="font-size:.7rem;color:#94a3b8;padding:6px 14px">Showing 500 of ${data.length} rows — apply filters to narrow.</div>`:'';
+
+  document.getElementById('perfView').innerHTML=`
+    <div class="tbl-wrap">
+      <div class="tbl-title">Distribution shift per variable and country
+        <span class="sub" style="cursor:help" title="Shift = country-level aggregate (all regions, all years). <b>sig</b> = KS test p&lt;0.05 (distributions differ significantly). Temporal [Min,Max] = shift range across the 5 test years. Spatial [Min,Max] = shift range across ADM regions (new data).">&#9432;</span>
+      </div>
+
+      <div class="tbl-scr"><table class="dt"><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table></div>
+      ${clip}
+    </div>`;
+}
+
+// ═══════════════════════════════════════════
+// SUMMARY VIEW
+// ═══════════════════════════════════════════
+function renderSummary(data){
+  const f=getFilters();
+  if(f.testYear>0&&PER_YEAR_DATA.length>0){renderPerYearSummary(f.testYear,f);return;}
+  const srcList=sources.filter(s=>f.source==='all'||f.source===s);
+  const cards=srcList.map(src=>{
+    const sub=data.filter(r=>src==='remote_sensing'?(r.source==='ndvi'||r.source==='fpar'):r.source===src);
+    if(!sub.length) return '';
+    const vars=[...new Set(sub.map(r=>r.variable))].sort();
+    const rows=vars.map(v=>{
+      const vd=sub.filter(r=>r.variable===v);
+      const unit=VAR_UNITS[v]||'';
+      const deltas=vd.map(r=>r.mean_test-r.mean_train).filter(x=>isFinite(x)).sort((a,b)=>a-b);
+      const medDelta=deltas.length?deltas[Math.floor(deltas.length/2)]:null;
+      const minDelta=deltas.length?deltas[0]:null;
+      const maxDelta=deltas.length?deltas[deltas.length-1]:null;
+      const fmtD=x=>x!=null?((x>=0?'+':'')+x.toFixed(2)+(unit?' '+unit:'')):'—';
+      const shiftCell=medDelta!=null
+        ?`<span style="font-weight:600;color:${medDelta>0?'#15803D':'#991B1B'}">${fmtD(medDelta)}</span>`+
+         `<span style="color:#94a3b8;font-size:.65rem"> [${fmtD(minDelta)}, ${fmtD(maxDelta)}]</span>`
+        :'—';
+      const pSig=vd.filter(r=>r.sig===1).length/Math.max(vd.length,1);
+      const pUp=vd.filter(r=>r.direction>0).length/Math.max(vd.length,1);
+
+      return `<tr>
+        <td style="font-weight:600">${v} <span style="color:#94a3b8;font-size:.62rem">${unit}</span></td>
+        <td style="font-size:.72rem">${shiftCell}</td>
+        <td style="font-size:.72rem;text-align:right">${(pSig*100).toFixed(0)}%</td>
+        <td style="font-size:.72rem;text-align:right">${(pUp*100).toFixed(0)}%</td>
+
+      </tr>`;
+    }).join('');
+    const srcC=SRC_COLOR[src]||'#94a3b8';
+    return `<div class="sum-card">
+      <h4><span class="src-pill" style="background:${srcC}20;color:${srcC}">${SRC_LABEL[src]}</span></h4>
+      <table>
+        <thead><tr>
+          <th>Variable</th>
+          <th title="Median of (test mean − train mean) across countries, with country min/max in brackets.">Median Shift [Min, Max] ⓘ</th>
+          <th title="% of countries where shift is statistically significant (p&lt;0.05).">% Sig</th>
+          <th title="% of countries where test mean > train mean.">% ↑</th>
+
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+  }).join('');
+  document.getElementById('summaryView').innerHTML=`
+    <div style="font-size:.7rem;color:#64748b;padding:7px 12px;background:#fff;border:1px solid #e2e8ef;border-radius:7px;margin-bottom:10px;line-height:1.6">
+      <b>Shift [Min, Max]</b>: median shift in original units; brackets = most/least shifted country.
+      <b>% Sig</b>: fraction significant (KS p&lt;0.05). <b>% ↑</b>: fraction where values increased.
+
+    </div>
+    <div class="summary-grid">${cards}</div>`;
+}
+
+function renderPerYearSummary(yearIdx,f){
+  const pyd=PER_YEAR_DATA.filter(r=>r.test_year_idx===yearIdx&&
+    (f.crop==='all'||r.crop===f.crop)&&(f.continent==='all'||r.continent===f.continent)&&
+    (f.country==='all'||r.country===f.country)&&
+    (f.source==='all'||(f.source==='yield'?r.variable==='yield':(f.source==='remote_sensing'?(r.variable==='ndvi'||r.variable==='fpar'):r.source===f.source))));
+  if(!pyd.length){
+    document.getElementById('summaryView').innerHTML='<div style="padding:20px;color:#94a3b8">No per-year data. Run compute_eda_peryear.py first.</div>';
+    return;
+  }
+  const ordinals=['','1st','2nd','3rd','4th','5th'];
+  const varMap={};
+  pyd.forEach(r=>{(varMap[r.variable]=varMap[r.variable]||[]).push(r);});
+  const trs=Object.keys(varMap).sort().map(v=>{
+    const rows=varMap[v]; const unit=VAR_UNITS[v]||'';
+    const shifts=rows.map(r=>r.shift).filter(x=>x!=null).sort((a,b)=>a-b);
+    const pcts=rows.map(r=>r.shift_pct).filter(x=>x!=null).sort((a,b)=>a-b);
+    const med=s=>s.length?s[Math.floor(s.length/2)]:null;
+    const ms=med(shifts); const mp=med(pcts);
+    const nHot=rows.filter(r=>r.train_p90!=null&&r.country_mean>r.train_p90).length;
+    const nCold=rows.filter(r=>r.train_p10!=null&&r.country_mean<r.train_p10).length;
+    const badge=nHot>0?`<span class="pill pill-heat">+${nHot} above p90</span>`:
+                nCold>0?`<span class="pill pill-cold">${nCold} below p10</span>`:'';
+    return `<tr>
+      <td style="font-weight:600">${v} <span style="color:#94a3b8;font-size:.62rem">${unit}</span></td>
+      <td style="font-size:.72rem;color:${ms!=null&&ms>0?'#15803D':'#991B1B'};font-weight:600">${ms!=null?(ms>0?'+':'')+ms.toFixed(2)+' '+unit:'—'}</td>
+      <td style="font-size:.72rem;text-align:right">${mp!=null?(mp>0?'+':'')+mp.toFixed(1)+'%':'—'}</td>
+      <td style="font-size:.72rem">${badge}</td>
+    </tr>`;
+  }).join('');
+  const yr=pyd[0]?.test_year||'';
+  document.getElementById('summaryView').innerHTML=`
+    <div style="padding:7px 12px;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:7px;margin-bottom:10px;font-size:.75rem;color:#1E3A8A;font-weight:600">
+      ${ordinals[yearIdx]} test year vs training distribution
+    </div>
+    <div class="tbl-wrap"><div class="tbl-title">Variable shifts — ${ordinals[yearIdx]} test year</div>
+    <div class="tbl-scr"><table class="dt"><thead><tr>
+      <th>Variable</th><th>Median Shift</th><th>Shift %</th><th title="Countries where this test year's mean exceeded the training 90th percentile (above-normal) or fell below the 10th (below-normal).">Out-of-range countries ⓘ</th>
+    </tr></thead><tbody>${trs}</tbody></table></div></div>`;
+}
+
+// ═══════════════════════════════════════════
+// SORT
+// ═══════════════════════════════════════════
+function sortBy(col){
+  if(_sortCol===col) _sortDir*=-1; else {_sortCol=col; _sortDir=-1;}
+  renderPerformance(filtered());
+}
+
+// ═══════════════════════════════════════════
+// VIEW TOGGLE
+// ═══════════════════════════════════════════
+function setView(v){
+  _view=v;
+  document.getElementById('btn-perf').classList.toggle('active',v==='performance');
+  document.getElementById('btn-summary').classList.toggle('active',v==='summary');
+  document.getElementById('btn-extremes').classList.toggle('active',v==='extremes');
+  document.getElementById('perfView').style.display=v==='performance'?'':'none';
+  document.getElementById('summaryView').style.display=v==='summary'?'':'none';
+  document.getElementById('extremeView').style.display=v==='extremes'?'':'none';
+  update();
+}
+
+// ═══════════════════════════════════════════
+// MAIN UPDATE
+// ═══════════════════════════════════════════
+function update(){
+  populateCountries();
+  const data=filtered();
+  renderInfo(data);
+  if(_view==='performance') renderPerformance(data);
+  else if(_view==='summary') renderSummary(data);
+  else if(_view==='extremes') renderExtremes();
+
+  notify();
+}
+
+
+
+
+// ═══════════════════════════════════════════
+// EXTREMES VIEW
+// ═══════════════════════════════════════════
+/* GEN:cond_meta — replaced by generate_eda.py, do not edit manually */
+const COND_META={
+  heat_stress: {label:'Extreme Heat',icon:'&#128293;',pill:'pill-heat',col:'tmax_condition'},
+  frost_risk: {label:'Frost Risk',icon:'&#129482;',pill:'pill-frost',col:'tmin_condition'},
+  excess_rainfall: {label:'Excess Rainfall',icon:'&#9928;&#65039;',pill:'pill-wet',col:'prec_condition'},
+  warm_season: {label:'Warm Season',icon:'&#9728;&#65039;',pill:'pill-cold',col:'tavg_condition'},
+  cold_season: {label:'Cold Season',icon:'&#129398;',pill:'pill-cold',col:'tavg_condition'},
+  water_deficit: {label:'Water Deficit',icon:'&#127797;',pill:'pill-dry',col:'cwb_condition'},
+  water_surplus: {label:'Water Surplus',icon:'&#127754;',pill:'pill-dry',col:'cwb_condition'},
+  low_soil_moisture: {label:'Dry Soil',icon:'&#127580;&#65039;',pill:'pill-soil-dry',col:'rsm_condition'},
+  high_soil_moisture: {label:'Waterlogged',icon:'&#128167;',pill:'pill-soil-dry',col:'rsm_condition'}
+};
+const COND_ORDER=["heat_stress", "frost_risk", "excess_rainfall"];
+/* /GEN:cond_meta */
+
+function renderExtremes(){
+  const f=getFilters();
+  const el=document.getElementById('extremeView');
+  if(!EXTREME_DATA.length){
+    el.innerHTML='<div style="padding:40px;text-align:center;color:#94a3b8">No data. Run compute_eda_peryear.py first.</div>';
+    return;
+  }
+  const cropKey=f.crop==='all'?'both':f.crop;
+  const summ=EXTREME_SUMMARY[cropKey]||{};
+
+  // Apply filters
+  const rows=EXTREME_DATA.filter(r=>
+    (f.crop==='all'||r.crop===f.crop)&&
+    (f.continent==='all'||r.continent===f.continent)&&
+    (f.country==='all'||r.country===f.country)&&
+    (f.testYear===0||r.test_year_idx===f.testYear));
+
+  // ── Condition frequency cards ─────────────────────────────────────────────
+  const cards=COND_ORDER.map(cond=>{
+    const cm=COND_META[cond], cs=summ[cond];
+    if(!cs) return '';
+    const pct=cs.pct||0;
+    const ptrain=cs.pct_train;
+    const freqColor=pct>25?'#991B1B':pct>12?'#D97706':'#64748b';
+    const trainStr=ptrain!=null?`<span style="color:#94a3b8;font-size:.65rem">Train: ${ptrain.toFixed(1)}% &rarr; </span>`:'';
+    return `<div class="cond-card">
+      <div class="cond-title">${cm.icon} ${cm.label}</div>
+      <div class="cond-freq" style="color:${freqColor}">${trainStr}<b>${pct.toFixed(1)}%</b></div>
+      <div class="cond-sub">test years</div>
+    </div>`;
+  }).join('');
+
+  // ── Yield shift table: one row per (crop, country, condition) ────────────
+  // Temporal: yield_anomaly_pct across extreme test years for that country-condition
+  // Spatial:  region_shifts_[cond] flattened across those years
+  const ABS_CONDS={
+    heat_stress:     {rs:'region_shifts_heat_stress',    nr:'n_regions_heat_stress'},
+    frost_risk:      {rs:'region_shifts_frost_risk',     nr:'n_regions_frost_risk'},
+    excess_rainfall: {rs:'region_shifts_excess_rainfall',nr:'n_regions_excess_rainfall'},
+  };
+
+  const groups={};
+  rows.forEach(r=>{
+    COND_ORDER.forEach(cond=>{
+      const cm=COND_META[cond];
+      if(r[cm.col]!==cond) return;
+      const key=`${r.crop}|${r.country}|${cond}`;
+      if(!groups[key]) groups[key]={crop:r.crop,country:r.country,
+        country_name:r.country_name||r.country,cond,
+        temporal:[],spatial:[],n_regions_total:0};
+      if(r.yield_anomaly_pct!=null) groups[key].temporal.push(r.yield_anomaly_pct);
+      const ac=ABS_CONDS[cond];
+      if(ac && r[ac.rs]) groups[key].spatial.push(...r[ac.rs]);
+      if(ac && r[ac.nr]) groups[key].n_regions_total+=r[ac.nr];
+    });
+  });
+
+  const med=arr=>{const s=[...arr].sort((a,b)=>a-b);return s[Math.floor(s.length/2)];};
+  const fmt=v=>(v>=0?'+':'')+v.toFixed(1)+'%';
+  const color=v=>v<-5?'#991B1B':v<0?'#D97706':v>5?'#15803D':'#64748b';
+
+  const tableRows=Object.values(groups)
+    .filter(d=>d.temporal.length>0)
+    .sort((a,b)=>a.country.localeCompare(b.country)||a.cond.localeCompare(b.cond)||a.crop.localeCompare(b.crop))
+    .map(d=>{
+      const cm=COND_META[d.cond];
+      const ts=d.temporal.sort((a,b)=>a-b);
+      const ss=d.spatial.sort((a,b)=>a-b);
+      const tmed=med(ts);
+      const tStr=`${fmt(tmed)} [${fmt(ts[0])}, ${fmt(ts[ts.length-1])}]`;
+      const sStr=ss.length>0?`${fmt(med(ss))} [${fmt(ss[0])}, ${fmt(ss[ss.length-1])}]`:'—';
+      const nReg=d.n_regions_total>0?d.n_regions_total:null;
+      return `<tr>
+        <td>${cm.icon} ${cm.label}</td>
+        <td>${d.crop}</td>
+        <td>${d.country_name}</td>
+        <td class="num-cell" style="font-weight:600;color:${color(tmed)}">${tStr}
+          <span style="color:#94a3b8;font-weight:400;font-size:.65rem">(${ts.length} yr)</span></td>
+        <td class="num-cell" style="color:${ss.length>0?color(med(ss)):'#94a3b8'}">${sStr}
+          ${nReg?`<span style="color:#94a3b8;font-size:.65rem">(${nReg} rgn)</span>`:''}
+        </td>
+      </tr>`;
+    }).join('');
+
+  el.innerHTML=`
+    <div style="font-size:.7rem;color:#64748b;padding:7px 12px;background:#fff;border:1px solid #e2e8ef;border-radius:7px;margin-bottom:10px;line-height:1.6">
+      <b>Extreme Heat:</b> tmax &gt; 29&deg;C (maize) / 34&deg;C (wheat) &mdash; Schlenker &amp; Roberts 2009; Tack et al. 2015.&nbsp;
+      <b>Frost Risk:</b> tmin &lt; 2&deg;C (maize) / 0&deg;C (wheat) &mdash; ETCCDI FD.&nbsp;
+      <b>Excess Rainfall:</b> &gt;50mm/day &mdash; ETCCDI R50mm (single threshold).
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px;margin-bottom:14px">
+      ${cards||'<div style="color:#94a3b8;padding:10px">No data.</div>'}
+    </div>
+    <div class="tbl-wrap">
+      <div class="tbl-title">Yield shift in extreme years
+        <span style="margin-left:auto;font-size:.7rem;font-weight:400;color:#94a3b8">
+          Shift = test year yield vs training mean &mdash; Temporal: across extreme test years &mdash; Spatial: across extreme ADM regions
+        </span>
+      </div>
+      <div class="tbl-scr"><table class="dt"><thead><tr>
+        <th>Condition</th><th>Crop</th><th>Country</th>
+        <th>Temporal shift [Min, Max]</th>
+        <th>Spatial shift [Min, Max]</th>
+      </tr></thead><tbody>
+        ${tableRows||'<tr><td colspan="5" style="color:#94a3b8;text-align:center">No data for current filters</td></tr>'}
+      </tbody></table></div>
+    </div>`;
+}
+
+// ═══════════════════════════════════════════
+// PARENT FRAME COMMS
+// ═══════════════════════════════════════════
+function notify(){
+  try{const h=document.body.scrollHeight;
+    window.parent.postMessage({type:'resize',height:h},'*');}catch(e){}
+}
+window.addEventListener('message',e=>{
+  if(!e.data) return;
+  if(e.data.type==='filterSync'){
+    if(e.data.continent&&e.data.continent!=='World'){
+      document.getElementById('selContinent').value=e.data.continent;
+    } else if(e.data.continent==='World'){
+      document.getElementById('selContinent').value='all';
+    }
+    if(e.data.country){
+      const sel=document.getElementById('selCountry');
+      if([...sel.options].some(o=>o.value===e.data.country)){
+        sel.value=e.data.country;
+      }
+    }
+    update();
+  }
+  if(e.data.type==='clearCountry'){
+    document.getElementById('selCountry').value='all';
+    update();
+  }
+});
+
+window.addEventListener('load', async () => {
+  try {
+    await loadData();
+    update();
+    setTimeout(notify, 600);
+  } catch(e) {
+    console.error('EDA dashboard failed to load:', e);
+  }
+});
+window.addEventListener('resize',notify);
+
+// EDA findings crop toggle — switches full panels
+function setECrop(c){
+  ['both','maize','wheat'].forEach(function(tag){
+    var btn=document.getElementById('ebtn-'+tag);
+    if(!btn) return;
+    btn.classList.remove('active');
+    if(tag===c) btn.classList.add('active');
+  });
+  document.querySelectorAll('.eda-crop-panel').forEach(function(p){p.style.display='none';});
+  var panel=document.getElementById('eda-panel-'+c);
+  if(panel) panel.style.display='block';
+  notify();
+}
+
+// Fix anchor-link scrolling inside iframe
+document.addEventListener('click', function(e){
+  var a = e.target.closest('a[href^="#"]');
+  if (!a) return;
+  var id = a.getAttribute('href').slice(1);
+  var el = document.getElementById(id);
+  if (el) { e.preventDefault(); el.scrollIntoView({behavior:'smooth', block:'start'}); }
+});
+</script>
+
+<div class="panel" id="epanel-methods" style="display:none">
+<div style="max-width:960px;margin:0 auto;padding:18px 20px 40px">
+<p style="color:#64748b;font-size:.8rem;margin-bottom:18px">
+  Methodology for the EDA tab. Numbers generated by <code>scripts/generate_eda.py</code> from
+  <code>data/eda_variable_shift.json</code> and <code>data/eda_peryear.json</code> &mdash; re-run to refresh.
+</p>
+<div class="meth-section"><h3 class="meth-h">1 &nbsp; Train / Test Split</h3>
+<p class="meth-p">Fixed chronological split per country: last <strong>5 years</strong> = test,
+2 years before = validation (excluded), all earlier = training.</p>
+</div>
+<div class="meth-section"><h3 class="meth-h">2 &nbsp; Variable Shift (Results tab)</h3>
+<table class="meth-tbl"><thead><tr><th>Column</th><th>Definition</th></tr></thead><tbody>
+<tr><td>Shift</td><td>mean_test &minus; mean_train in original units, per country</td></tr>
+<tr><td>% Sig</td><td>Fraction of countries where KS test p &lt; 0.05</td></tr>
+<tr><td>% &uarr;</td><td>Fraction of countries where test mean &gt; train mean</td></tr>
+</tbody></table>
+<p class="meth-p" style="margin-top:8px">Annual view: yield = annual value; weather = seasonal median (q50).</p>
+</div>
+<div class="meth-section"><h3 class="meth-h">3 &nbsp; Extreme Condition Definitions</h3>
+<p class="meth-p">All thresholds are country-specific percentiles of the training distribution (p10/p90),
+except heat/frost which use absolute literature-grounded crop-specific values.</p>
+<table class="meth-tbl"><thead><tr>
+  <th>Condition</th><th>Variable</th><th>Threshold</th><th>Source</th>
+</tr></thead><tbody>
+<tr><td><strong>Extreme Heat</strong></td><td>tmax</td>
+  <td>Days &gt; yield-decline threshold (maize 29&deg;C, wheat 34&deg;C) &gt; p90 of training</td>
+  <td>Schlenker &amp; Roberts 2009 (PNAS); Tack et al. 2015 (PNAS)</td></tr>
+<tr><td><strong>Heat Stress</strong></td><td>tavg</td>
+  <td>Days below GDD base (maize 12&deg;C, wheat 5&deg;C) &lt; p10 of training (fewer cold days = warmer season)</td>
+  <td>Porter &amp; Gawith 1999; standard GDD bases</td></tr>
+<tr><td><strong>Cold Stress</strong></td><td>tavg</td>
+  <td>Days below GDD base &gt; p90 of training</td>
+  <td>Same GDD bases</td></tr>
+<tr><td><strong>Frost Risk</strong></td><td>tmin</td>
+  <td>Days below frost threshold (wheat 0&deg;C / maize 2&deg;C) &gt; p90 of training</td>
+  <td>ETCCDI FD index; maize 2&deg;C for canopy-level radiative inversion</td></tr>
+<tr><td><strong>Drought</strong></td><td>cwb</td>
+  <td>Days with negative CWB (prec &minus; ET&#8320;) &gt; p90 of training</td>
+  <td>CWB as SPEI proxy; Vicente-Serrano et al. 2010</td></tr>
+<tr><td><strong>Excess Rainfall</strong></td><td>prec</td>
+  <td>Days &gt; 50 mm/day and that count &gt; p90 of training</td>
+  <td>ETCCDI R50mm; single threshold (no crop-specific split justified by literature)</td></tr>
+<tr><td><strong>Dry Soil</strong></td><td>rsm</td>
+  <td>Seasonal mean RSM &lt; p10 of training</td>
+  <td>Percentile-based; PWP not in dataset so PAW threshold not used</td></tr>
+<tr><td><strong>Waterlogged</strong></td><td>rsm</td>
+  <td>Seasonal mean RSM &gt; p90 of training</td>
+  <td>Same</td></tr>
+</tbody></table>
+</div>
+<div class="meth-section"><h3 class="meth-h">4 &nbsp; Yield Impact (Extreme Years tab)</h3>
+<p class="meth-p"><code>yield_vs_normal</code> = mean yield anomaly in condition years &minus;
+mean yield anomaly in normal years, both vs the country&rsquo;s test-period mean
+(removes structural yield trend to isolate the weather effect).</p>
+</div>
+<div class="meth-section"><h3 class="meth-h">5 &nbsp; Key References</h3>
+<table class="meth-tbl"><thead><tr><th>Reference</th><th>Relevance</th></tr></thead><tbody>
+<tr><td>Schlenker &amp; Roberts 2009, PNAS</td><td>Maize tmax &gt; 29&deg;C yield-decline threshold</td></tr>
+<tr><td>Tack et al. 2015, PNAS</td><td>Wheat tmax &gt; 34&deg;C yield-decline threshold</td></tr>
+<tr><td>Porter &amp; Gawith 1999, Europ. J. Agron.</td><td>Wheat temperature thresholds; GDD base temperatures</td></tr>
+<tr><td>Vicente-Serrano et al. 2010, J. Climate</td><td>SPEI drought index; CWB deficit as proxy</td></tr>
+<tr><td>ETCCDI (WMO/WCRP)</td><td>FD (frost days TN &lt; 0&deg;C) and R50mm index definitions</td></tr>
+</tbody></table>
+</div>
+</div></div>
+<script>
+// Auto-resize iframe to content height whenever content changes
+(function(){
+  function _notify(){
+    try{window.parent.postMessage({type:'resize',height:document.body.scrollHeight},'*');}catch(e){}
+  }
+  if(window.ResizeObserver){
+    new ResizeObserver(_notify).observe(document.body);
+  }
+  window.addEventListener('resize', _notify);
+})();
+</script>
+</body>
+</html>

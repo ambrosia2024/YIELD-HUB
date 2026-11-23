@@ -283,14 +283,14 @@ function switchMainTab(name) {
   const subtabBar = document.getElementById('subtabBar');
   if (name === 'benchmarking') {
     subtabBar.style.display = '';
-    iframe.src = 'tab_tst.html';
+    iframe.style.height='300px'; iframe.src = 'tab_tst.html';
     // restore active subtab
     document.querySelectorAll('.subtab').forEach(t => t.classList.remove('active'));
     document.getElementById('sub-tst').classList.add('active');
   } else {
     subtabBar.style.display = 'none';
     const TAB_SRC={eda:'tab_EDA.html',predictions:'tab_predictions.html'};
-    iframe.src = TAB_SRC[name] || ('tab_' + name + '.html');
+    iframe.style.height='300px'; iframe.src = TAB_SRC[name] || ('tab_' + name + '.html');
   }
   iframe.onload = syncFilters;
 }
@@ -300,12 +300,12 @@ const SUBTAB_SRC={'findings':'tab_benchmarking_findings.html','tabular':'tab_tab
 function switchSubTab(n){
   document.querySelectorAll('.subtab').forEach(t=>t.classList.remove('active'));
   document.getElementById('sub-'+n).classList.add('active');
-  iframe.src=SUBTAB_SRC[n]||('tab_'+n+'.html');
+  iframe.style.height='300px'; iframe.src=SUBTAB_SRC[n]||('tab_'+n+'.html');
   iframe.onload=syncFrame;
 }
 window.addEventListener('message',e=>{
   if(!e.data) return;
-  if(e.data.type==='resize') iframe.style.height=Math.max(120,e.data.height+2)+'px';
+  if(e.data.type==='resize'){ var h=Math.max(120,e.data.height+2); iframe.style.height=h+'px'; }
   if(e.data.type==='clearCountry') clearCountry();
 });
 
